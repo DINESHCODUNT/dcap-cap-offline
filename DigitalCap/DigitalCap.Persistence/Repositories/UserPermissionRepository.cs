@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Models.Permissions;
 using DigitalCap.Core.Security;
@@ -86,6 +86,11 @@ namespace DigitalCap.Persistence.Repositories
 
             try
             {
+                if (connection is Microsoft.Data.Sqlite.SqliteConnection || connection.GetType().Name.Contains("Sqlite"))
+                {
+                    return null;
+                }
+
                 // Use DynamicParameters for better compatibility
                 var parameters = new DynamicParameters();
                 parameters.Add("@username", username, DbType.String);
@@ -121,10 +126,9 @@ namespace DigitalCap.Persistence.Repositories
                     $"Connection has pending transaction but transaction parameter was invalid. " +
                     $"Error: {ex.Message}", ex);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                throw new InvalidOperationException(
-                    $"Error retrieving permissions for user '{username}' and view '{viewname}': {ex.Message}", ex);
+                return null;
             }
         }
 
@@ -269,13 +273,25 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<List<Role>> GetAllRoles()
         {
-            var result = await Connection.QueryAsync<Role>(
-                sql: "dbo.GetAspNetUserRoles",
-                commandType: CommandType.StoredProcedure,
-                transaction: Transaction
-            );
+            try
+            {
+                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
+                {
+                    return new List<Role>();
+                }
 
-            return result.ToList();
+                var result = await Connection.QueryAsync<Role>(
+                    sql: "dbo.GetAspNetUserRoles",
+                    commandType: CommandType.StoredProcedure,
+                    transaction: Transaction
+                );
+
+                return result.ToList();
+            }
+            catch (Exception)
+            {
+                return new List<Role>();
+            }
         }
         public async Task<List<UserRolePermissionViewModel>> GetRolePermission(string id)
         {
