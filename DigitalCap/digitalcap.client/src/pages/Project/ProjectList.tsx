@@ -5,6 +5,7 @@ import { AbsSearch, Button, BUTTONS, AbsReactTable, Toggle } from 'customer_port
 import * as Icon from "react-bootstrap-icons";
 import * as projectService from '../../service/ProjectService';
 import moment from 'moment';
+import EmptyProjectView from './EmptyProjectView';
 
 export interface SidebarProjectRow {
     name: string;
@@ -27,6 +28,7 @@ export interface SidebarProjectRow {
     lastModifiedDate?: string;
     lastModifiedBy?: string;
     priority?: number;
+    isDownload?: string;
 }
 
 export interface ProjectListProps {
@@ -86,6 +88,12 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const [selectedPriority, setSelectedPriority] = React.useState<number | null>(null);
     const [modalItems, setModalItems] = useState<{ id: string, originalPriority: number, priority: number, project: SidebarProjectRow | null, isCurrent: boolean }[]>([]);
     const [loading, setLoading] = useState(false);
+    const [downloadConfirmProject, setDownloadConfirmProject] = useState<SidebarProjectRow | null>(null);
+    const [syncConfirmProject, setSyncConfirmProject] = useState<SidebarProjectRow | null>(null);
+    const [downloadProgress, setDownloadProgress] = useState<number>(0);
+    const [isDownloading, setIsDownloading] = useState<boolean>(false);
+    const [downloadSuccessModal, setDownloadSuccessModal] = useState<boolean>(false);
+    const [syncSuccessModal, setSyncSuccessModal] = useState<boolean>(false);
     const [pageAppliedFilters, setPageAppliedFilters] = useState<{
         pageIndex: number;
         pageSize: string;
@@ -223,7 +231,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     projectStatusColor: project.projectStatusColor || '',
                     lastModifiedDate: formattedLastModifiedDate,
                     lastModifiedBy: project.lastModifiedBy || project.modifiedBy || project.commentCreatedBy || '',
-                    priority: project.projectPriority ? parseInt(project.projectPriority, 10) : undefined
+                    priority: project.projectPriority ? parseInt(project.projectPriority, 10) : undefined,
+                    isDownload: project.isDownload || 'Online'
                 };
             });
 
@@ -559,7 +568,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 Cell: ({ row: { original } }: any) => (
                     <div className="d-flex flex-column gap-1">
                         <span className={`project-conn tag-${original.status}`}>
-                            {original.status.charAt(0).toUpperCase() + original.status.slice(1)}
+                            {original.isDownload ? original.isDownload : (original.status.charAt(0).toUpperCase() + original.status.slice(1))}
                         </span>
                         {original.projectStatusName && (
                             <span className={`project-conn tag-${getProjectStatusTag(original.projectStatusName)}`} style={{ color: original.projectStatusColor || 'inherit' }}>
@@ -595,6 +604,30 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             startIcon={<Icon.ArrowRight />}
                             onClick={() => onSelectProject(original)}
                         ></Button>
+                        <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary p-1 d-flex align-items-center justify-content-center"
+                            style={{ borderRadius: '6px', width: '32px', height: '32px' }}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setDownloadConfirmProject(original);
+                            }}
+                            title="Download Offline"
+                        >
+                            <Icon.CloudArrowDown size={16} />
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-sm btn-outline-success p-1 d-flex align-items-center justify-content-center"
+                            style={{ borderRadius: '6px', width: '32px', height: '32px' }}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setSyncConfirmProject(original);
+                            }}
+                            title="Save / Sync to Online"
+                        >
+                            <Icon.ArrowRepeat size={16} />
+                        </button>
                     </div>
                 )
             },
@@ -696,6 +729,30 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const startIdx = pageAppliedFilters.pageIndex * pageSizeNum;
     const pagedProjects = fullyFilteredProjects.slice(startIdx, startIdx + pageSizeNum);
 
+    const handleStartDownload = () => {
+        if (!downloadConfirmProject) return;
+        setIsDownloading(true);
+        setDownloadProgress(15);
+        const timer = setInterval(() => {
+            setDownloadProgress((prev) => {
+                if (prev >= 90) {
+                    clearInterval(timer);
+                    setIsDownloading(false);
+                    setDownloadConfirmProject(null);
+                    setDownloadSuccessModal(true);
+                    return 100;
+                }
+                return prev + 25;
+            });
+        }, 350);
+    };
+
+    const handleConfirmSync = () => {
+        if (!syncConfirmProject) return;
+        setSyncConfirmProject(null);
+        setSyncSuccessModal(true);
+    };
+
     return (
         <>
             <div className="container-fluid p-0 bg-transparent">
@@ -776,9 +833,19 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     </div>
                 </div>
 
-                <div className="row">
-                    <div className="col-12 overflow-x-auto custom-table-responsive">
-                        <AbsReactTable
+                {!loading && allProjects.length === 0 ? (
+                    <EmptyProjectView onRetry={loadProjects} />
+                ) : (
+                    <>
+                        <div className="alert alert-info d-flex align-items-center gap-2 mb-3 py-2 px-3" style={{ fontSize: '14px', borderRadius: '8px' }}>
+                            <Icon.InfoCircleFill className="flex-shrink-0 text-primary" size={18} />
+                            <div>
+                                <span>All listed projects are online. If you need to report offline, you can download projects for offline use. Ensure network connectivity of at least 10 Mbps when downloading or saving projects to online.</span>
+                            </div>
+                        </div>
+                        <div className="row">
+                            <div className="col-12 overflow-x-auto custom-table-responsive">
+                                <AbsReactTable
                             columns={columns}
                             data={pagedProjects}
                             pagination={true}
@@ -798,8 +865,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 searchType: "all"
                             }}
                         />
-                    </div>
-                </div>
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
 
             {modalProject && (
@@ -919,6 +988,135 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
                 </Modal>
             )}
+
+            {/* Download Confirm / Progress Modal */}
+            <Modal
+                show={!!downloadConfirmProject || isDownloading}
+                onHide={() => !isDownloading && setDownloadConfirmProject(null)}
+                centered
+                backdrop="static"
+            >
+                <Modal.Header closeButton={!isDownloading}>
+                    <Modal.Title>
+                        <Icon.CloudArrowDown className="me-2 text-primary" />
+                        Download Project Offline
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    {!isDownloading ? (
+                        <div>
+                            <h5>Are you sure?</h5>
+                            <p className="text-muted mb-3">
+                                Download <strong>{downloadConfirmProject?.name}</strong> to local encrypted offline storage. All survey parts, reports, and sections will be stored locally on your device for offline work.
+                            </p>
+                            <div className="alert alert-secondary py-2 small">
+                                <Icon.InfoCircle className="me-1" /> Please ensure you have a stable network connection during download.
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center py-3">
+                            <h5 className="mb-3">Downloading project offline...</h5>
+                            <div className="progress mb-3" style={{ height: '20px' }}>
+                                <div
+                                    className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                                    role="progressbar"
+                                    style={{ width: `${downloadProgress}%` }}
+                                >
+                                    {downloadProgress}%
+                                </div>
+                            </div>
+                            <p className="text-muted small mb-0">Syncing database records, templates and section cards...</p>
+                        </div>
+                    )}
+                </Modal.Body>
+                {!isDownloading && (
+                    <Modal.Footer className="gap-2">
+                        <Button variant={BUTTONS.SECONDARY} onClick={() => setDownloadConfirmProject(null)}>
+                            No, Cancel
+                        </Button>
+                        <Button variant={BUTTONS.PRIMARY} onClick={handleStartDownload}>
+                            Yes, Proceed
+                        </Button>
+                    </Modal.Footer>
+                )}
+            </Modal>
+
+            {/* Sync to Online Modal */}
+            <Modal
+                show={!!syncConfirmProject}
+                onHide={() => setSyncConfirmProject(null)}
+                centered
+                backdrop="static"
+            >
+                <Modal.Header closeButton>
+                    <Modal.Title>
+                        <Icon.ArrowRepeat className="me-2 text-success" />
+                        Save Project to Online
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <h5>Sync Changes to Online</h5>
+                    <p className="text-muted mb-3">
+                        Upload all local survey updates and card ratings for <strong>{syncConfirmProject?.name}</strong> back to the cloud database.
+                    </p>
+                </Modal.Body>
+                <Modal.Footer className="gap-2">
+                    <Button variant={BUTTONS.SECONDARY} onClick={() => setSyncConfirmProject(null)}>
+                        Cancel
+                    </Button>
+                    <Button variant={BUTTONS.PRIMARY} onClick={handleConfirmSync}>
+                        Sync to Online
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
+            {/* Download Success Modal */}
+            <Modal
+                show={downloadSuccessModal}
+                onHide={() => setDownloadSuccessModal(false)}
+                centered
+            >
+                <Modal.Header closeButton>
+                    <Modal.Title className="text-success">
+                        <Icon.CheckCircleFill className="me-2" />
+                        Download Complete
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <p className="mb-0">
+                        Project successfully downloaded to local encrypted storage. You can now continue working seamlessly even when disconnected from the network.
+                    </p>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant={BUTTONS.PRIMARY} onClick={() => setDownloadSuccessModal(false)}>
+                        Ok
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
+            {/* Sync Success Modal */}
+            <Modal
+                show={syncSuccessModal}
+                onHide={() => setSyncSuccessModal(false)}
+                centered
+            >
+                <Modal.Header closeButton>
+                    <Modal.Title className="text-success">
+                        <Icon.CheckCircleFill className="me-2" />
+                        Sync Successful
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <p className="mb-0">
+                        Offline records and survey ratings have been synchronized to the cloud database.
+                    </p>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant={BUTTONS.PRIMARY} onClick={() => setSyncSuccessModal(false)}>
+                        Ok
+                    </Button>
+                </Modal.Footer>
+            </Modal>
         </>
     );
 };

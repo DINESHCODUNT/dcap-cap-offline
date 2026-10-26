@@ -56,6 +56,11 @@ const initializeMsal = async (): Promise<IPublicClientApplication> => {
     const AppConfig: AppConfig = await loadConfig();
     const msalConfig: Configuration = AppConfig.azureAdConfig;
 
+    if (msalConfig && msalConfig.auth) {
+        msalConfig.auth.redirectUri = `${window.location.origin}/success`;
+        msalConfig.auth.postLogoutRedirectUri = `${window.location.origin}/`;
+    }
+
     msalInstance = new PublicClientApplication(msalConfig);
     await msalInstance.initialize();
   } catch (error) {

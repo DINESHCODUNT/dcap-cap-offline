@@ -13,6 +13,7 @@ import AddUser, { type CapUser } from '../pages/Admin/AdminSettings/Users/AddUse
 import InformationPopup from '../Common/InformationPopup';
 import * as absUserService from '../service/AbsUserService';
 import { usePermissions } from '../context/PermissionContext';
+import OnlineStatusBadge from '../components/OnlineStatusBadge';
 
 const Header: React.FC = () => {
     const msalContext = React.useContext(MsalContext);
@@ -105,6 +106,9 @@ const Header: React.FC = () => {
                         </div>
                     </NavItem>
                     <div className='d-flex align-items-center gap-2 gap-md-3'>
+                        <NavItem className='top-nav-item border-0 me-2'>
+                            <OnlineStatusBadge />
+                        </NavItem>
                         <NavItem className='top-nav-item border-0'>
                             {isAuthorized ? (
                                 <Dropdown align="end">

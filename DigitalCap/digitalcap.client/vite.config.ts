@@ -51,6 +51,11 @@ export default defineConfig({
         }
     },
 
+    build: {
+        outDir: '../DigitalCap.Server/wwwroot',
+        emptyOutDir: false
+    },
+
     server: {
         proxy: {
             '^/api': {
