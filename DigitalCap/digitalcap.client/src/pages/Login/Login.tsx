@@ -81,6 +81,8 @@ const Login: React.FC = () => {
         if (!validateEmail(email)) return;
 
         if (isCorpUser(email)) {
+            setLoading(true);
+            setResponseMsg("");
             try {
                 await instance.loginRedirect({
                     ...loginRequest,
@@ -88,6 +90,8 @@ const Login: React.FC = () => {
                 });
             } catch (error: any) {
                 setResponseMsg(`Failed to redirect: ${error.message || error.errorCode || "Unknown error"}`);
+            } finally {
+                setLoading(false);
             }
         } else {
             setShowPasswordScreen(true);

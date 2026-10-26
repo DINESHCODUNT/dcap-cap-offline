@@ -1,15 +1,26 @@
 using Azure.Identity;
+using DigitalCap.Core.Services;
 using DigitalCap.Infrastructure.DbContext;
+using DigitalCap.Infrastructure.Service;
 using DigitalCap.Persistence.Extensions;
 using DigitalCap.WebApi.Core;
+using ElectronNET.API;
+using ElectronNET.API.Entities;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.IO;
 using System.Security.Claims;
+using System.Threading.Tasks;
+
+// Initialize SQLCipher provider
+SQLitePCL.raw.SetProvider(new SQLitePCL.SQLite3Provider_e_sqlcipher());
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.UseElectron(args);
+
 // Load secrets from Azure Key Vault (works locally via VS/CLI login; in Azure via Managed Identity)
 var keyVaultUri = builder.Configuration["KeyVaultUri"];
 if (!string.IsNullOrEmpty(keyVaultUri))
@@ -24,6 +35,9 @@ var configuration = builder.Configuration;
 builder.Services.AddControllers();
 builder.Services.AddPersistenceServices(builder.Configuration);
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSingleton<OneDrivePathService>();
+builder.Services.AddSingleton<OnlineStatusService>();
+
 builder.Services.Configure<OpenIdConnectOptions>(options =>
 {
     options.TokenValidationParameters.NameClaimType = "preferred_username";
@@ -31,8 +45,19 @@ builder.Services.Configure<OpenIdConnectOptions>(options =>
     options.TokenValidationParameters.NameClaimType = ClaimTypes.Upn;
 });
 
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+if (!HybridSupport.IsElectronActive)
+{
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+}
+else
+{
+    var pathService = new OneDrivePathService();
+    var workingDbPath = pathService.GetDatabasePath();
+    var decryptedKey = AppKeyService.GetDecryptedKey();
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlite($"Data Source={workingDbPath};Password={decryptedKey};"));
+}
 
 
 var adAudience = configuration["AzureAd:Audience"] ?? "d8a3a596-6fcc-4047-ac76-d990b30f1bb0";
@@ -137,7 +162,7 @@ builder.Services.AddOpenApi();
 var app = builder.Build();
 
 app.UseDefaultFiles();
-app.MapStaticAssets();
+app.UseStaticFiles();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -145,12 +170,67 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+if (!HybridSupport.IsElectronActive)
+{
+    app.UseHttpsRedirection();
+}
+
+app.UseMiddleware<OnlineStatusMiddleware>();
 
 app.UseAuthorization();
+
+// Ensure local SQLite database exists in OneDrive or LocalAppData from template
+if (HybridSupport.IsElectronActive)
+{
+    var webRoot = app.Environment.WebRootPath ?? Path.Combine(AppContext.BaseDirectory, "wwwroot");
+    var offlineDbManager = new OfflineDatabaseManager(webRoot);
+    offlineDbManager.EnsureWorkingDatabaseExists();
+}
 
 app.MapControllers();
 
 app.MapFallbackToFile("/index.html");
+
+if (HybridSupport.IsElectronActive)
+{
+    Task.Run(async () =>
+    {
+        // Setup View Menu matching digital-cap-offline
+        var viewMenu = new MenuItem[]
+        {
+            new MenuItem { Role = MenuRole.toggledevtools },
+            new MenuItem { Role = MenuRole.zoomin },
+            new MenuItem { Role = MenuRole.zoomout },
+            new MenuItem { Type = MenuType.separator },
+            new MenuItem { Role = MenuRole.togglefullscreen }
+        };
+
+        var menu = new MenuItem[]
+        {
+            new MenuItem { Label = "View", Type = MenuType.submenu, Submenu = viewMenu }
+        };
+
+        Electron.Menu.SetApplicationMenu(menu);
+
+        var iconPath = Path.Combine(app.Environment.WebRootPath, "abs-icon.ico");
+        var options = new BrowserWindowOptions
+        {
+            Width = 1280,
+            Height = 900,
+            Show = false,
+            Title = "CAP App",
+            Icon = File.Exists(iconPath) ? iconPath : null,
+            WebPreferences = new WebPreferences
+            {
+                NodeIntegration = false,
+                ContextIsolation = true
+            }
+        };
+
+        var window = await Electron.WindowManager.CreateWindowAsync(options);
+        window.OnReadyToShow += () => window.Show();
+        window.OnClosed += () => Electron.App.Quit();
+    });
+}
 
 app.Run();

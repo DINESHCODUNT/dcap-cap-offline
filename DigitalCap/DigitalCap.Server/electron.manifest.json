@@ -1,0 +1,49 @@
+{
+  "name": "DigitalCap.Server",
+  "author": "ABS",
+  "singleInstance": false,
+  "aspCoreBackendPort": 55562,
+  "environment": "Development",
+  "executable": "DigitalCap.Server",
+  "splashscreen": {
+    "imageFile": "/wwwroot/images/splash.jpg"
+  },
+  "build": {
+    "appId": "com.DigitalCapDev.app",
+    "productName": "CAP App",
+    "copyright": "2026",
+    "buildVersion": "1.1.4",
+    "compression": "maximum",
+    "directories": {
+      "output": "../../../bin/Desktop"
+    },
+    "nsis": {
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "include": "../../../wwwroot/installer.nsi",
+      "perMachine": true,
+      "guid": "DCAP"
+    },
+    "extraResources": [
+      {
+        "from": "./bin",
+        "to": "bin",
+        "filter": [ "**/*" ]
+      }
+    ],
+    "files": [
+      {
+        "from": "./ElectronHostHook/node_modules",
+        "to": "ElectronHostHook/node_modules",
+        "filter": [ "**/*" ]
+      },
+      "**/*"
+    ],
+    "win": {
+      "icon": "../../../wwwroot/abs-icon.ico",
+      "target": [ "nsis" ],
+      "compression": "maximum"
+    }
+  }
+}
