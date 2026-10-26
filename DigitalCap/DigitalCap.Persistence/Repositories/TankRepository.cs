@@ -232,6 +232,16 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
+                {
+                    var sqliteResult = await Connection.QueryAsync<Core.Models.Tank.ShipType>(
+                        sql: DigitalCap.Core.Constants.SQLiteQueries.Tank.GetShipType,
+                        commandType: CommandType.Text,
+                        transaction: Transaction
+                    );
+                    return sqliteResult.ToList();
+                }
+
                 var result = await Connection.QueryAsync<Core.Models.Tank.ShipType>(
                     sql: "dbo.GetShipType",
                     commandType: CommandType.StoredProcedure,
@@ -489,6 +499,15 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
+                {
+                    var sqliteResult = await Connection.QueryAsync<TankTypes>(
+                        sql: DigitalCap.Core.Constants.SQLiteQueries.Tank.GetTankType,
+                        commandType: CommandType.Text,
+                        transaction: Transaction);
+                    return sqliteResult.ToList();
+                }
+
                 var result = await Connection.QueryAsync<TankTypes>(
                  sql: "dbo.GetTankType",
                  commandType: CommandType.StoredProcedure,
@@ -506,6 +525,19 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
+                {
+                    var sql = (projectId != 0)
+                        ? DigitalCap.Core.Constants.SQLiteQueries.Tank.GetTankTypeByProjectTankMapping
+                        : DigitalCap.Core.Constants.SQLiteQueries.Tank.GetTankTypeByVesselTankMapping;
+                    var sqliteResult = await Connection.QueryAsync<TankTypes>(
+                        sql: sql,
+                        param: new { ProjectId = projectId, Vesseltype = vesseltype },
+                        commandType: CommandType.Text,
+                        transaction: Transaction);
+                    return sqliteResult.ToList();
+                }
+
                 var result = await Connection.QueryAsync<TankTypes>(
                   sql: "[dbo].[GetTankTypeByTankMapping]",
                   new
@@ -528,6 +560,15 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
+                {
+                    var sqliteResult = await Connection.QueryAsync<VesselDetails>(
+                        sql: DigitalCap.Core.Constants.SQLiteQueries.Tank.GetImoNumber,
+                        commandType: CommandType.Text,
+                        transaction: Transaction);
+                    return sqliteResult.ToList();
+                }
+
                 var result = await Connection.QueryAsync<VesselDetails>(
                 sql: "dbo.GetIMONumber",
                 commandType: CommandType.StoredProcedure,
@@ -546,6 +587,15 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
+                {
+                    var sqliteResult = await Connection.QueryAsync<Core.Models.View.Admin.VesselTypes>(
+                        sql: "SELECT Id, VesselType AS Name FROM VesselType",
+                        commandType: CommandType.Text,
+                        transaction: Transaction);
+                    return sqliteResult.ToList();
+                }
+
                 var result = await Connection.QueryAsync<Core.Models.View.Admin.VesselTypes>(
                     sql: "dbo.GetVesselType",
                     commandType: CommandType.StoredProcedure,
@@ -563,6 +613,31 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
+                {
+                    var sqliteResult = await Connection.QueryAsync<dynamic>(
+                        sql: DigitalCap.Core.Constants.SQLiteQueries.Tank.GetTanksOfVessel,
+                        param: new { username = username },
+                        commandType: CommandType.Text,
+                        transaction: Transaction);
+
+                    var convertedResults = sqliteResult.Select(r => new Core.Models.View.Admin.Tank
+                    {
+                        TankId = r.TankId != null ? Guid.Parse(r.TankId.ToString()) : Guid.Empty,
+                        VesselType = r.VesselType != null ? r.VesselType.ToString() : string.Empty,
+                        TankName = r.TankName != null ? r.TankName.ToString() : string.Empty,
+                        IsActive = Convert.ToBoolean(r.Status),
+                        Status = Convert.ToBoolean(r.Status),
+                        IMONumber = r.ImoNumber != null ? r.ImoNumber.ToString() : string.Empty,
+                        VesselName = r.VesselName != null ? r.VesselName.ToString() : string.Empty,
+                        TankType = r.TankType != null ? r.TankType.ToString() : string.Empty,
+                        ProjectName = r.ProjectName != null ? r.ProjectName.ToString() : string.Empty,
+                        Subheader = r.Subheader != null ? r.Subheader.ToString() : string.Empty
+                    });
+
+                    return convertedResults.ToList();
+                }
+
                 var result = await Connection.QueryAsync<Core.Models.View.Admin.Tank>(
                     sql: "dbo.Get_Vessel_Tank",
                     param: new

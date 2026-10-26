@@ -183,6 +183,15 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
+                {
+                    var sqliteList = await Connection.QueryAsync<SelectListItem>(
+                        sql: DigitalCap.Core.Constants.SQLiteQueries.Project.GetProjectListByIMO,
+                        param: new { IMO = imoNumber },
+                        commandType: CommandType.Text,
+                        transaction: Transaction);
+                    return sqliteList.ToList();
+                }
 
                 return (await Connection.QueryAsync<SelectListItem>(
                     sql: "CAP.GetProjectListByIMO",
@@ -1001,13 +1010,31 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<IEnumerable<AllProjectsGrid>> GetAllProjectsGridData()
         {
-            var result = await Connection.QueryAsync<AllProjectsGrid>(
-                sql: "CAP.Read_Projects_Grid",
-                commandType: CommandType.StoredProcedure,
-                transaction: Transaction,
-                commandTimeout: 60
-            );
-            return result;
+            try
+            {
+                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
+                {
+                    var sqliteResult = await Connection.QueryAsync<AllProjectsGrid>(
+                        sql: DigitalCap.Core.Constants.SQLiteQueries.Project.AllProjectsGrid,
+                        commandType: CommandType.Text,
+                        transaction: Transaction
+                    );
+                    return sqliteResult;
+                }
+
+                var result = await Connection.QueryAsync<AllProjectsGrid>(
+                    sql: "CAP.Read_Projects_Grid",
+                    commandType: CommandType.StoredProcedure,
+                    transaction: Transaction,
+                    commandTimeout: 60
+                );
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error in GetAllProjectsGridData");
+                return Enumerable.Empty<AllProjectsGrid>();
+            }
         }
         public async Task<List<CAPCoordinator>> GetCAPCoordinator(string region, bool includeManager)
         {

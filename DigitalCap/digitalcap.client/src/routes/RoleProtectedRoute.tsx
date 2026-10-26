@@ -33,7 +33,9 @@ const RoleProtectedRoute = ({
 
     let isAllowed = true;
 
-    if (requireAnyAccess) {
+    const isDesktop = typeof window !== 'undefined' && (Boolean((window as any).electron) || navigator.userAgent.includes('Electron'));
+
+    if (requireAnyAccess && !isDesktop) {
         if (permissions.length === 0 && roles.length === 0 && Object.keys(pagePermissions).length === 0) {
             isAllowed = false;
         }

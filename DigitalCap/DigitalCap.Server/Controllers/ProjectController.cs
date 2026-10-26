@@ -199,10 +199,10 @@ namespace DigitalCap.WebApi.Controllers
         public async Task<IActionResult> List()
         {
 
-            var isElectron = Convert.ToBoolean(_configData["IsElectron"]);
+            bool isOffline = !DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline;
             var currentUser = CurrentUsername;
 
-            var result = await _projectService.GetList(currentUser, isElectron);
+            var result = await _projectService.GetList(currentUser, isOffline);
 
             return Ok(result.Data);
         }
@@ -216,14 +216,14 @@ namespace DigitalCap.WebApi.Controllers
         {
             try
             {
-                var Iselectron = Convert.ToBoolean(_configData["IsElectron"]);
-                var currentUser = CurrentUsername.ToLower();
+                bool isOffline = !DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline;
+                var currentUser = CurrentUsername?.ToLower() ?? "";
 
                 if (string.IsNullOrEmpty(currentUser))
                     return Unauthorized("User not authenticated");
 
                 var refreshStale = request?.RefreshStalePercentComplete ?? true;
-                var result = await _projectService.GetAllProjectsGridData(Iselectron, currentUser, refreshStale);
+                var result = await _projectService.GetAllProjectsGridData(isOffline, currentUser, refreshStale);
 
                 if (!result.IsSuccess)
                     return BadRequest(result.ErrorMessage);

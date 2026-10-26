@@ -122,48 +122,79 @@ namespace DigitalCap.Infrastructure.Service
                 if (string.IsNullOrEmpty(email))
                     return ServiceResult<ApplicationDto>.Failure("No user identity in token");
 
-                // 1. Try exact email match
-                var user = await _userManager.FindByEmailAsync(email);
-
-                // 2. Try by username (some systems store email as username)
-                if (user == null)
-                    user = await _userManager.FindByNameAsync(email);
-
-                // 3. Try by the username prefix before '@' (handles domain mismatch between AD and DB)
-                if (user == null && email.Contains('@'))
+                ApplicationUser? user = null;
+                try
                 {
-                    var usernamePart = email.Split('@')[0];
-                    user = await _userManager.FindByNameAsync(usernamePart);
-                    // Also try email-style lookup with just the prefix
+                    // 1. Try exact email match
+                    user = await _userManager.FindByEmailAsync(email);
+
+                    // 2. Try by username (some systems store email as username)
                     if (user == null)
-                        user = await _userManager.Users
-                            .FirstOrDefaultAsync(u => u.UserName != null && u.UserName.StartsWith(usernamePart));
+                        user = await _userManager.FindByNameAsync(email);
+
+                    // 3. Try by the username prefix before '@' (handles domain mismatch between AD and DB)
+                    if (user == null && email.Contains('@'))
+                    {
+                        var usernamePart = email.Split('@')[0];
+                        user = await _userManager.FindByNameAsync(usernamePart);
+                        if (user == null)
+                            user = await _userManager.Users
+                                .FirstOrDefaultAsync(u => u.UserName != null && u.UserName.StartsWith(usernamePart));
+                    }
+                }
+                catch
+                {
+                    // Ignore offline or database query errors
                 }
 
-                if (user == null)
-                    return ServiceResult<ApplicationDto>.Failure($"User not found: {email}");
-
-                await MapUserDetails(user);
-
-                var dto = new ApplicationDto
+                if (user != null)
                 {
-                    Id = user.Id,
-                    Email = user.Email,
-                    UserName = user.UserName,
-                    IsEnabled = user.IsEnabled,
+                    try
+                    {
+                        await MapUserDetails(user);
+                    }
+                    catch
+                    {
+                        // Ignore mapping error on offline DB
+                    }
 
-                    Roles = user.Roles ?? Array.Empty<string>(),
-                    Permissions = user.Permissions,
+                    var dto = new ApplicationDto
+                    {
+                        Id = user.Id,
+                        Email = user.Email,
+                        UserName = user.UserName,
+                        IsEnabled = user.IsEnabled,
 
-                    UserAccount = user.UserAccount
+                        Roles = user.Roles ?? Array.Empty<string>(),
+                        Permissions = user.Permissions,
+
+                        UserAccount = user.UserAccount
+                    };
+
+                    return ServiceResult<ApplicationDto>.Success(dto);
+                }
+
+                // Fallback using token claims for offline mode or unmapped accounts
+                var roles = claimsPrincipal.FindAll(ClaimTypes.Role).Select(c => c.Value).ToArray();
+                if (roles.Length == 0)
+                {
+                    roles = new[] { "Surveyor" };
+                }
+                var fallbackDto = new ApplicationDto
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Email = email,
+                    UserName = claimsPrincipal.FindFirstValue(ClaimTypes.Name) ?? email,
+                    IsEnabled = true,
+                    Roles = roles,
+                    Permissions = new HashSet<Permission> { Permission.ViewAbsProjectLandingPage, Permission.ViewAllProjects }
                 };
 
-
-                return ServiceResult<ApplicationDto>.Success(dto);
+                return ServiceResult<ApplicationDto>.Success(fallbackDto);
             }
             catch (Exception ex)
             {
-                throw new Exception(ex.Message);
+                return ServiceResult<ApplicationDto>.Failure($"Error resolving user: {ex.Message}");
             }
         }
 

@@ -56,7 +56,36 @@ const HeaderMenu: React.FC = () => {
         items: SidebarChildItem[];
     };
 
-    const sidebarData: any[] = [
+    const isDesktopApp =
+        navigator.userAgent.toLowerCase().includes("electron") ||
+        (window as any).electron !== undefined ||
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1";
+
+    const sidebarData: any[] = isDesktopApp
+        ? [
+            {
+                id: "Allprojects",
+                title: "All Projects",
+                link: "/app/Project",
+                permission: "ViewAllProjects",
+                items: [],
+            },
+            {
+                id: "ProjectConfiguration",
+                title: "Project Configuration",
+                link: "",
+                items: [
+                    {
+                        id: "ManageTanks",
+                        name: "Manage Tanks",
+                        navlink: "/app/Configuration/ManageTanks",
+                        permission: "manageTank"
+                    }
+                ],
+            }
+        ]
+        : [
         {
             id: "Allprojects",
             title: "All Projects",

@@ -3,6 +3,7 @@ using System.Data;
 using System.IO;
 using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Services;
+using DigitalCap.Infrastructure.Service;
 using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
@@ -22,6 +23,10 @@ namespace DigitalCap.Persistence
         public UnitOfWork(IConfiguration configuration)
         {
             _isElectron = configuration.GetValue<bool>("IsElectron", true);
+            var sqlServerConn = configuration.GetConnectionString("DefaultConnection")
+                ?? configuration.GetConnectionString("ABSConnectionString") ?? "";
+
+            bool isOnline = IsOnline.OnlineOrOffline;
 
             if (_isElectron)
             {
@@ -37,10 +42,11 @@ namespace DigitalCap.Persistence
                 var pathService = new OneDrivePathService();
                 var oneDriveDb = pathService.GetDatabasePath();
                 var decryptedKey = AppKeyService.GetDecryptedKey();
+                string sqliteConnStr;
 
                 if (File.Exists(oneDriveDb))
                 {
-                    _connectionString = $"Data Source={oneDriveDb};Password={decryptedKey};";
+                    sqliteConnStr = $"Data Source={oneDriveDb};Password={decryptedKey};";
                 }
                 else
                 {
@@ -49,7 +55,6 @@ namespace DigitalCap.Persistence
 
                     if (File.Exists(templateDb))
                     {
-                        // Copy template to OneDrive working directory
                         var dir = Path.GetDirectoryName(oneDriveDb);
                         if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                         {
@@ -58,24 +63,45 @@ namespace DigitalCap.Persistence
                         try
                         {
                             File.Copy(templateDb, oneDriveDb, overwrite: true);
-                            _connectionString = $"Data Source={oneDriveDb};Password={decryptedKey};";
+                            sqliteConnStr = $"Data Source={oneDriveDb};Password={decryptedKey};";
                         }
                         catch
                         {
-                            _connectionString = $"Data Source={templateDb};Password={decryptedKey};";
+                            sqliteConnStr = $"Data Source={templateDb};Password={decryptedKey};";
                         }
                     }
                     else
                     {
-                        _connectionString = $"Data Source={oneDriveDb};Password={decryptedKey};";
+                        sqliteConnStr = $"Data Source={oneDriveDb};Password={decryptedKey};";
                     }
                 }
 
-                Connection = new SqliteConnection(_connectionString);
+                // If online in desktop mode, connect to Azure SQL Server like web mode
+                if (isOnline && !string.IsNullOrWhiteSpace(sqlServerConn))
+                {
+                    try
+                    {
+                        var sqlConn = new SqlConnection(sqlServerConn);
+                        sqlConn.Open();
+                        Connection = sqlConn;
+                        _connectionString = sqlServerConn;
+                    }
+                    catch
+                    {
+                        // Fallback to SQLite if Azure SQL Server is unreachable
+                        Connection = new SqliteConnection(sqliteConnStr);
+                        _connectionString = sqliteConnStr;
+                    }
+                }
+                else
+                {
+                    Connection = new SqliteConnection(sqliteConnStr);
+                    _connectionString = sqliteConnStr;
+                }
             }
             else
             {
-                _connectionString = configuration.GetConnectionString("DefaultConnection") ?? "";
+                _connectionString = sqlServerConn;
                 Connection = new SqlConnection(_connectionString);
             }
         }

@@ -52,6 +52,23 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
+                {
+                    try
+                    {
+                        var sqliteActivities = await Connection.QueryAsync<RecentActivity>(
+                            "SELECT * FROM Activities ORDER BY CreateDttm DESC LIMIT @Take OFFSET @Skip",
+                            new { Take = size, Skip = page * size },
+                            transaction: Transaction
+                        );
+                        return sqliteActivities.ToList();
+                    }
+                    catch
+                    {
+                        return new List<RecentActivity>();
+                    }
+                }
+
                 var sort = new List<ISort>
                 {
                     Predicates.Sort<RecentActivity>(x => x.CreateDttm, false)
@@ -64,8 +81,8 @@ namespace DigitalCap.Persistence.Repositories
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error fetching paged recent activities");
-                throw;
+                _logger?.LogError(ex, "Error fetching paged recent activities");
+                return new List<RecentActivity>();
             }
         }
 
