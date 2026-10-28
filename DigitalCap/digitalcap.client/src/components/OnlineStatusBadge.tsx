@@ -1,6 +1,5 @@
 import React from 'react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
-import * as Icon from 'react-bootstrap-icons';
 
 interface OnlineStatusBadgeProps {
     className?: string;
@@ -39,19 +38,7 @@ export const OnlineStatusBadge: React.FC<OnlineStatusBadgeProps> = ({
                 }}
             />
             {showLabel && (
-                <span>
-                    {isOnline ? (
-                        <>
-                            <Icon.CloudCheckFill className="me-1" style={{ verticalAlign: '-1px' }} />
-                            Online
-                        </>
-                    ) : (
-                        <>
-                            <Icon.CloudSlashFill className="me-1" style={{ verticalAlign: '-1px' }} />
-                            Offline Mode
-                        </>
-                    )}
-                </span>
+                <span>{isOnline ? 'Online' : 'Offline'}</span>
             )}
         </div>
     );

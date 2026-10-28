@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import Modal from 'react-bootstrap/Modal';
-import { AbsSearch, Button, BUTTONS, AbsReactTable, Toggle } from 'customer_portal-ui-shared';
+import { AbsSearch, AbsSelect, Button, BUTTONS, AbsReactTable, Toggle } from 'customer_portal-ui-shared';
 import * as Icon from "react-bootstrap-icons";
 import * as projectService from '../../service/ProjectService';
 import moment from 'moment';
@@ -315,10 +315,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     }, [isDesktop]);
 
     const handleTriggerDownloadFromDropdown = async () => {
-        if (!selectedOnlineProjectId) {
-            setTransferError("Please select the project name to download offline");
-            return;
-        }
+        if (!selectedOnlineProjectId) return;
         const match = availableOnlineProjects.find(p => p.projectId === selectedOnlineProjectId);
         if (!match) return;
 
@@ -767,10 +764,12 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 filtering: false,
                 sorting: false,
                 Cell: ({ row: { original } }: any) => (
-                    <div className='d-flex justify-content-start gap-3'>
+                    <div className='d-flex align-items-center justify-content-start gap-3'>
                         <Button
                             variant={BUTTONS.TABLEDOWNLOAD}
-                            startIcon={<Icon.ArrowRight />}
+                            className="project-action-btn"
+                            style={{ width: '32px', height: '32px', minWidth: '32px', padding: 0, borderRadius: '6px' }}
+                            startIcon={<Icon.ArrowRight size={16} />}
                             onClick={() => onSelectProject(original)}
                         ></Button>
                         {isDesktop && navigator.onLine && (
@@ -994,29 +993,28 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     <div className="d-flex justify-content-between align-items-center mb-3 p-3 bg-white rounded shadow-sm">
                         <h4 className="mb-0 _600">All Projects</h4>
                         <div className="d-flex align-items-center gap-2">
-                            <select
-                                className="form-select"
-                                style={{ minWidth: '260px' }}
-                                value={selectedOnlineProjectId ?? ''}
-                                onChange={(e) => setSelectedOnlineProjectId(e.target.value ? Number(e.target.value) : null)}
-                                disabled={loadingOnlineProjects || isDownloading}
-                            >
-                                <option value="">Select project</option>
-                                {availableOnlineProjects.map((p) => (
-                                    <option key={p.projectId} value={p.projectId}>
-                                        {p.projectName}
-                                    </option>
-                                ))}
-                            </select>
-                            <button
-                                type="button"
-                                className="btn btn-primary d-flex align-items-center gap-2"
+                            <div style={{ minWidth: '260px' }}>
+                                <AbsSelect
+                                    mult={false}
+                                    search={true}
+                                    placeholder="Select project"
+                                    options={availableOnlineProjects.map((p) => ({
+                                        text: p.projectName,
+                                        value: String(p.projectId)
+                                    }))}
+                                    selected={selectedOnlineProjectId ? [String(selectedOnlineProjectId)] : []}
+                                    onChange={(selected) => setSelectedOnlineProjectId(selected?.[0] ? Number(selected[0]) : null)}
+                                    disabled={loadingOnlineProjects || isDownloading}
+                                />
+                            </div>
+                            <Button
+                                variant={BUTTONS.PRIMARY}
+                                className="text-nowrap"
                                 onClick={handleTriggerDownloadFromDropdown}
-                                disabled={isDownloading}
+                                disabled={!selectedOnlineProjectId || isDownloading}
                             >
-                                <Icon.Download size={16} />
                                 Download Offline
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 )}
@@ -1207,7 +1205,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 </Modal.Body>
                 <Modal.Footer className="d-flex justify-content-end gap-2">
                     <Button variant={BUTTONS.SECONDARY} onClick={() => setShowDownloadConfirm(false)}>
-                        No, Cancel
+                        Cancel
                     </Button>
                     <Button variant={BUTTONS.SECONDARY} onClick={handleProceedDropdownDownload}>
                         Yes, Proceed
