@@ -10,6 +10,7 @@ import ProjectLanding from '../Project/ProjectLanding';
 import * as projectService from '../../service/ProjectService';
 import * as userPermissionService from "../../service/UserPermissionService";
 import { useLocation } from 'react-router-dom';
+import { isElectron } from '../../utils/runtime';
 
 function downloadCsv(rows: Array<Record<string, string>>, filename: string): void {
     if (rows.length === 0) return;
@@ -272,16 +273,20 @@ const Overview: React.FC = () => {
                     >
                         <div className="section-actions d-flex flex-column flex-md-row justify-content-center justify-content-md-end align-items-end align-items-md-center gap-2 mt-2 mt-md-0 flex-grow-1">
 
-                            {hasPermission("exportProject") && (
-                                <Button disabled={exporting} onClick={() => void handleExport()}>
-                                    {exporting ? 'Exporting…' : 'Export'}
-                                </Button>
-                            )}
+                            {!isElectron() && (
+                                <>
+                                    {hasPermission("exportProject") && (
+                                        <Button disabled={exporting} onClick={() => void handleExport()}>
+                                            {exporting ? 'Exporting…' : 'Export'}
+                                        </Button>
+                                    )}
 
-                            {hasPermission("addProject") && (
-                                <Button onClick={handleClick}>
-                                    Add New Project
-                                </Button>
+                                    {hasPermission("addProject") && (
+                                        <Button onClick={handleClick}>
+                                            Add New Project
+                                        </Button>
+                                    )}
+                                </>
                             )}
 
                         </div>

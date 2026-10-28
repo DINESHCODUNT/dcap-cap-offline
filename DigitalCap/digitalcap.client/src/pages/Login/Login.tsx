@@ -7,7 +7,7 @@ import * as accountService from "../../service/LoginService";
 import { Button, BUTTONS, Input, Label } from 'customer_portal-ui-shared';
 import { getApiScopes, getLoginScopes } from "../../utils/authConfig";
 import { AuthContext } from "../../context/AuthContext";
-import { isElectron } from "../../utils/runtime";
+import { isElectron, isAppOnline } from "../../utils/runtime";
 import EmptyProjectView from "../Project/EmptyProjectView";
 
 const loginRequest = {
@@ -27,7 +27,7 @@ const Login: React.FC = () => {
     const [responseMsg, setResponseMsg] = useState("");
     const hasProcessedRedirect = useRef(false);
     const { user, loading: authLoading } = useContext(AuthContext);
-    const [redirectingToOnline, setRedirectingToOnline] = useState(isElectron() && navigator.onLine);
+    const [redirectingToOnline, setRedirectingToOnline] = useState(isElectron());
 
     useEffect(() => {
         if (!authLoading && user) {
@@ -36,20 +36,33 @@ const Login: React.FC = () => {
     }, [user, authLoading, navigate]);
 
     useEffect(() => {
+        let isMounted = true;
         if (!authLoading && !user && isElectron()) {
-            if (navigator.onLine) {
-                setRedirectingToOnline(true);
-                axios.get('/api/Offline/GetOnlineUrl').then(res => {
-                    if (res.data?.url) {
-                        window.location.href = res.data.url;
-                    } else {
-                        setRedirectingToOnline(false);
+            isAppOnline().then(async (online) => {
+                if (!isMounted) return;
+                if (online) {
+                    try {
+                        const res = await axios.get('/api/Offline/GetOnlineUrl');
+                        if (isMounted) {
+                            if (res.data?.url) {
+                                window.location.href = res.data.url;
+                            } else {
+                                setRedirectingToOnline(false);
+                            }
+                        }
+                    } catch {
+                        if (isMounted) {
+                            setRedirectingToOnline(false);
+                        }
                     }
-                }).catch(() => {
+                } else {
                     setRedirectingToOnline(false);
-                });
-            }
+                }
+            });
         }
+        return () => {
+            isMounted = false;
+        };
     }, [user, authLoading]);
 
     useEffect(() => {

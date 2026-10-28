@@ -2,7 +2,7 @@ import axios from "axios";
 import type { AxiosInstance, AxiosResponse, AxiosError } from "axios";
 import initializeMsal from "../msalInstance";
 import { API_BASE_URL } from "../api/apiConfig";
-import { isOfflineDesktop } from "../utils/runtime";
+import { isElectron, isAppOnline, isOfflineDesktop } from "../utils/runtime";
 import type { SilentRequest, PopupRequest } from "@azure/msal-browser";
 
 const axiosInstance: AxiosInstance = axios.create({
@@ -23,6 +23,9 @@ const renewToken = async (): Promise<string | null> => {
         const accounts = msalInstance.getAllAccounts();
 
         if (!accounts.length) {
+            if (isElectron()) {
+                return localStorage.getItem("token");
+            }
             return null;
         }
 
@@ -81,6 +84,7 @@ axiosInstance.interceptors.request.use(async (config) => {
 
 let isRefreshing = false;
 let pendingRequests: Array<(token: string | null) => void> = [];
+let isRedirectingToOnline = false;
 
 axiosInstance.interceptors.response.use(
     (response: AxiosResponse) => response,
@@ -93,6 +97,32 @@ axiosInstance.interceptors.response.use(
 
         if (await isOfflineDesktop()) {
             return Promise.reject(error);
+        }
+
+        if (isElectron()) {
+            const msalInstance = await initializeMsal();
+            const accounts = msalInstance.getAllAccounts();
+            if (!accounts.length) {
+                localStorage.removeItem("token");
+                if ((await isAppOnline()) && !isRedirectingToOnline) {
+                    isRedirectingToOnline = true;
+                    try {
+                        const res = await axios.get("/api/Offline/GetOnlineUrl");
+                        const onlineUrl = res.data?.url;
+                        if (onlineUrl) {
+                            const base = onlineUrl.endsWith("/") ? onlineUrl : `${onlineUrl}/`;
+                            const currentPath = (window.location.pathname === "/SetToken" || window.location.pathname === "/Login" || window.location.pathname === "/")
+                                ? "/app/Project"
+                                : window.location.pathname + window.location.search;
+                            window.location.href = `${base}desktop-login?redirectUrl=${encodeURIComponent(currentPath)}`;
+                            return new Promise(() => {});
+                        }
+                    } catch {
+                        isRedirectingToOnline = false;
+                    }
+                }
+                return Promise.reject(error);
+            }
         }
 
         if (originalConfig._retried) {
