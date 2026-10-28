@@ -1528,6 +1528,18 @@
     svg {
         fill: #fff !important;
     }
+
+    &.project-action-btn {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        max-width: 32px;
+        padding: 0 !important;
+        border-radius: 6px !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
 }
 
 
