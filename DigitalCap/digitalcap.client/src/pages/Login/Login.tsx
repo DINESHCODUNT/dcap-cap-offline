@@ -1,10 +1,14 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext } from "react";
+import axios from "axios";
 import { useMsal } from "@azure/msal-react";
 import { useNavigate } from "react-router-dom";
 import ABSLogo from "../../assets/images/ABSLogo.svg";
 import * as accountService from "../../service/LoginService";
 import { Button, BUTTONS, Input, Label } from 'customer_portal-ui-shared';
 import { getApiScopes, getLoginScopes } from "../../utils/authConfig";
+import { AuthContext } from "../../context/AuthContext";
+import { isElectron } from "../../utils/runtime";
+import EmptyProjectView from "../Project/EmptyProjectView";
 
 const loginRequest = {
     scopes: getLoginScopes(),
@@ -22,6 +26,31 @@ const Login: React.FC = () => {
     const [passwordError, setPasswordError] = useState("");
     const [responseMsg, setResponseMsg] = useState("");
     const hasProcessedRedirect = useRef(false);
+    const { user, loading: authLoading } = useContext(AuthContext);
+    const [redirectingToOnline, setRedirectingToOnline] = useState(isElectron() && navigator.onLine);
+
+    useEffect(() => {
+        if (!authLoading && user) {
+            navigate("/app/Project", { replace: true });
+        }
+    }, [user, authLoading, navigate]);
+
+    useEffect(() => {
+        if (!authLoading && !user && isElectron()) {
+            if (navigator.onLine) {
+                setRedirectingToOnline(true);
+                axios.get('/api/Offline/GetOnlineUrl').then(res => {
+                    if (res.data?.url) {
+                        window.location.href = res.data.url;
+                    } else {
+                        setRedirectingToOnline(false);
+                    }
+                }).catch(() => {
+                    setRedirectingToOnline(false);
+                });
+            }
+        }
+    }, [user, authLoading]);
 
     useEffect(() => {
         if (hasProcessedRedirect.current) return;
@@ -177,6 +206,13 @@ const Login: React.FC = () => {
         setPasswordError("");
         setResponseMsg("");
     };
+
+    if (!authLoading && isElectron() && !user) {
+        if (redirectingToOnline) {
+            return null;
+        }
+        return <EmptyProjectView />;
+    }
 
     return (
         <div className="login-wrapper">

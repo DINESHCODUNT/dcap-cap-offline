@@ -1157,7 +1157,7 @@ export function deleteTankCardImage(
 }
 
 export function releaseDataTransfer(payload: Record<string, unknown>): Promise<AxiosResponse<unknown>> {
-    return axiosInstance.post(`/DataTransfer/Release`, payload);
+    return axiosInstance.post(`/api/DataTransferAPI/Release`, null, { params: { projectId: payload.projectId } });
 }
 
 export function backupOfflineDatabase(): Promise<AxiosResponse<unknown>> {

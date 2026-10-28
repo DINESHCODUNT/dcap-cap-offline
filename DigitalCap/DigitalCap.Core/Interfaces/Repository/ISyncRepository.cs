@@ -7,6 +7,7 @@ namespace DigitalCap.Core.Interfaces.Repository
 {
     public interface ISyncRepository
     {
-        Task<LoginData> GetUserInfo();
+        Task<LoginData?> GetUserInfo();
+        Task SaveUserInfo(LoginData user);
     }
 }

@@ -108,6 +108,9 @@ namespace DigitalCap.WebApi.Controllers
         [DisableRequestSizeLimit]
         public async Task<IActionResult> UploadProjectFile([FromForm] IFormFile uploadedFile, [FromForm] FileDataType dataType, [FromForm] int projectId)
         {
+            if (!DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return BadRequest(new { message = "This needs an internet connection" });
+
             try
             {
                 if (uploadedFile == null)
@@ -134,6 +137,9 @@ namespace DigitalCap.WebApi.Controllers
         [HttpPost("[action]")]
         public async Task<IActionResult> UploadTaskFile([FromForm] IFormFile uploadedFile, [FromForm] FileDataType dataType, [FromForm] int projectId, [FromForm] int taskId)
         {
+            if (!DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return BadRequest(new { message = "This needs an internet connection" });
+
             try
             {
                 if (uploadedFile == null)
@@ -266,6 +272,9 @@ namespace DigitalCap.WebApi.Controllers
         [HttpGet("[action]")]
         public async Task<IActionResult> GetDownloadUrl([FromQuery] int fileId)
         {
+            if (!DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return BadRequest(new { message = "This needs an internet connection" });
+
             try
             {
                 var result = await _fileStorageService.GetFileDownloadUrl(fileId);
@@ -334,6 +343,9 @@ namespace DigitalCap.WebApi.Controllers
         [HttpPost("[action]")]
         public async Task<IActionResult> ShareFile([FromQuery] int projectId, [FromQuery] string projectName, [FromQuery] string emailTo, [FromQuery] string fileId, [FromQuery] string fileName)
         {
+            if (!DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return BadRequest(new { message = "This needs an internet connection" });
+
             try
             {
                 if (string.IsNullOrWhiteSpace(emailTo))
@@ -357,6 +369,9 @@ namespace DigitalCap.WebApi.Controllers
         [PermissionAuthorize(Permission.ClientDashboardDownloadDeliverables)]
         public async Task<IActionResult> DownloadClientDeliverables([FromQuery] int projectId)
         {
+            if (!DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return BadRequest(new { message = "This needs an internet connection" });
+
             try
             {
                 var stream = await _fileStorageService.DownloadZip(projectId, FileDataType.ClientDeliverables, true);

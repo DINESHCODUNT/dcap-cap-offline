@@ -2,6 +2,7 @@ using Dapper;
 using DapperExtensions;
 using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Models;
+using DigitalCap.Persistence.Extensions;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
@@ -24,8 +25,38 @@ namespace DigitalCap.Persistence.Repositories
             _unitOfWork = unitOfWork;
             _logger = logger;
         }
+        // Offline reads port SQLiteQueries.ReadActivities / ReadActivitiesByProjectId (reference
+        // ActivityOfflineRepository); the project columns are LEFT JOINed so activities of released projects still show.
+        private const string SqliteReadActivities = @"
+            SELECT a.ID, a.Text, a.CreateBy, a.CreateDttm, a.ProjectId, p.PIDNumber, p.VesselName
+            FROM Activities a LEFT JOIN Projects p ON a.ProjectId = p.ID
+            WHERE COALESCE(a.IsDeleted, 0) = 0
+            ORDER BY a.CreateDttm DESC LIMIT @Take OFFSET @Skip";
+
+        private const string SqliteReadActivitiesByProjectId = @"
+            SELECT a.ID, a.Text, a.CreateBy, a.CreateDttm, a.ProjectId, p.PIDNumber, p.VesselName
+            FROM Activities a LEFT JOIN Projects p ON a.ProjectId = p.ID
+            WHERE a.ProjectId = @ProjectId AND COALESCE(a.IsDeleted, 0) = 0
+            ORDER BY a.CreateDttm DESC LIMIT @Take";
+
+        private async Task<List<RecentActivity>> QuerySqliteActivities(string sql, object param, string what)
+        {
+            try
+            {
+                return await Connection.QueryMappedAsync<RecentActivity>(sql, param, Transaction);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching {What} from the local database", what);
+                throw;
+            }
+        }
+
         public async Task<List<RecentActivity>> GetRecentActivitiesAsync(int take)
         {
+            if (Connection.IsSqlite())
+                return await QuerySqliteActivities(SqliteReadActivities, new { Take = take, Skip = 0 }, "recent activities");
+
             try
             {
                 var parameters = new DynamicParameters();
@@ -50,25 +81,11 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<RecentActivity>> GetRecentActivitiesAsync2(int page, int size)
         {
+            if (Connection.IsSqlite())
+                return await QuerySqliteActivities(SqliteReadActivities, new { Take = size, Skip = page * size }, "paged recent activities");
+
             try
             {
-                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
-                {
-                    try
-                    {
-                        var sqliteActivities = await Connection.QueryAsync<RecentActivity>(
-                            "SELECT * FROM Activities ORDER BY CreateDttm DESC LIMIT @Take OFFSET @Skip",
-                            new { Take = size, Skip = page * size },
-                            transaction: Transaction
-                        );
-                        return sqliteActivities.ToList();
-                    }
-                    catch
-                    {
-                        return new List<RecentActivity>();
-                    }
-                }
-
                 var sort = new List<ISort>
                 {
                     Predicates.Sort<RecentActivity>(x => x.CreateDttm, false)
@@ -88,6 +105,9 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<RecentActivity>> GetRecentActivitiesByProjectIdAsync(int size, int projectId)
         {
+            if (Connection.IsSqlite())
+                return await QuerySqliteActivities(SqliteReadActivitiesByProjectId, new { Take = size, ProjectId = projectId }, "activities by projectId");
+
             try
             {
                 var parameters = new DynamicParameters();

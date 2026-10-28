@@ -121,6 +121,7 @@ namespace DigitalCap.Core.Models.Survey
         public bool? IsDeleted { get; set; }
         public DateTime? CreatedDttm { get; set; }
         public DateTime? UpdatedDttm { get; set; }
+        public string OthersDescription { get; set; }
     }
 
     public class ProjectCardMapping
@@ -520,11 +521,13 @@ public class TransferDataModel
     public List<GetReportVesselMainData> VesselMainData { get; set; }
     public List<CapActivity> Activities { get; set; }
     public List<ReportSurveyDetails> SurveyDetails { get; set; }
-    public List<ReportStatutoryCertificates> StatutoryCertificates { get; set; }
+    // Reference shape (nullable dates, PascalCase) — the Survey.ReportStatutoryCertificates view model differs.
+    public List<DigitalCap.Core.Models.DataTransfer.TransferReportStatutoryCertificates> StatutoryCertificates { get; set; }
     public List<HandIProjectGrading> handIProjectGradings { get; set; }
     public List<HandIProjectGradingConditions> handIProjectGradingConditions { get; set; }
     public List<Comment> comments { get; set; }
-    public List<ReportPart> ReportPart { get; set; }
+    // config.ReportPart rows (PartId, PartName, ...), not the Survey.ReportPart view model.
+    public List<DigitalCap.Core.Models.DataTransfer.TransferReportPart> ReportPart { get; set; }
     public List<ProjectTankSectionMapping> ProjectTankSection { get; set; }
     public List<ProjectSectionMapping> ProjectSectionMapping { get; set; }
     public List<DigitalCap.Core.Models.ProjectSubSection> ProjectSubSection { get; set; }
@@ -548,5 +551,11 @@ public class TransferDataModel
     public List<UpskillImageData> upskillImageData { get; set; }
 
     public List<VesselTypeTankMapping> VesselTypeTankMapping { get; set; }
+
+    // Desktop additions (not in the reference download): a read-only snapshot of the project's CAP2 workflow tasks
+    // for the offline landing page, and the downloading user's roles/permissions for offline permission checks.
+    // Neither is uploaded by sync.
+    public List<DigitalCap.Core.Models.SingleTask>? ProjectTasks { get; set; }
+    public DigitalCap.Core.Models.DataTransfer.OfflineUserSecurity? UserSecurity { get; set; }
 
 }

@@ -3,8 +3,10 @@ using DapperExtensions;
 using DigitalCap.Core.Helpers.Constants;
 using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Models;
+using DigitalCap.Core.Constants;
 using DigitalCap.Core.Models.Tank;
 using DigitalCap.Core.ViewModels;
+using DigitalCap.Persistence.Extensions;
 using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
@@ -42,8 +44,33 @@ namespace DigitalCap.Persistence.Repositories
             return percentComplete;
         }
 
+        // ------------------------------------------------------------------ offline (local SQLite)
+        // Reads port digital-cap-offline TaskOfflineService (GetCap2Tasks / GetCap2Task / GetStatusGroups). The
+        // reference had no working offline task writes (it ran SQL Server procedures on the local file), and the
+        // sync does not upload ProjectTaskStatus, so writes are refused offline instead of being lost.
+
+        private const string OfflineTaskWriteMessage =
+            "Workflow tasks can only be changed online; changes made offline would not be synchronized.";
+
+        /// <summary>CAP1 task list (CAP.Read_Tasks_ByProjectId): same rows as CAP2, using the CAP1 names.</summary>
+        private const string SqliteReadTasksByProjectId = @"
+            SELECT pts.[ID], pts.[ProjectId], pts.[StatusId], t.[ID] AS TaskId, t.[Category], t.[Type], t.[Name] AS Task,
+                   t.IsMilestone, t.PercentageComplete, s.[Status], pts.[Value], pts.[Notes], pts.StatusDate,
+                   pts.LastModifiedDate, pts.LastModifiedBy, pts.DueDate, pts.AssignedTo, pts.AssignedDate, pts.SurveyDays
+            FROM ProjectTaskStatus pts
+            INNER JOIN Statuses s ON pts.StatusId = s.[ID]
+            INNER JOIN Tasks t ON pts.[TaskId] = t.[ID]
+            WHERE pts.[ProjectId] = @ID";
+
+        private const string SqliteReadTaskStatuses = "SELECT ID, [Status] AS Name FROM Statuses WHERE [Type] = 'Task' ORDER BY ID";
+
+        private const string SqliteReadStatusGroups = "SELECT Id, Category, Name, StartedTaskId, CompletedTaskId FROM TaskStatusGroups WHERE Category = @Category ORDER BY Id";
+
         public async Task<IEnumerable<SingleTask>> GetCap2Tasks(int projectId)
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<SingleTask>(SQLiteQueries.Task.ReadCap2TasksByProjectId, new { ID = projectId }, Transaction);
+
             try
             {
                 var result = await Connection.QueryAsync<SingleTask>(
@@ -62,6 +89,9 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<TaskStatusGroup>> GetStatusGroups(string category)
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<TaskStatusGroup>(SqliteReadStatusGroups, new { Category = category }, Transaction);
+
             var sql = @"
         SELECT *
         FROM CAP.TaskStatusGroups
@@ -79,6 +109,9 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<IEnumerable<SingleTask>> GetTasks(int projectId)
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<SingleTask>(SqliteReadTasksByProjectId, new { ID = projectId }, Transaction);
+
             var result = await Connection.QueryAsync<SingleTask>(
                 sql: "CAP.Read_Tasks_ByProjectId",
                 new { ID = projectId },
@@ -90,6 +123,9 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<SingleTask> GetTask(int id)
         {
+            if (Connection.IsSqlite())
+                return (await Connection.QueryFirstMappedAsync<SingleTask>(SqliteReadTasksByProjectId.Replace("pts.[ProjectId] = @ID", "pts.[ID] = @ID"), new { ID = id }, Transaction))!;
+
             var result = await Connection.QueryFirstOrDefaultAsync<SingleTask>(
                 sql: "CAP.Read_Task_ById",
                 new { ID = id },
@@ -101,6 +137,9 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<SingleTask> GetCap2Task(int id)
         {
+            if (Connection.IsSqlite())
+                return (await Connection.QueryFirstMappedAsync<SingleTask>(SQLiteQueries.Task.ReadCap2ById, new { ID = id }, Transaction))!;
+
             var result = await Connection.QueryFirstOrDefaultAsync<SingleTask>(
                 sql: "CAP.Read_Cap2Tasks_ByTaskId",
                 new { ID = id },
@@ -123,6 +162,9 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<bool> UpdateTask(SingleTask task, string currentUser)
         {
+            if (Connection.IsSqlite())
+                throw new InvalidOperationException(OfflineTaskWriteMessage);
+
             try
             {
                 var result = await Connection.ExecuteAsync(
@@ -158,6 +200,9 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<bool> CloseTechnicalTasks(int projectId)
         {
+            if (Connection.IsSqlite())
+                throw new InvalidOperationException(OfflineTaskWriteMessage);
+
             try
             {
                 var result = await Connection.ExecuteAsync(
@@ -180,6 +225,9 @@ namespace DigitalCap.Persistence.Repositories
         /// </summary>
         public async Task<bool> CloseInvoiceTasks(int projectId)
         {
+            if (Connection.IsSqlite())
+                throw new InvalidOperationException(OfflineTaskWriteMessage);
+
             try
             {
                 var result = await Connection.ExecuteAsync(
@@ -198,6 +246,9 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<IEnumerable<Status>> GetStatuses()
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<Status>(SqliteReadTaskStatuses, transaction: Transaction);
+
             try
             {
                 var result = await Connection.QueryAsync<Status>(

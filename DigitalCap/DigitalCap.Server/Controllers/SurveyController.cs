@@ -1,6 +1,7 @@
 ﻿using DigitalCap.Core.Interfaces.Service;
 using DigitalCap.Core.Models;
 using DigitalCap.Core.Models.ExportConfig;
+using DigitalCap.WebApi.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
@@ -26,7 +27,9 @@ namespace DigitalCap.WebApi.Controllers
         {
             var user = User.Identity?.Name;
 
+            // The offline identity's Name claim is the display name; its permissions are stored under the e-mail.
             var currentUserName = User.FindFirstValue(ClaimTypes.Upn)
+               ?? (User.Identity?.AuthenticationType == OfflineAuthenticationHandler.SchemeName ? User.FindFirstValue(ClaimTypes.Email) : null)
                ?? User.FindFirstValue(ClaimTypes.Name);
 
             var result = await _projectSurveyService.GetSurveyIndexAsync(projectId, currentUserName, templateSectionId);

@@ -1,3 +1,4 @@
+import axios from 'axios';
 import React, { useState, useEffect } from 'react';
 import { Spinner, Modal } from "react-bootstrap";
 import * as Icon from "react-bootstrap-icons";
@@ -13,6 +14,7 @@ import WorkflowDetails from '../Workflow/WorkflowDetails';
 import RevenueList from '../Invoice/RevenueList';
 import DocumentList from '../File/DocumentList';
 import { Link } from 'react-router-dom';
+import { isElectron } from '../../utils/runtime';
 
 interface Project {
     name: string;
@@ -34,6 +36,7 @@ interface Project {
     createdBy?: string;
     lastModifiedDate?: string;
     lastModifiedBy?: string;
+    isReadOnlyEnabled?: boolean;
 }
 
 interface ProjectLandingProps {
@@ -151,7 +154,7 @@ function pickProjectStatusDisplay(
 }
 
 function isElectronShell(): boolean {
-    return import.meta.env.VITE_IS_ELECTRON === "true";
+    return isElectron();
 }
 
 const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit, onProjectsChanged, globalPermission, initialTab = 0 }) => {
@@ -162,7 +165,6 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
     const [lifecycleSubmitting, setLifecycleSubmitting] = useState(false);
     const [detailReloadNonce, setDetailReloadNonce] = useState(0);
     const [synchedOnlineContact, setSynchedOnlineContact] = useState<SynchedOnlineContact | null>(null);
-    const [releaseFlag, setReleaseFlag] = useState(false);
     const [showDiscardOfflineWarning, setShowDiscardOfflineWarning] = useState(false);
     const [activities, setActivities] = useState<any[]>([]);
 
@@ -229,7 +231,6 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
                     setSynchedOnlineContact(
                         projectService.parseSynchedOnlineFromLanding(response.data)
                     );
-                    setReleaseFlag(projectService.parseReleaseFlagFromLanding(response.data));
 
                     if (response.data && response.data.projectDetails) {
                         const apiData = response.data.projectDetails;
@@ -308,7 +309,6 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
                     }
                 } catch (error) {
                     setSynchedOnlineContact(null);
-                    setReleaseFlag(false);
                     const projectDetail: ProjectDetail = {
                         created_on: project.createdDate
                             ? moment(project.createdDate).format('DD-MMM-YYYY')
@@ -344,42 +344,42 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
     }, [project, detailReloadNonce]);
 
     useEffect(() => {
-        if (!isElectronShell()) {
-            setShowDiscardOfflineWarning(false);
-            return;
-        }
-        if (!navigator.onLine || project.id == null || !detail || loading) {
+        if (!isElectronShell() || project.id == null || loading) {
             return;
         }
 
-        let cancelled = false;
-        void (async () => {
-            if (releaseFlag) {
-                if (!cancelled) setShowDiscardOfflineWarning(true);
-                return;
-            }
-            try {
-                const res = await projectService.getDownloadedDataExists(project.id ?? 0);
-                const hasData = Boolean(res.data);
-                if (cancelled) return;
-                if (hasData) {
-                    setShowDiscardOfflineWarning(false);
-                } else {
-                    setShowDiscardOfflineWarning(true);
-                    try {
-                        await projectService.updateOfflineReleasedStatus(String(project.id ?? 0));
-                    } catch {
+        const isLocalReleased = Boolean(project.isReadOnlyEnabled || (detail as any)?.isReadOnlyEnabled || (detail as any)?.isRleased);
+        if (isLocalReleased) {
+            setShowDiscardOfflineWarning(true);
+            return;
+        }
+
+        if (navigator.onLine) {
+            let cancelled = false;
+            void (async () => {
+                try {
+                    const res = await axios.get(`/api/DataTransferAPI/GetDownloadedData?projectId=${project.id}`);
+                    if (!cancelled) {
+                        if (res.data == null || res.data === '' || (typeof res.data === 'object' && Object.keys(res.data).length === 0)) {
+                            setShowDiscardOfflineWarning(true);
+                            await axios.post(`/api/Offline/UpdateReleasedStatus?projectId=${project.id}`);
+                        } else {
+                            setShowDiscardOfflineWarning(false);
+                        }
+                    }
+                } catch {
+                    if (!cancelled) {
+                        setShowDiscardOfflineWarning(false);
                     }
                 }
-            } catch {
-                if (!cancelled) setShowDiscardOfflineWarning(false);
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [project.id, releaseFlag, detail, loading, detailReloadNonce]);
+            })();
+            return () => {
+                cancelled = true;
+            };
+        } else {
+            setShowDiscardOfflineWarning(false);
+        }
+    }, [project.id, project.isReadOnlyEnabled, (detail as any)?.isReadOnlyEnabled, loading, detailReloadNonce]);
 
     const runLifecycleAction = async (action: ProjectLifecycleAction) => {
         if (!project.id) return;
@@ -449,6 +449,7 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
                                         </ul>
                                     </div>
                                 )}
+
 
                             {showDiscardOfflineWarning && (
                                 <div className="alert alert-danger mb-2 project-landing-alert" role="alert">
@@ -536,7 +537,13 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
                                             <FieldBlock label="CAP Scope" value={detail.cap_scope} />
                                             <FieldBlock label="Project Status" value={<StatusBadge status={detail.project_status} type="projectStatus" />} />
                                             <FieldBlock label="Status" value={<StatusBadge status={detail.status} type="status" />} />
-                                            <FieldBlock label="Last Modified on/by" value={`${detail.last_modified_on && detail.last_modified_on !== 'N/A' ? moment(detail.last_modified_on).format('DD-MMM-YYYY') : 'N/A'} / ${detail.last_modified_by}`} />
+                                            {
+                                                (() => {
+                                                    const isGuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim()));
+                                                    const displayModifiedBy = (!detail.last_modified_by || isGuid(detail.last_modified_by) || detail.last_modified_by === 'N/A') ? '-' : detail.last_modified_by;
+                                                    return <FieldBlock label="Last Modified on/by" value={`${detail.last_modified_on && detail.last_modified_on !== 'N/A' ? moment(detail.last_modified_on).format('DD-MMM-YYYY') : 'N/A'} / ${displayModifiedBy}`} />;
+                                                })()
+                                            }
                                             <FieldBlock label="Vessel CAP History" value={detail.vessel_cap_history} />
                                         </div>
                                         <div className="project-landing-divider" />

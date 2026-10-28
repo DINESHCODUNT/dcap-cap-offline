@@ -1,4 +1,4 @@
-﻿using DigitalCap.Core.Models.Survey;
+using DigitalCap.Core.Models.Survey;
 using DigitalCap.Core.ViewModels;
 using System;
 using System.Collections.Generic;
@@ -31,13 +31,13 @@ namespace DigitalCap.Core.Interfaces.Repository
         Task<bool> DeleteProjectTemplate(int projectId, int templateId);
         Task InsertBulkUploadImage(int imageId);
         Task<int> DeleteBulkUploadImage(int imageId);
-        Task<bool> AddEditImageNew(int imgId, string imageBase64);
+        Task<bool> AddEditImageNew(int imgId, string imageBase64, int projectId);
         Task<List<string>> GetUnplacedImages(int projectId, string assignmentId);
         Task<string> GetImage(string fileId);
         Task<List<AssignmentsDropdownModel>> GetReportFromAssignments(string assignmentIds);
         Task<bool> DeleteImage(string assignmentId, string fileId);
         Task<bool> DeleteCard(int projectId, string cardId, string sequenceId, string assignmentId, string appId);
-        Task<int> UploadImage(string assignmentId, string fileId);
+        Task<int> UploadImage(string assignmentId, string fileId, int projectId);
         Task<ProjectCardMapping> GetProjectImagCardById(int projectId, int templateId, Guid sectionId, int cardId);
         Task<bool> CreateProjectImageCard(ProjectCardMapping model);
         Task<bool> UpdateProjectImageCard(ProjectCardMapping model);

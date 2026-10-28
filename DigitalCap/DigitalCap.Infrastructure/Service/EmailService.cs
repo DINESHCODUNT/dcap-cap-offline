@@ -24,6 +24,8 @@ namespace DigitalCap.Infrastructure.Service
 
         public async Task<ServiceResult<bool>> SendEmailAsync(string from, string fromPw, string to, string subject, string body)
         {
+            if (!IsOnline.OnlineOrOffline)
+                return ServiceResult<bool>.Failure("This needs an internet connection");
             await _emailRepository.SendEmailAsync(from, fromPw, to, subject, body);
 
             return ServiceResult<bool>.Success(true);
@@ -31,6 +33,8 @@ namespace DigitalCap.Infrastructure.Service
 
         public async Task<ServiceResult<bool>> SendEmailAsync(string from, string fromPw, IEnumerable<string> to, string subject, string body, string htmlMessage)
         {
+            if (!IsOnline.OnlineOrOffline)
+                return ServiceResult<bool>.Failure("This needs an internet connection");
             await _emailRepository.SendEmailAsync(from, fromPw, to, subject, body, htmlMessage);
 
             return ServiceResult<bool>.Success(true);
@@ -38,6 +42,8 @@ namespace DigitalCap.Infrastructure.Service
 
         public async Task<ServiceResult<bool>> SendEmailAsync(IEnumerable<string> to, string subject, string body, string htmlMessage)
         {
+            if (!IsOnline.OnlineOrOffline)
+                return ServiceResult<bool>.Failure("This needs an internet connection");
             await _emailRepository.SendEmailAsync(to, subject, body, htmlMessage);
 
             return ServiceResult<bool>.Success(true);
@@ -45,6 +51,8 @@ namespace DigitalCap.Infrastructure.Service
 
         public async Task<ServiceResult<bool>> SendEmailAsyncWithCC(string to, string cc, string subject, string body, string htmlMessage)
         {
+            if (!IsOnline.OnlineOrOffline)
+                return ServiceResult<bool>.Failure("This needs an internet connection");
             await _emailRepository.SendEmailAsyncWithCC(to, cc, subject, body, htmlMessage);
 
             return ServiceResult<bool>.Success(true);
@@ -52,6 +60,8 @@ namespace DigitalCap.Infrastructure.Service
 
         public async Task<ServiceResult<bool>> SendEmailAsync(string email, string subject, string body)
         {
+            if (!IsOnline.OnlineOrOffline)
+                return ServiceResult<bool>.Failure("This needs an internet connection");
             await _emailRepository.SendEmailAsync(email, subject, body);
 
             return ServiceResult<bool>.Success(true);
@@ -59,6 +69,8 @@ namespace DigitalCap.Infrastructure.Service
 
         public async Task<ServiceResult<bool>> SendEmailAsync(string email, string subject, string body, string htmlMessage)
         {
+            if (!IsOnline.OnlineOrOffline)
+                return ServiceResult<bool>.Failure("This needs an internet connection");
             await _emailRepository.SendEmailAsync(email, subject, body, htmlMessage);
 
             return ServiceResult<bool>.Success(true);
@@ -66,12 +78,16 @@ namespace DigitalCap.Infrastructure.Service
 
         public async Task<ServiceResult<bool>> SendEmailAsync(string from, string fromPw, IEnumerable<string> to, string subject, string body)
         {
+            if (!IsOnline.OnlineOrOffline)
+                return ServiceResult<bool>.Failure("This needs an internet connection");
             await _emailRepository.SendEmailAsync(from, fromPw, to, subject, body);
             return ServiceResult<bool>.Success(true);
         }
 
         public async Task<ServiceResult<bool>> SendEmailAsync(IEnumerable<string> to, string subject, string body)
         {
+            if (!IsOnline.OnlineOrOffline)
+                return ServiceResult<bool>.Failure("This needs an internet connection");
             await _emailRepository.SendEmailAsync(to, subject, body);
             return ServiceResult<bool>.Success(true);
         }

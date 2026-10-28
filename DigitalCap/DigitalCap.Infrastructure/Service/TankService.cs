@@ -173,8 +173,8 @@ namespace DigitalCap.Infrastructure.Service
                     tankfile.CopyTo(ms);
                     var fileBytes = ms.ToArray();
                     resizedImage = _surveyReportService.ResizeImage(fileBytes);
-                    var imgId = await _surveyReportRepository.UploadImage("unknown", newfileId);
-                    await _surveyReportRepository.AddEditImageNew(imgId, resizedImage);
+                    var imgId = await _surveyReportRepository.UploadImage("unknown", newfileId, projectId);
+                    await _surveyReportRepository.AddEditImageNew(imgId, resizedImage, projectId);
                     var imageCard = _tankRepository.GetProjectTankImagCardByName(projectId, templateId, sectionId, cardNumber).Result;
                     if (imageCard == null || imageCard.Id == 0)
                     {

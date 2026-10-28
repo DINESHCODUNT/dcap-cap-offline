@@ -107,6 +107,9 @@ namespace DigitalCap.Infrastructure.Service
 
         public async Task<ServiceResult<VesselDetails>> LookUp([FromQuery] string classNumber)
         {
+            if (!IsOnline.OnlineOrOffline)
+                return ServiceResult<VesselDetails>.Failure("This needs an internet connection");
+
             var vessel = new DigitalCap.Core.Models.Vessel();
             var vesselDetails = _freedomApiRepository.GetVessel(classNumber).Result;
             if (vesselDetails != null)

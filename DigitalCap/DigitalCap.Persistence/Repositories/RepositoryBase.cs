@@ -1,4 +1,5 @@
 ﻿using Dapper;
+using DigitalCap.Persistence.Extensions;
 using DapperExtensions;
 using DigitalCap.Core.Helpers;
 using DigitalCap.Core.Interfaces.Repository;
@@ -211,6 +212,11 @@ namespace DigitalCap.Persistence.Repositories
         }
         public void SoftDeleteById(string spname, Guid id)
         {
+            if (Connection.IsSqlite())
+            {
+                throw new NotSupportedException("SoftDeleteById is not supported offline");
+            }
+
             using (SqlConnection connection = new SqlConnection(Connection.ConnectionString))
             {
                 connection.Open();
@@ -313,6 +319,11 @@ namespace DigitalCap.Persistence.Repositories
 
         public virtual int BulkInsert(IEnumerable<TEntity> entities)
         {
+            if (Connection.IsSqlite())
+            {
+                throw new NotSupportedException("BulkInsert is not supported offline");
+            }
+
             try
             {
                 DataTable table = new DataTable();

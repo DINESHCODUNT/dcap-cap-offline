@@ -1,6 +1,8 @@
 using Dapper;
 using DigitalCap.Core.Interfaces.Repository;
+using DigitalCap.Core.Models.DataTransfer;
 using DigitalCap.Core.Models.Permissions;
+using DigitalCap.Persistence.Extensions;
 using DigitalCap.Core.Security;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
@@ -31,6 +33,10 @@ namespace DigitalCap.Persistence.Repositories
             var connection = _unitOfWork?.Connection;
             if (connection == null)
                 throw new InvalidOperationException("Database connection is not initialized.");
+
+            // Offline: evaluate the permissions stored at download (reference OfflineController.GetReportPermission).
+            if (connection.IsSqlite())
+                return await GetOfflineRolePermission(connection, username, viewname, projectId);
 
             // Ensure connection is open
             if (connection.State != ConnectionState.Open)
@@ -86,11 +92,6 @@ namespace DigitalCap.Persistence.Repositories
 
             try
             {
-                if (connection is Microsoft.Data.Sqlite.SqliteConnection || connection.GetType().Name.Contains("Sqlite"))
-                {
-                    return null;
-                }
-
                 // Use DynamicParameters for better compatibility
                 var parameters = new DynamicParameters();
                 parameters.Add("@username", username, DbType.String);
@@ -134,6 +135,10 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<int>> GetCurrentUserProjects(string username)
         {
+            // Offline: the projects on this computer were downloaded by a user allowed to open them.
+            if (Connection.IsSqlite())
+                return (await Connection.QueryAsync<int>("SELECT ID FROM Projects ORDER BY ID", transaction: Transaction)).ToList();
+
             var result = await Connection.QueryAsync<int>(
                 sql: "dbo.GetCurrentUserProjects",
                 param: new { username },
@@ -275,9 +280,12 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
-                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
+                if (Connection.IsSqlite())
                 {
-                    return new List<Role>();
+                    // Offline: the role names of the permission matrix stored at download (no AspNetRoles ids locally).
+                    var names = await Connection.QueryAsync<string>(
+                        "SELECT DISTINCT RoleName FROM OfflineRolePermissions ORDER BY RoleName", transaction: Transaction);
+                    return names.Select(n => new Role { Id = n, Name = n }).ToList();
                 }
 
                 var result = await Connection.QueryAsync<Role>(
@@ -304,6 +312,79 @@ namespace DigitalCap.Persistence.Repositories
 
             return result.ToList();
         }
-      
+
+        // ------------------------------------------------------------------ offline (local database)
+
+        /// <summary>
+        /// Roles that apply to the user for a project, as the reference evaluated them offline
+        /// (OfflineController.GetReportPermission / GetManageTankOfflinePermission): the user's stored roles plus
+        /// "CAP Lead" when the user is the project's LeadSurveyor and "CAP Team" when listed in SecondSurveyor.
+        /// </summary>
+        public const string CapLeadRole = "CAP Lead";
+        public const string CapTeamRole = "CAP Team";
+
+        private async Task<PermissionViewModel> GetOfflineRolePermission(IDbConnection connection, string username, string viewname, int? projectId)
+        {
+            var user = username?.Trim() ?? string.Empty;
+            var stored = await connection.ExecuteScalarAsync<long>(
+                "SELECT COUNT(1) FROM OfflineUserSecurity WHERE UserName = @UserName", new { UserName = user }, Transaction);
+            if (stored == 0)
+                return null!; // nothing downloaded by this user yet: same as "no permission row" online
+
+            var roles = (await connection.QueryAsync<string>(
+                "SELECT RoleName FROM OfflineUserRoles WHERE UserName = @UserName", new { UserName = user }, Transaction)).ToList();
+
+            if (projectId.HasValue)
+            {
+                var project = (await connection.QueryAsync(
+                    "SELECT LeadSurveyor, SecondSurveyor FROM Projects WHERE ID = @ID", new { ID = projectId.Value }, Transaction))
+                    .Cast<IDictionary<string, object>>().FirstOrDefault();
+                if (project != null)
+                {
+                    var lead = project["LeadSurveyor"] as string;
+                    var team = (project["SecondSurveyor"] as string)?.Split(',') ?? Array.Empty<string>();
+                    if (IsSameUser(lead, user))
+                        roles.Add(CapLeadRole);
+                    if (team.Any(t => IsSameUser(t, user)))
+                        roles.Add(CapTeamRole);
+                }
+            }
+
+            var result = new PermissionViewModel { PermissionName = viewname };
+            if (roles.Count == 0)
+                return result;
+
+            var rows = await connection.QueryMappedAsync<OfflineRolePermission>(
+                "SELECT RoleName, PermissionName, [Read], [Edit], [Delete] FROM OfflineRolePermissions WHERE PermissionName = @PermissionName AND RoleName IN @Roles",
+                new { PermissionName = viewname, Roles = roles.Distinct(StringComparer.OrdinalIgnoreCase).ToList() }, Transaction);
+            foreach (var row in rows)
+            {
+                result.Read |= row.Read;
+                result.Edit |= row.Edit;
+                result.Delete |= row.Delete;
+            }
+            return result;
+        }
+
+        private static bool IsSameUser(string? surveyor, string user)
+            => !string.IsNullOrWhiteSpace(surveyor) && string.Equals(surveyor.Trim(), user, StringComparison.OrdinalIgnoreCase);
+
+        public async Task<OfflineUserSecurity?> GetOfflineUserSecurityAsync(string userName)
+        {
+            if (!Connection.IsSqlite() || string.IsNullOrWhiteSpace(userName))
+                return null;
+
+            var user = new { UserName = userName.Trim() };
+            var header = await Connection.QueryFirstMappedAsync<OfflineUserSecurity>(
+                "SELECT UserName, AspNetUserId FROM OfflineUserSecurity WHERE UserName = @UserName", user, Transaction);
+            if (header == null)
+                return null;
+
+            header.Roles = (await Connection.QueryAsync<string>(
+                "SELECT RoleName FROM OfflineUserRoles WHERE UserName = @UserName ORDER BY RoleName", user, Transaction)).ToList();
+            header.Claims = (await Connection.QueryAsync<string>(
+                "SELECT ClaimType FROM OfflineUserClaims WHERE UserName = @UserName", user, Transaction)).ToList();
+            return header;
+        }
     }
 }

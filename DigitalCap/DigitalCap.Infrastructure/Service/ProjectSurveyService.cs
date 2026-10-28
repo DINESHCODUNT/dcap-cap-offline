@@ -1,3 +1,4 @@
+using DigitalCap.Core.Helpers.Extensions;
 using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Interfaces.Service;
 using DigitalCap.Core.Models;
@@ -38,6 +39,7 @@ namespace DigitalCap.Infrastructure.Service
         private readonly IProjectReportRepository _projectReportRepository;
         private readonly IDescriptionRepository _descriptionRepository;
         private readonly IProjectReportService _projectReportService;
+        private readonly IUnitOfWork _unitOfWork;
 
         public ProjectSurveyService(
             ILogger<ProjectSurveyService> logger,
@@ -51,8 +53,10 @@ namespace DigitalCap.Infrastructure.Service
             ISurveyReportRepository surveyReportRepository,
             ITankRepository tankRepository,
             IProjectReportRepository projectReportRepository,
-            IDescriptionRepository descriptionRepository, IProjectReportService projectReportService)
+            IDescriptionRepository descriptionRepository, IProjectReportService projectReportService,
+            IUnitOfWork unitOfWork)
         {
+            _unitOfWork = unitOfWork;
             _logger = logger;
             _configuration = configuration;
             _userPermissionRepository = userPermissionRepository;
@@ -104,6 +108,7 @@ namespace DigitalCap.Infrastructure.Service
             var model = await PrepareProjectTemplateViewModelAsync(projectId, null, imo);
 
             model.Imonumber = project.IMO;
+            model.IsRleased = project.IsReadOnlyEnabled;
             model.ReportExport = (await _userPermissionRepository.GetRolePermissionByUserName(
                 currentUserName, EnumExtensions.GetDescription(ManagePages.ReportExport), projectId))?.Edit;
             model.ReportExportAll = (await _userPermissionRepository.GetRolePermissionByUserName(
@@ -123,7 +128,9 @@ namespace DigitalCap.Infrastructure.Service
         {
             var isSync = await _transferDataOnlinetoOfflineRepository.GetDownloadOfflineProjects(projectId);
 
-            if (templateSectionId.HasValue)
+            // Opening a part writes its ProjectTemplateMapping rows (CreateProjectReportAsync). Offline the report is
+            // only read here: the downloaded mappings are used as they are and nothing is written on tab open.
+            if (templateSectionId.HasValue && !_unitOfWork.UsesLocalDatabase())
             {
                 var pre = await PrepareProjectTemplateViewModelAsync(projectId, null, imo);
                 var partRow = pre.ReportPartGrid?.FirstOrDefault(x => x.PartId == templateSectionId.Value);
@@ -342,7 +349,7 @@ namespace DigitalCap.Infrastructure.Service
                 if (id?.Contains("..") == true || id?.Contains('/') == true || id?.Contains('\\') == true)
                     return ServiceResult<bool>.Failure("Invalid path");
 
-                var root = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "tempdocument", id);
+                var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DigitalCap", "temp", "tempdocument", id);
                 var path = Path.Combine(root, templateId.ToString());
                 Directory.CreateDirectory(path);
 
@@ -382,7 +389,7 @@ namespace DigitalCap.Infrastructure.Service
                         ?? new List<ProjectPart>();
                 }
 
-                var root = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "tempdocument");
+                var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DigitalCap", "temp", "tempdocument");
                 var path = Path.Combine(root, id);
                 var documents = Directory.GetFiles(path, "*.pdf", SearchOption.AllDirectories);
 

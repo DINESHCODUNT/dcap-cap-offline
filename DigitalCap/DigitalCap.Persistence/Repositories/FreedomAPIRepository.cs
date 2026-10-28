@@ -38,6 +38,9 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<Vessel> GetVessel(string classNumber)
         {
+            if (!DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return null;
+
             try
             {
                 var vessel = await GetData<VesselObject, Vessel>(null, classNumber);
@@ -80,12 +83,18 @@ namespace DigitalCap.Persistence.Repositories
         public async Task<IEnumerable<VesselSurvey>> GetSurveys(string classNum)
 
         {
+            if (!DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return Enumerable.Empty<VesselSurvey>();
+
             return await GetData<SurveysObject, VesselSurvey>("survey-audit", classNum);
         }
 
         #region Private Methods
         public async Task<IEnumerable<Certificate>> GetCertificates(string classNum)
         {
+            if (!DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return Enumerable.Empty<Certificate>();
+
             IEnumerable<Certificate> certificates = await GetData<CertificatesObject, Certificate>("certificates", classNum);
             if (certificates != null)
             {

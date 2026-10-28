@@ -2,6 +2,7 @@ using Dapper;
 using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Models;
 using DigitalCap.Core.Models.Survey;
+using DigitalCap.Persistence.Extensions;
 using DigitalCap.WebApi.Core;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -25,6 +26,10 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<IsSynchedOnline> GetDownloadOfflineProjects(int projectId)
         {
+            // The download marker exists only online (dbo.GetDownloadOfflineProject); offline there is none to show.
+            if (Connection.IsSqlite())
+                return null!;
+
             var parameters = new DynamicParameters();
             parameters.Add("@ProjectId", projectId);
 

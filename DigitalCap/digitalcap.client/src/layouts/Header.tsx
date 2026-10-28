@@ -14,6 +14,8 @@ import InformationPopup from '../Common/InformationPopup';
 import * as absUserService from '../service/AbsUserService';
 import { usePermissions } from '../context/PermissionContext';
 import OnlineStatusBadge from '../components/OnlineStatusBadge';
+import axios from 'axios';
+import { isElectron } from '../utils/runtime';
 
 const Header: React.FC = () => {
     const msalContext = React.useContext(MsalContext);
@@ -30,6 +32,30 @@ const Header: React.FC = () => {
     const [loadingMyProfile, setLoadingMyProfile] = React.useState(false);
     const [showProfilePopup, setShowProfilePopup] = React.useState(false);
     const [profilePopupMessage, setProfilePopupMessage] = React.useState("");
+    const [isDownloadingDB, setIsDownloadingDB] = React.useState(false);
+
+    const handleDownloadDB = async () => {
+        setIsDownloadingDB(true);
+        try {
+            const response = await axios.get('/api/Offline/DownloadDB', {
+                responseType: 'blob'
+            });
+            const blob = new Blob([response.data], { type: 'application/octet-stream' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'sqldb-cap-dev-001.db.enc';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            alert('Error occurred while backing up database.');
+            console.error(error);
+        } finally {
+            setIsDownloadingDB(false);
+        }
+    };
 
     const getCurrentUserEmail = () =>
         account?.username ||
@@ -103,9 +129,29 @@ const Header: React.FC = () => {
                                     <img src={ABSLogo} alt="DCAP Logo" height="40" className="login-logo" />
                                 </div>
                             </div>
+                            {isElectron() && (
+                                <h3 className="ms-3 mb-0 text-white" style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '0.5px' }}>
+                                    CONDITION ASSESSMENT PROGRAM
+                                </h3>
+                            )}
                         </div>
                     </NavItem>
                     <div className='d-flex align-items-center gap-2 gap-md-3'>
+                        {isElectron() && (
+                            <button
+                                type="button"
+                                id="downloadDB"
+                                className="btn btn-outline-light btn-sm d-flex align-items-center gap-1"
+                                onClick={handleDownloadDB}
+                                disabled={isDownloadingDB}
+                            >
+                                {isDownloadingDB ? (
+                                    <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                ) : (
+                                    <Icon.Download size={14} />
+                                )} Download Database Backup
+                            </button>
+                        )}
                         <NavItem className='top-nav-item border-0 me-2'>
                             <OnlineStatusBadge />
                         </NavItem>

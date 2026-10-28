@@ -1,4 +1,5 @@
 ﻿using DigitalCap.Core.DTO;
+using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Interfaces.Service;
 using DigitalCap.WebApi.Core;
 using Microsoft.AspNetCore.Identity;
@@ -15,9 +16,11 @@ namespace DigitalCap.WebApi.Controllers
     {
         private readonly ICommentService _commentService;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly IUserPermissionRepository _userPermissionRepository;
 
-        public CommentController(ICommentService commentService, UserManager<ApplicationUser> userManager)
+        public CommentController(ICommentService commentService, UserManager<ApplicationUser> userManager, IUserPermissionRepository userPermissionRepository)
         {
+            _userPermissionRepository = userPermissionRepository ?? throw new ArgumentNullException(nameof(userPermissionRepository));
             _commentService = commentService ?? throw new ArgumentNullException(nameof(commentService));
             _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
         }
@@ -43,6 +46,12 @@ namespace DigitalCap.WebApi.Controllers
                 // User found in AspNetUsers table - return their ID and email
                 return (user.Id, userEmail);
             }
+
+            // Desktop offline: AspNetUsers is empty locally; use the AspNetUsers id stored when a project was
+            // downloaded (it is the id Comments.CreatedBy holds). Null when online or nothing was stored.
+            var offlineUser = await _userPermissionRepository.GetOfflineUserSecurityAsync(userEmail);
+            if (!string.IsNullOrWhiteSpace(offlineUser?.AspNetUserId))
+                return (offlineUser.AspNetUserId, userEmail);
 
             // User not found, return empty ID but keep email
             return (string.Empty, userEmail);

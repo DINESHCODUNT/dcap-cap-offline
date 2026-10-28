@@ -35,5 +35,6 @@ namespace DigitalCap.Core.Interfaces.Repository
         //Task<(IEnumerable<AllProjectsGrid> Items, int TotalCount)> GetAllProjectsGridData(int skip = 0, int take = 20);
 
         Task<ProjectStats> GetProjectStats();
+        Task<bool> UpdateReleasedData(int projectId);
     }
 }

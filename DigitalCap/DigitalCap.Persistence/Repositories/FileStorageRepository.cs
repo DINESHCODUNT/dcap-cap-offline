@@ -2,6 +2,7 @@ using Dapper;
 using DigitalCap.Core.Enumerations;
 using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Models;
+using DigitalCap.Persistence.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -33,6 +34,10 @@ namespace DigitalCap.Persistence.Repositories
             var connection = _unitOfWork?.Connection;
             if (connection == null)
                 throw new InvalidOperationException("Database connection is not initialized.");
+
+            // Offline: project files live in Azure Blob storage and are not downloaded, so there is nothing to list.
+            if (connection.IsSqlite())
+                return Enumerable.Empty<ProjectFile>();
 
             // Ensure connection is open
             if (connection.State != ConnectionState.Open)
@@ -206,6 +211,10 @@ namespace DigitalCap.Persistence.Repositories
             var connection = _unitOfWork?.Connection;
             if (connection == null)
                 throw new InvalidOperationException("Database connection is not initialized.");
+
+            // Offline: task attachments live in Azure Blob storage and are not downloaded.
+            if (connection.IsSqlite())
+                return Enumerable.Empty<ProjectFile>();
 
             if (connection.State != ConnectionState.Open)
             {

@@ -213,6 +213,8 @@ namespace DigitalCap.Persistence.Repositories
 
         private async Task SendAsync(MailMessage message, string from = null, string fromPassword = null)
         {
+            if (!DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return;
             using (var client = new SmtpClient(_serverAddress, _serverPort))
             {
                 client.UseDefaultCredentials = false;

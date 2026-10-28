@@ -11,10 +11,12 @@ namespace DigitalCap.WebApi.Controllers
     public class DiagController : ControllerBase
     {
         private readonly IConfiguration _config;
+        private readonly Microsoft.AspNetCore.Hosting.IWebHostEnvironment _env;
 
-        public DiagController(IConfiguration config)
+        public DiagController(IConfiguration config, Microsoft.AspNetCore.Hosting.IWebHostEnvironment env)
         {
             _config = config;
+            _env = env;
         }
 
         /// <summary>
@@ -25,6 +27,8 @@ namespace DigitalCap.WebApi.Controllers
         [HttpGet("token-info")]
         public IActionResult TokenInfo()
         {
+            if (!_env.IsDevelopment())
+                return NotFound();
             var authHeader = Request.Headers["Authorization"].ToString();
 
             if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
@@ -78,6 +82,8 @@ namespace DigitalCap.WebApi.Controllers
         [HttpGet("auth-check")]
         public IActionResult AuthCheck()
         {
+            if (!_env.IsDevelopment())
+                return NotFound();
             // Resolve username the same way ApiBaseController.CurrentUsername does
             var resolvedUsername =
                 User.FindFirstValue("preferred_username")

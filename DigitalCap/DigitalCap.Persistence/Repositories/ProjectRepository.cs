@@ -1,10 +1,12 @@
 using Dapper;
+using DigitalCap.Core.Constants;
 using DigitalCap.Core.DTO;
 using DigitalCap.Core.Enumerations;
 using DigitalCap.Core.Helpers.Constants;
 using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Models;
 using DigitalCap.Core.Models.Permissions;
+using DigitalCap.Persistence.Extensions;
 using DigitalCap.WebApi.Core;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNetCore.Http;
@@ -208,6 +210,10 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<Project> GetProject(int id)
         {
+            // Offline the unit of work's connection string is a SQLite one, so read the local Projects table.
+            if (Connection.IsSqlite())
+                return await GetProjectSqlite(id);
+
             try
             {
                 await using var connection = new SqlConnection(_unitOfWork.ConnectionString);
@@ -438,6 +444,121 @@ namespace DigitalCap.Persistence.Repositories
             }
         }
 
+
+        // ------------------------------------------------------------------ offline (local SQLite) reads
+
+        /// <summary>
+        /// Reference ProjectOfflineService.GetProject (SQLiteQueries.Project.ReadById), plus the status name the
+        /// online procedure returns. Local column names differ from the model in a few places (FatigueAnalysis,
+        /// CreatedBy holds the user id) and are mapped explicitly.
+        /// </summary>
+        private const string SqliteReadProjectById = @"
+            SELECT p.*, s.[Status] AS ProjectStatusName,
+                   u.ProviderDisplayName AS CreatedByDisplayName, u2.ProviderDisplayName AS StatusChangedByDisplayName
+            FROM Projects p
+            LEFT JOIN Statuses s ON s.ID = p.ProjectStatus
+            LEFT JOIN AspNetUserLogins u ON p.CreatedBy = u.UserId
+            LEFT JOIN AspNetUserLogins u2 ON p.StatusChangedBy = u2.UserId
+            WHERE p.ID = @ID";
+
+        private async Task<Project> GetProjectSqlite(int id)
+        {
+            try
+            {
+                var row = (await Connection.QueryAsync(SqliteReadProjectById, new { ID = id }, Transaction))
+                    .Cast<IDictionary<string, object>>()
+                    .FirstOrDefault();
+                if (row == null)
+                    return null!;
+
+                var project = ConnectionExtensions.MapRow<Project>(row);
+                object? Raw(string column) => row.TryGetValue(column, out var v) && v is not DBNull ? v : null;
+
+                if (Raw("FatigueAnalysis") is { } fatigue)
+                    project.Fatigue = (bool)ConnectionExtensions.ConvertValue(fatigue, typeof(bool), "FatigueAnalysis")!;
+                project.CreatedBy = (Raw("CreatedByDisplayName") ?? Raw("CreatedBy"))?.ToString()!;
+                project.StatusChangedBy = (Raw("StatusChangedByDisplayName") ?? Raw("StatusChangedBy"))?.ToString()!;
+                if (Raw("IsReadOnlyEnabled") is { } roe)
+                    project.IsReadOnlyEnabled = Convert.ToBoolean(roe);
+
+                if (!string.IsNullOrWhiteSpace(project.ProjectStatusName))
+                    project.ProjectStatusColor = DigitalCap.Core.Helpers.StatusColorHelper.GetProjectStatusColor(project.ProjectStatusName);
+
+                return project;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error reading project {ProjectId} from the local database", id);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Reference SQLiteQueries.Project.AllProjectsGrid (every local project is a downloaded one), plus the
+        /// vessel name the online grid also returns; deleted comments are ignored.
+        /// </summary>
+        private const string SqliteAllProjectsGrid = @"
+            SELECT p.ID AS Id, 'Offline' AS IsDownload, p.Name,
+                   p.PIDNumber,
+                   p.CompanyName, p.IMO, p.WCN, p.VesselName,
+                   p.PotentialDrydockDate, p.CapRegion, p.ProjectPriority, s.[Status] AS ProjectStatusName,
+                   COALESCE(u_mod.ProviderDisplayName, p.LastModifiedBy) AS LastModifiedBy,
+                   COALESCE(c.CreatedByDisplayName, act.CreateBy, u_mod.ProviderDisplayName, p.LastModifiedBy) AS CommentCreatedBy,
+                   c.Comment AS MostRecentComment, c.CommentLastModifiedDate,
+                   a.ProjectLastUpdatedDate, p.PercentComplete
+            FROM Projects p
+            INNER JOIN Statuses s ON s.ID = p.ProjectStatus
+            LEFT JOIN AspNetUserLogins u_mod ON p.LastModifiedBy = u_mod.UserId
+            LEFT JOIN (SELECT c.ProjectId, c.Comment, u.ProviderDisplayName AS CreatedByDisplayName,
+                              c.LastModifiedDate AS CommentLastModifiedDate,
+                              ROW_NUMBER() OVER (PARTITION BY c.ProjectId ORDER BY c.LastModifiedDate DESC) AS rn
+                       FROM Comments c LEFT JOIN AspNetUserLogins u ON c.CreatedBy = u.UserId
+                       WHERE COALESCE(c.IsDeleted, 0) = 0) c ON p.ID = c.ProjectId AND c.rn = 1
+            LEFT JOIN (SELECT ProjectId, CreateBy, ROW_NUMBER() OVER (PARTITION BY ProjectId ORDER BY CreateDttm DESC) AS rn FROM Activities) act ON p.ID = act.ProjectId AND act.rn = 1
+            LEFT JOIN (SELECT ProjectId, MAX(CreateDttm) AS ProjectLastUpdatedDate FROM Activities GROUP BY ProjectId) a ON p.ID = a.ProjectId
+            ORDER BY p.ID DESC";
+
+        private async Task<IEnumerable<AllProjectsGrid>> GetAllProjectsGridDataSqlite()
+        {
+            try
+            {
+                var list = await Connection.QueryMappedAsync<AllProjectsGrid>(SqliteAllProjectsGrid, transaction: Transaction);
+
+                foreach (var project in list)
+                {
+                    project.StatusName = project.ProjectStatusName;
+                    if (!FormValues.CAPRegion.Contains(project.CapRegion))
+                        project.CapRegion = FormValues.CAPRegion.FirstOrDefault();
+                }
+                return list;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error reading the project grid from the local database");
+                throw;
+            }
+        }
+
+        /// <summary>Same shape as CAP.Get_Projects_Stats, computed from the local tables (every local project is offline).</summary>
+        private async Task<ProjectStats> GetProjectStatsSqlite()
+        {
+            var total = await Connection.ExecuteScalarAsync<long>("SELECT COUNT(1) FROM Projects", transaction: Transaction);
+            var stats = new ProjectStats { Total = (int)total, Offline = (int)total, Online = 0 };
+
+            var regions = await Connection.QueryAsync(
+                "SELECT CapRegion AS RegionName, COUNT(1) AS RegionCount FROM Projects WHERE CapRegion IS NOT NULL GROUP BY CapRegion",
+                transaction: Transaction);
+            foreach (IDictionary<string, object> r in regions)
+                stats.Regions[r["RegionName"].ToString()!] = Convert.ToInt32(r["RegionCount"]);
+
+            var statuses = await Connection.QueryAsync(
+                "SELECT s.[Status] AS StatusName, COUNT(1) AS StatusCount FROM Projects p INNER JOIN Statuses s ON s.ID = p.ProjectStatus GROUP BY s.[Status]",
+                transaction: Transaction);
+            foreach (IDictionary<string, object> r in statuses)
+                stats.Statuses[r["StatusName"].ToString()!] = Convert.ToInt32(r["StatusCount"]);
+
+            return stats;
+        }
 
         private static T GetValue<T>(IDataReader reader, HashSet<string> columns, string columnName)
         {
@@ -736,6 +857,10 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<string> GetProjectName(int id)
         {
+            if (Connection.IsSqlite())
+                return (await Connection.QueryFirstOrDefaultAsync<string>(
+                    DigitalCap.Core.Constants.SQLiteQueries.Project.ReadProjectNameById, new { ID = id }, Transaction))!;
+
             var result = await Connection.QueryFirstOrDefaultAsync<string>(
                 sql: "CAP.Read_Project_Name_ById",
                 param: new { ID = id },
@@ -804,6 +929,10 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<string> GetIMONumberByProjectId(int projectId)
         {
+            if (Connection.IsSqlite())
+                return (await Connection.ExecuteScalarAsync(
+                    DigitalCap.Core.Constants.SQLiteQueries.Project.ReadIMONumberByProjectId, new { ProjectId = projectId }, Transaction))?.ToString()!;
+
 
             var result = await Connection.QueryAsync<string>(
                 sql: "CAP.Read_IMONumber_ByProjectId",
@@ -1010,18 +1139,11 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<IEnumerable<AllProjectsGrid>> GetAllProjectsGridData()
         {
+            if (Connection.IsSqlite())
+                return await GetAllProjectsGridDataSqlite();
+
             try
             {
-                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
-                {
-                    var sqliteResult = await Connection.QueryAsync<AllProjectsGrid>(
-                        sql: DigitalCap.Core.Constants.SQLiteQueries.Project.AllProjectsGrid,
-                        commandType: CommandType.Text,
-                        transaction: Transaction
-                    );
-                    return sqliteResult;
-                }
-
                 var result = await Connection.QueryAsync<AllProjectsGrid>(
                     sql: "CAP.Read_Projects_Grid",
                     commandType: CommandType.StoredProcedure,
@@ -1060,6 +1182,10 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<string> GetProjectVesselType(int id)
         {
+            if (Connection.IsSqlite())
+                return (await Connection.QueryFirstOrDefaultAsync<string>(
+                    DigitalCap.Core.Constants.SQLiteQueries.Project.ReadProjectVesselTypeById, new { ID = id }, Transaction))!;
+
             var result = await Connection.QueryFirstOrDefaultAsync<string>(
                    sql: "CAP.ReadProjectVesselTypeById",
                    param: new { ID = id },
@@ -1119,8 +1245,22 @@ namespace DigitalCap.Persistence.Repositories
             return result.ToList();
         }
 
+        public async Task<bool> UpdateReleasedData(int projectId)
+        {
+            if (Connection.IsSqlite())
+            {
+                await Connection.ExecuteAsync(SQLiteQueries.Project.UpdateReleasedProject, new { ProjectId = projectId }, Transaction);
+                return true;
+            }
+            await Connection.ExecuteAsync("UPDATE Projects SET IsReadOnlyEnabled = 1 WHERE ID = @ProjectId", new { ProjectId = projectId }, Transaction);
+            return true;
+        }
+
         public async Task<ProjectStats> GetProjectStats()
         {
+            if (Connection.IsSqlite())
+                return await GetProjectStatsSqlite();
+
             var connection = _unitOfWork?.Connection;
             if (connection.State != ConnectionState.Open)
                 connection.Open();

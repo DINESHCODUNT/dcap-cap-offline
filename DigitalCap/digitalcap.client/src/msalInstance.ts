@@ -1,5 +1,6 @@
 import { PublicClientApplication, type Configuration, type IPublicClientApplication } from "@azure/msal-browser";
 import axios, { type AxiosResponse } from "axios";
+import { isElectron } from "./utils/runtime";
 interface AppConfig {
   azureAdConfig: Configuration;
   azureAdMsalConfig?: Configuration;
@@ -9,22 +10,27 @@ interface ConfigModule {
   default: AppConfig;
 }
 
-const loadConfig = async (): Promise<AppConfig> => {
-  try {
-    const environment: string = import.meta.env.VITE_APP_ENV || import.meta.env.REACT_APP_ENV || "local";
+const loadLocalConfig = async (): Promise<AppConfig> => {
+  const configModule = await import(`./config.local.json`) as ConfigModule;
+  return configModule.default;
+};
 
-    if (environment.toLowerCase() === "local") {
-      const configModule = await import(`./config.local.json`) as ConfigModule;
-      return configModule.default;
-    } else {
-      const proxyUrl: string = import.meta.env.VITE_APP_PROXY_URL;
-      const response: AxiosResponse<AppConfig> = await axios.get(
-        `${proxyUrl}/api/Auth/GetAuthConfig`
-      );
-      return response.data;
-    }
-  } catch (error) {
-    throw error;
+const loadConfig = async (): Promise<AppConfig> => {
+  const environment: string = import.meta.env.VITE_APP_ENV || import.meta.env.REACT_APP_ENV || "local";
+
+  // The desktop app must start without a network, so it always uses the bundled config.
+  if (environment.toLowerCase() === "local" || isElectron()) {
+    return loadLocalConfig();
+  }
+
+  try {
+    const proxyUrl: string = import.meta.env.VITE_APP_PROXY_URL;
+    const response: AxiosResponse<AppConfig> = await axios.get(
+      `${proxyUrl}/api/Auth/GetAuthConfig`
+    );
+    return response.data;
+  } catch {
+    return loadLocalConfig();
   }
 };
 
