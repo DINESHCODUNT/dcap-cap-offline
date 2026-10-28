@@ -137,74 +137,90 @@ const Header: React.FC = () => {
                         </div>
                     </NavItem>
                     <div className='d-flex align-items-center gap-2 gap-md-3'>
-                        {isElectron() && (
-                            <button
-                                type="button"
-                                id="downloadDB"
-                                className="btn btn-outline-light btn-sm d-flex align-items-center gap-1"
-                                onClick={handleDownloadDB}
-                                disabled={isDownloadingDB}
-                            >
-                                {isDownloadingDB ? (
-                                    <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                                ) : (
-                                    <Icon.Download size={14} />
-                                )} Download Database Backup
-                            </button>
-                        )}
-                        <NavItem className='top-nav-item border-0 me-2'>
-                            <OnlineStatusBadge />
-                        </NavItem>
-                        <NavItem className='top-nav-item border-0'>
-                            {isAuthorized ? (
-                                <Dropdown align="end">
-                                    <Dropdown.Toggle id="dropdown-basic" variant='secondary' className='btn btn-transparent p-1 p-md-2'>
-                                        <div className='d-flex align-items-center'>
+                        {isElectron() ? (
+                            <>
+                                <button
+                                    type="button"
+                                    id="downloadDB"
+                                    className="btn btn-outline-light btn-sm d-flex align-items-center gap-1"
+                                    onClick={handleDownloadDB}
+                                    disabled={isDownloadingDB}
+                                >
+                                    {isDownloadingDB ? (
+                                        <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                    ) : (
+                                        <Icon.Download size={14} />
+                                    )} Download Database Backup
+                                </button>
+                                <a
+                                    className="text-white text-decoration-none px-2"
+                                    role="button"
+                                    onClick={() => setShowContactModal(true)}
+                                    style={{ cursor: 'pointer' }}
+                                >
+                                    Contact Us
+                                </a>
+                                <NavItem className='top-nav-item border-0 me-2'>
+                                    <OnlineStatusBadge />
+                                </NavItem>
+                            </>
+                        ) : (
+                            <>
+                                <NavItem className='top-nav-item border-0 me-2'>
+                                    <OnlineStatusBadge />
+                                </NavItem>
+                                <NavItem className='top-nav-item border-0'>
+                                    {isAuthorized ? (
+                                        <Dropdown align="end">
+                                            <Dropdown.Toggle id="dropdown-basic" variant='secondary' className='btn btn-transparent p-1 p-md-2'>
+                                                <div className='d-flex align-items-center'>
+                                                    <div className='action-icons'>
+                                                        <Icon.PersonCircle size={20} />
+                                                    </div>
+                                                    <div className='d-none d-md-inline pl-2 pr-2'>{userName}</div>
+                                                </div>
+                                            </Dropdown.Toggle>
+
+                                            <Dropdown.Menu>
+                                                <Dropdown.Item onClick={() => setShowChangePassword(true)}>Change Password</Dropdown.Item>
+                                                <Dropdown.Item
+                                                    onClick={handleMyProfile}
+                                                    disabled={loadingMyProfile}
+                                                >
+                                                    {loadingMyProfile ? "Loading..." : "My Profile"}
+                                                </Dropdown.Item>
+                                                <Dropdown.Item
+                                                    onClick={() => setShowContactModal(true)}
+                                                >
+                                                    Contact Us
+                                                </Dropdown.Item>
+                                            </Dropdown.Menu>
+                                        </Dropdown>
+                                    ) : (
+                                        <div className='btn btn-transparent d-flex align-items-center p-1 p-md-2' style={{ cursor: 'default' }}>
                                             <div className='action-icons'>
                                                 <Icon.PersonCircle size={20} />
                                             </div>
-                                            <div className='d-none d-md-inline pl-2 pr-2'>{userName}</div>
+                                            <div className='d-none d-md-inline pl-2 pr-2 text-white'>{userName}</div>
                                         </div>
-                                    </Dropdown.Toggle>
-
-                                    <Dropdown.Menu>
-                                        <Dropdown.Item onClick={() => setShowChangePassword(true)}>Change Password</Dropdown.Item>
-                                        <Dropdown.Item
-                                            onClick={handleMyProfile}
-                                            disabled={loadingMyProfile}
-                                        >
-                                            {loadingMyProfile ? "Loading..." : "My Profile"}
-                                        </Dropdown.Item>
-                                        <Dropdown.Item
-                                            onClick={() => setShowContactModal(true)}
-                                        >
-                                            Contact Us
-                                        </Dropdown.Item>
-                                    </Dropdown.Menu>
-                                </Dropdown>
-                            ) : (
-                                <div className='btn btn-transparent d-flex align-items-center p-1 p-md-2' style={{ cursor: 'default' }}>
-                                    <div className='action-icons'>
-                                        <Icon.PersonCircle size={20} />
-                                    </div>
-                                    <div className='d-none d-md-inline pl-2 pr-2 text-white'>{userName}</div>
-                                </div>
-                            )}
-                        </NavItem>
-                        <NavItem className='top-nav-item border-0'>
-                            <a className='nav-link p-1 p-md-2'
-                                aria-current='false'
-                                onClick={(e) => handleLogout(e, msalContext)}
-                                style={{ cursor: 'pointer' }}
-                            >
-                                <div className='d-flex align-items-center'>
-                                    <div className='action-icons'>
-                                        <Icon.BoxArrowRight size={20} />
-                                    </div>
-                                    <div className='d-none d-md-inline pl-2'>Logout</div>
-                                </div>
-                            </a>
-                        </NavItem>
+                                    )}
+                                </NavItem>
+                                <NavItem className='top-nav-item border-0'>
+                                    <a className='nav-link p-1 p-md-2'
+                                        aria-current='false'
+                                        onClick={(e) => handleLogout(e, msalContext)}
+                                        style={{ cursor: 'pointer' }}
+                                    >
+                                        <div className='d-flex align-items-center'>
+                                            <div className='action-icons'>
+                                                <Icon.BoxArrowRight size={20} />
+                                            </div>
+                                            <div className='d-none d-md-inline pl-2'>Logout</div>
+                                        </div>
+                                    </a>
+                                </NavItem>
+                            </>
+                        )}
                     </div>
                 </Container>
             </StyledToBar>

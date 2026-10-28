@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "../pages/Login/Login";
+import SetToken from "../pages/Login/SetToken";
 import ForgotPassword from "../pages/Login/ForgotPassword";
 import ResetPassword from "../pages/Login/ResetPassword";
 import ManageDescriptionList from "../pages/Admin/Configuration/ManageDescription/ManageDescriptionList";
@@ -30,6 +31,7 @@ const AppRoutes = () => (
                 <Route path="/internal" element={<Login />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/SetToken" element={<SetToken />} />
 
                 <Route path="/success" element={<Success />} />
                 <Route path="/signout" element={<Navigate to="/" replace />} />

@@ -173,6 +173,13 @@ namespace DigitalCap.Persistence.Repositories
                 InsertSectionData(connection, tx, data);
                 if (data.ProjectTasks != null) ReplaceProjectTasks(connection, tx, projectId, data.ProjectTasks);
                 if (data.UserSecurity != null) ReplaceUserSecurity(connection, tx, data.UserSecurity);
+                if (data.UserSecurity != null && !string.IsNullOrWhiteSpace(data.UserSecurity.UserName))
+                {
+                    var emailId = data.UserSecurity.UserName.Trim();
+                    connection.Execute("DELETE FROM LogInData WHERE lower(EmailId) = lower(@EmailId);", new { EmailId = emailId }, tx);
+                    connection.Execute("INSERT INTO LogInData (Id, FirstName, LastName, ProviderKey, EmailId) VALUES (@Id, NULL, NULL, NULL, @EmailId);",
+                        new { Id = data.UserSecurity.AspNetUserId, EmailId = emailId }, tx);
+                }
 
                 InsertActivity(connection, tx, projectId, activityUser, DownloadedActivityText);
 
@@ -528,13 +535,6 @@ namespace DigitalCap.Persistence.Repositories
         private static void InsertActivity(SqliteConnection c, IDbTransaction tx, int projectId, string user, string text)
         {
             c.Execute(SQLiteQueries.DataTransfer.InsertActivities, new { ProjectId = projectId, CreateBy = user, Text = text }, tx);
-            if (!string.IsNullOrWhiteSpace(user))
-            {
-                c.Execute(
-                    @"INSERT OR IGNORE INTO AspNetUserLogins (LoginProvider, ProviderKey, ProviderDisplayName, UserId)
-                      VALUES ('AzureAD', @User, @User, @User)",
-                    new { User = user }, tx);
-            }
         }
 
         private static void InsertVesselMainData(SqliteConnection c, IDbTransaction tx, List<GetReportVesselMainData> list)

@@ -8,7 +8,7 @@ import * as projectService from '../../service/ProjectService';
 import moment from 'moment';
 import EmptyProjectView from './EmptyProjectView';
 import SyncConfirmModal from './SyncConfirmModal';
-import { isElectron } from '../../utils/runtime';
+import { isElectron, isAppOnline } from '../../utils/runtime';
 
 export interface SidebarProjectRow {
     name: string;
@@ -891,15 +891,23 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const pagedProjects = fullyFilteredProjects.slice(startIdx, startIdx + pageSizeNum);
 
     useEffect(() => {
-        if (!loading && loadSuccess && !loadError && isDesktop && allProjects.length === 0 && navigator.onLine) {
-            projectService.getOnlineUrl().then((res: any) => {
-                if (res?.data?.url) {
-                    window.location.href = res.data.url;
+        let isMounted = true;
+        if (!loading && loadSuccess && !loadError && isDesktop && allProjects.length === 0) {
+            isAppOnline().then(async (online) => {
+                if (!isMounted || !online) return;
+                try {
+                    const res: any = await projectService.getOnlineUrl();
+                    if (isMounted && res?.data?.url) {
+                        window.location.href = res.data.url;
+                    }
+                } catch {
+                    // If fetching online URL fails, do not redirect
                 }
-            }).catch(() => {
-                // If fetching online URL fails, do not redirect
             });
         }
+        return () => {
+            isMounted = false;
+        };
     }, [loading, loadSuccess, loadError, isDesktop, allProjects.length]);
 
     return (

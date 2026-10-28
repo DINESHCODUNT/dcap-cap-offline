@@ -65,16 +65,6 @@ namespace DigitalCap.Persistence.Repositories
                 commandType: CommandType.Text
             );
 
-            var displayName = $"{user.FirstName} {user.LastName}".Trim();
-            if (string.IsNullOrWhiteSpace(displayName))
-                displayName = user.EmailId ?? string.Empty;
-
-            await local.ExecuteAsync(
-                sql: @"INSERT OR REPLACE INTO AspNetUserLogins (LoginProvider, ProviderKey, ProviderDisplayName, UserId)
-                       VALUES ('AzureAD', COALESCE(@ProviderKey, @Id), @DisplayName, @Id);",
-                param: new { user.ProviderKey, user.Id, DisplayName = displayName },
-                commandType: CommandType.Text
-            );
         }
 
         // LogInData describes who uses this desktop, so it always lives in the local database,

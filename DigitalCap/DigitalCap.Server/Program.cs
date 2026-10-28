@@ -189,6 +189,8 @@ builder.Services.AddAuthentication(options =>
                 catch (Exception ex)
                 {
                     Console.WriteLine($"[Offline] Could not record offline identity: {ex.Message}");
+                    var logger = context.HttpContext.RequestServices.GetService<ILogger<Program>>();
+                    logger?.LogWarning(ex, "[Offline] Could not record offline identity: {Message}", ex.Message);
                 }
             }
         },
