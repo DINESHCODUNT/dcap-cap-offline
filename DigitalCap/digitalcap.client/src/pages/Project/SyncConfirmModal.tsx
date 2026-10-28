@@ -111,7 +111,7 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
                     )}
                 </Modal.Body>
                 {!isSyncing && (
-                    <Modal.Footer>
+                    <Modal.Footer className="gap-2">
                         <Button variant={BUTTONS.SECONDARY} onClick={onClose}>
                             No, Cancel
                         </Button>
