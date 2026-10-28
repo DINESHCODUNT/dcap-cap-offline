@@ -993,7 +993,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     <div className="d-flex justify-content-between align-items-center mb-3 p-3 bg-white rounded shadow-sm">
                         <h4 className="mb-0 _600">All Projects</h4>
                         <div className="d-flex align-items-center gap-2">
-                            <div style={{ minWidth: '260px' }}>
+                            <div className="download-project-select" style={{ minWidth: '260px' }}>
                                 <AbsSelect
                                     mult={false}
                                     search={true}
@@ -1192,7 +1192,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 <Modal.Body>
                     <div className="d-flex align-items-center gap-3">
                         <div className="img-wrapper">
-                            <i className="fas fa-exclamation text-warning" style={{ fontSize: '24px' }}></i>
+                            <Icon.ExclamationCircle className="text-warning" size={24} />
                         </div>
                         <div className="alert-content">
                             <h5>Are you sure?</h5>
@@ -1225,7 +1225,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 <Modal.Body>
                     <div className="d-flex align-items-center gap-3">
                         <div className="img-wrapper">
-                            <i className="fas fa-exclamation text-warning" style={{ fontSize: '24px' }}></i>
+                            <Icon.ExclamationCircle className="text-warning" size={24} />
                         </div>
                         <div className="alert-content">
                             <h5>Are you sure?</h5>
@@ -1254,7 +1254,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 <Modal.Body>
                     <div className="d-flex align-items-center gap-3 mb-3">
                         <div className="img-wrapper">
-                            <i className="fas fa-download text-primary" style={{ fontSize: '24px' }}></i>
+                            <Icon.Download className="text-primary" size={24} />
                         </div>
                         <div className="alert-content flex-grow-1">
                             <h5 className="mb-0">Downloading the {downloadingProjectName} project in Offline Mode</h5>
@@ -1284,7 +1284,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         <div className="card-body p-3">
                             <div className="d-flex align-items-center gap-3">
                                 <div className="img-wrapper">
-                                    <i className="fas fa-download download-icon text-primary" style={{ fontSize: '20px' }}></i>
+                                    <Icon.Download className="download-icon text-primary" size={20} />
                                 </div>
                                 <div className="alert-content flex-grow-1">
                                     <h6 className="mb-1" style={{ fontSize: '14px', fontWeight: 600 }}>Download Offline is Inprogress</h6>
@@ -1297,10 +1297,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     </div>
                                 </div>
                             </div>
-                            <div className="actions d-flex justify-content-end gap-2 mt-2">
+                            <div className="actions d-flex justify-content-end gap-2 mt-2" style={{ gap: '8px' }}>
                                 <button type="button" className="btn btn-sm btn-light" onClick={handleStopDropdownDownload}> No, Cancel </button>
                                 <button type="button" className="btn btn-sm btn-light" onClick={() => setIsDownloadInBackground(false)}>
-                                    <i className="fas fa-expand"></i>
+                                    <Icon.ArrowsAngleExpand />
                                 </button>
                             </div>
                         </div>

@@ -1542,6 +1542,14 @@
     }
 }
 
+.download-project-select {
+    .dropdown-content,
+    ul.select-dropdown {
+        max-height: 300px !important;
+        overflow-y: auto !important;
+    }
+}
+
 
 .grade-wrapper {
     background: #fff;
