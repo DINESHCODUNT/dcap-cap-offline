@@ -8,6 +8,7 @@ import { PERMISSIONS } from '../constants/permissions';
 import { ROLES } from '../constants/roles';
 import { fetchAppConfiguration } from "../store/slices/configurationSlice";
 import GlobalSearch from './GlobalSearch';
+import { isElectron } from '../utils/runtime';
 
 const HeaderMenu: React.FC = () => {
     const navigate = useNavigate();
@@ -56,11 +57,7 @@ const HeaderMenu: React.FC = () => {
         items: SidebarChildItem[];
     };
 
-    const isDesktopApp =
-        navigator.userAgent.toLowerCase().includes("electron") ||
-        (window as any).electron !== undefined ||
-        window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1";
+    const isDesktopApp = isElectron();
 
     const sidebarData: any[] = isDesktopApp
         ? [
@@ -81,6 +78,18 @@ const HeaderMenu: React.FC = () => {
                         name: "Manage Tanks",
                         navlink: "/app/Configuration/ManageTanks",
                         permission: "manageTank"
+                    },
+                    {
+                        id: "ManageGrading",
+                        name: "Manage ABS Grading",
+                        navlink: "/app/Configuration/Manageabsgrading",
+                        permission: "manageGrading"
+                    },
+                    {
+                        id: "ManageDescription",
+                        name: "Manage Description",
+                        navlink: "/app/Configuration/Managedescriptions",
+                        permission: "manageDescription"
                     }
                 ],
             }

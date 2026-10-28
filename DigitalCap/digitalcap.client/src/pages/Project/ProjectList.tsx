@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import Modal from 'react-bootstrap/Modal';
 import { AbsSearch, Button, BUTTONS, AbsReactTable, Toggle } from 'customer_portal-ui-shared';
@@ -6,6 +7,8 @@ import * as Icon from "react-bootstrap-icons";
 import * as projectService from '../../service/ProjectService';
 import moment from 'moment';
 import EmptyProjectView from './EmptyProjectView';
+import SyncConfirmModal from './SyncConfirmModal';
+import { isElectron } from '../../utils/runtime';
 
 export interface SidebarProjectRow {
     name: string;
@@ -27,8 +30,14 @@ export interface SidebarProjectRow {
     createdBy?: string;
     lastModifiedDate?: string;
     lastModifiedBy?: string;
+    isReadOnlyEnabled?: boolean;
+    projectLastUpdatedDateFormatted?: string;
     priority?: number;
     isDownload?: string;
+    mostRecentComment?: string;
+    commentCreatedBy?: string;
+    commentLastModifiedDate?: string;
+    commentFormattedDate?: string;
 }
 
 export interface ProjectListProps {
@@ -88,12 +97,21 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const [selectedPriority, setSelectedPriority] = React.useState<number | null>(null);
     const [modalItems, setModalItems] = useState<{ id: string, originalPriority: number, priority: number, project: SidebarProjectRow | null, isCurrent: boolean }[]>([]);
     const [loading, setLoading] = useState(false);
-    const [downloadConfirmProject, setDownloadConfirmProject] = useState<SidebarProjectRow | null>(null);
+    const [loadSuccess, setLoadSuccess] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [downloadingProjectName, setDownloadingProjectName] = useState<string | null>(null);
+    const [isDownloadInBackground, setIsDownloadInBackground] = useState<boolean>(false);
+    const [downloadAbortController, setDownloadAbortController] = useState<AbortController | null>(null);
+    const [transferError, setTransferError] = useState<string | null>(null);
+    const isDesktop = isElectron();
+    const [availableOnlineProjects, setAvailableOnlineProjects] = useState<projectService.DropdownProject[]>([]);
+    const [loadingOnlineProjects, setLoadingOnlineProjects] = useState<boolean>(false);
+    const [selectedOnlineProjectId, setSelectedOnlineProjectId] = useState<number | null>(null);
     const [syncConfirmProject, setSyncConfirmProject] = useState<SidebarProjectRow | null>(null);
-    const [downloadProgress, setDownloadProgress] = useState<number>(0);
     const [isDownloading, setIsDownloading] = useState<boolean>(false);
     const [downloadSuccessModal, setDownloadSuccessModal] = useState<boolean>(false);
-    const [syncSuccessModal, setSyncSuccessModal] = useState<boolean>(false);
+    const [showDownloadConfirm, setShowDownloadConfirm] = useState<boolean>(false);
+    const [showDownloadWarning, setShowDownloadWarning] = useState<boolean>(false);
     const [pageAppliedFilters, setPageAppliedFilters] = useState<{
         pageIndex: number;
         pageSize: string;
@@ -185,6 +203,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const loadProjects = useCallback(async () => {
 
         setLoading(true);
+        setLoadError(null);
 
         try {
 
@@ -216,6 +235,18 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     formattedLastModifiedDate = parsedLMD.isValid() ? parsedLMD.format('DD-MMM-YYYY hh:mm A') : project.projectLastUpdatedDate;
                 }
 
+                let formattedProjectLastUpdatedDate = '';
+                if (project.projectLastUpdatedDate) {
+                    const parsedLUD = moment(project.projectLastUpdatedDate);
+                    formattedProjectLastUpdatedDate = parsedLUD.isValid() ? parsedLUD.format('DD-MMM-YYYY') : project.projectLastUpdatedDate;
+                }
+
+                let formattedCommentDate = '';
+                if (project.commentLastModifiedDate) {
+                    const parsedCMD = moment(project.commentLastModifiedDate);
+                    formattedCommentDate = parsedCMD.isValid() ? parsedCMD.format('DD-MMM h:mmA') : '';
+                }
+
                 return {
                     name: (project.name || '').trim().replace(/\t/g, ''),
                     imo: project.imo || '',
@@ -231,8 +262,14 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     projectStatusColor: project.projectStatusColor || '',
                     lastModifiedDate: formattedLastModifiedDate,
                     lastModifiedBy: project.lastModifiedBy || project.modifiedBy || project.commentCreatedBy || '',
+                    isReadOnlyEnabled: Boolean(project.isReadOnlyEnabled),
+                    projectLastUpdatedDateFormatted: formattedProjectLastUpdatedDate,
                     priority: project.projectPriority ? parseInt(project.projectPriority, 10) : undefined,
-                    isDownload: project.isDownload || 'Online'
+                    isDownload: project.isDownload || 'Online',
+                    mostRecentComment: project.mostRecentComment || '',
+                    commentCreatedBy: project.commentCreatedBy || '',
+                    commentLastModifiedDate: project.commentLastModifiedDate || '',
+                    commentFormattedDate: formattedCommentDate
                 };
             });
 
@@ -251,16 +288,97 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
             setAllProjects(mapped);
 
+            setLoadSuccess(true);
             onProjectsLoaded?.(mapped);
 
-        } catch (error) {
-
+        } catch (error: any) {
+            setLoadSuccess(false);
+            setLoadError(error?.message || "Failed to load projects");
         } finally {
 
             setLoading(false);
         }
+    }, [onProjectsLoaded, isDesktop]);
 
-    }, [onProjectsLoaded]);
+    const loadAvailableOnlineProjects = useCallback(async () => {
+        if (!isDesktop) return;
+        setLoadingOnlineProjects(true);
+        try {
+            const res = await projectService.getAvailableOnlineProjects();
+            if (Array.isArray(res.data)) {
+                setAvailableOnlineProjects(res.data);
+            }
+        } catch {
+        } finally {
+            setLoadingOnlineProjects(false);
+        }
+    }, [isDesktop]);
+
+    const handleTriggerDownloadFromDropdown = async () => {
+        if (!selectedOnlineProjectId) {
+            setTransferError("Please select the project name to download offline");
+            return;
+        }
+        const match = availableOnlineProjects.find(p => p.projectId === selectedOnlineProjectId);
+        if (!match) return;
+
+        try {
+            const checkRes = await projectService.getDownloadedDataExists(selectedOnlineProjectId);
+            if (checkRes.data == null || !checkRes.data) {
+                setShowDownloadConfirm(true);
+            } else {
+                setShowDownloadWarning(true);
+            }
+        } catch {
+            setShowDownloadConfirm(true);
+        }
+    };
+
+    const handleProceedDropdownDownload = async () => {
+        setShowDownloadConfirm(false);
+        if (!selectedOnlineProjectId) return;
+        const match = availableOnlineProjects.find(p => p.projectId === selectedOnlineProjectId);
+        if (!match) return;
+        setIsDownloading(true);
+        setIsDownloadInBackground(false);
+        const controller = new AbortController();
+        setDownloadAbortController(controller);
+        setDownloadingProjectName(match.projectName);
+        try {
+            const response = await projectService.downloadProjectOffline(selectedOnlineProjectId, controller.signal);
+            if (response.data && response.data.success === false) {
+                setTransferError(response.data.message || "Unable to download project.");
+            } else {
+                setDownloadSuccessModal(true);
+                await loadProjects();
+                await loadAvailableOnlineProjects();
+            }
+        } catch (err: any) {
+            if (axios.isCancel(err) || err?.name === 'CanceledError') {
+                return;
+            }
+            setTransferError("Unable to Sync/Download due to a very low internet connection. Please proceed when your internet connection is having at least 10 mbps download and upload speed.");
+        } finally {
+            setIsDownloading(false);
+            setDownloadAbortController(null);
+            setDownloadingProjectName(null);
+        }
+    };
+
+    const handleStopDropdownDownload = () => {
+        if (downloadAbortController) {
+            downloadAbortController.abort();
+        }
+        setIsDownloading(false);
+        setIsDownloadInBackground(false);
+        setDownloadingProjectName(null);
+    };
+
+    useEffect(() => {
+        if (isDesktop) {
+            loadAvailableOnlineProjects();
+        }
+    }, [isDesktop, loadAvailableOnlineProjects]);
 
     useEffect(() => {
         if (!navigatedProjectId || allProjects.length === 0) return;
@@ -480,6 +598,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
         return {
             name: computeUniq('name'),
+            imo: computeUniq('imo'),
             pidNumber: computeUniq('pidNumber'),
             capRegion: computeUniq('capRegion'),
             date: computeUniq('date'),
@@ -490,76 +609,122 @@ const ProjectList: React.FC<ProjectListProps> = ({
     }, [allProjects, pageAppliedFilters.filters, val, statusFilter, regionFilter, connectionFilter]);
 
     const columns = React.useMemo<Array<any>>(
-        () => [
-            {
-                label: "Project Name",
-                accessorKey: "name",
-                accessor: "name",
-                columnValues: { type: "both", data: columnUniqueValues.name },
-                Cell: ({ row }: any) => {
-                    const { original } = row;
-                    return (
-                        <div className="d-flex align-items-center justify-content-start gap-3 rank-list flex-row">
-                            <div className="d-flex gap-2">
-                                <div className={`project-dot priority ${!original.priority ? 'empty' : ''}`} onClick={(e) => { e.stopPropagation(); setModalProject(original); setSelectedPriority(null); }}>
-                                    {original.priority || ''}
+        () => {
+            const baseColumns: any[] = [
+                {
+                    label: "Project Name",
+                    accessorKey: "name",
+                    accessor: "name",
+                    columnValues: { type: "both", data: columnUniqueValues.name },
+                    Cell: ({ row }: any) => {
+                        const { original } = row;
+                        return (
+                            <div className="d-flex align-items-center justify-content-start gap-3 rank-list flex-row">
+                                <div className="d-flex gap-2">
+                                    <div className={`project-dot priority ${!original.priority ? 'empty' : ''}`} onClick={(e) => { e.stopPropagation(); setModalProject(original); setSelectedPriority(null); }}>
+                                        {original.priority || ''}
+                                    </div>
+                                </div>
+                                <div className="d-flex gap-2 flex-column">
+                                    <p className="mr-2 _600 mb-0 text-primary text-link cursor-pointer" role="button" onClick={() => onSelectProject(original)}>
+                                        {original.name}
+                                    </p>
+                                    {!isDesktop && (
+                                        <p className="text-muted small mb-0">
+                                            IMO <span className="_600 ">{original.imo}</span>
+                                        </p>
+                                    )}
+                                    {isDesktop && (
+                                        <>
+                                            <div className="d-flex align-items-center gap-3 text-muted small mt-1">
+                                                <span className="d-inline-flex align-items-center gap-1">
+                                                    <Icon.CheckCircle size={14} />
+                                                    <b>{original.pct ?? original.percentComplete ?? 0}% Completed</b>
+                                                </span>
+                                                {original.projectLastUpdatedDateFormatted && (
+                                                    <span className="d-inline-flex align-items-center gap-1">
+                                                        <Icon.Clock size={14} />
+                                                        <b>Last Updated {original.projectLastUpdatedDateFormatted}</b>
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {original.commentFormattedDate && (
+                                                <div className="d-flex align-items-center gap-2 text-muted small mt-1">
+                                                    <Icon.ChatRightTextFill size={14} className="flex-shrink-0" />
+                                                    <span>
+                                                        <b>{original.commentCreatedBy} ({original.commentFormattedDate}) </b>
+                                                        {original.mostRecentComment}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
                             </div>
-                            <div className="d-flex gap-2 flex-column">
-                                <p className="mr-2 _600 mb-0 text-primary text-link cursor-pointer" role="button" onClick={() => onSelectProject(original)}>
-                                    {original.name}
-                                </p>
-                                <p className="text-muted small mb-0">
-                                    IMO <span className="_600 ">{original.imo}</span>
-                                </p>
-                            </div>
-                        </div>
-                    );
+                        );
+                    },
                 },
-            },
-            {
-                label: "Project ID",
-                accessorKey: "pidNumber",
-                accessor: "pidNumber",
-                columnValues: { type: "both", data: columnUniqueValues.pidNumber },
-                Cell: ({ value }: any) => (value && value.toString().trim() !== '') ? value : '-',
-            },
-            {
-                label: "CAP Coordinator",
-                accessorKey: "capRegion",
-                accessor: "capRegion",
-                columnValues: { type: "both", data: columnUniqueValues.capRegion },
-                Cell: ({ value }: any) => (value && value.toString().trim() !== '') ? value : '-',
-            },
-            {
-                label: "Potential Drydock Date",
-                accessorKey: "date",
-                accessor: "date",
-                columnValues: { type: "both", data: columnUniqueValues.date },
-                Cell: ({ value }: any) => (value && value.toString().trim() !== '') ? value : '-',
-            },
-            {
-                label: "Client Name",
-                accessorKey: "clientName",
-                accessor: "clientName",
-                columnValues: { type: "both", data: columnUniqueValues.clientName },
-                Cell: ({ value }: any) => (value && value.toString().trim() !== '') ? value : '-',
-            },
-            {
-                label: "WCN Number",
-                accessorKey: "wcn",
-                accessor: "wcn",
-                columnValues: { type: "both", data: columnUniqueValues.wcn },
-                Cell: ({ value }: any) => (value && value.toString().trim() !== '') ? value : '-',
-            },
-            {
-                label: "Completion %",
-                accessorKey: "pct",
-                accessor: "pct",
-                columnValues: { type: "both", data: columnUniqueValues.pct },
-                Cell: ({ value }: any) => `${value ?? 0}%`,
-            },
-            {
+            ];
+
+            if (isDesktop) {
+                baseColumns.push({
+                    label: "IMO",
+                    accessorKey: "imo",
+                    accessor: "imo",
+                    columnValues: { type: "both", data: columnUniqueValues.imo },
+                    Cell: ({ value }: any) => (value && value.toString().trim() !== '') ? value : '-',
+                });
+            }
+
+            baseColumns.push(
+                {
+                    label: "Project ID",
+                    accessorKey: "pidNumber",
+                    accessor: "pidNumber",
+                    columnValues: { type: "both", data: columnUniqueValues.pidNumber },
+                    Cell: ({ value }: any) => (value !== undefined && value !== null && value.toString().trim() !== '') ? value : (isDesktop ? 0 : '-'),
+                },
+                {
+                    label: "CAP Coordinator",
+                    accessorKey: "capRegion",
+                    accessor: "capRegion",
+                    columnValues: { type: "both", data: columnUniqueValues.capRegion },
+                    Cell: ({ value }: any) => (value && value.toString().trim() !== '') ? value : '-',
+                },
+                {
+                    label: "Potential Drydock Date",
+                    accessorKey: "date",
+                    accessor: "date",
+                    columnValues: { type: "both", data: columnUniqueValues.date },
+                    Cell: ({ value }: any) => (value && value.toString().trim() !== '') ? value : '-',
+                },
+                {
+                    label: isDesktop ? "Client" : "Client Name",
+                    accessorKey: "clientName",
+                    accessor: "clientName",
+                    columnValues: { type: "both", data: columnUniqueValues.clientName },
+                    Cell: ({ value }: any) => (value && value.toString().trim() !== '') ? value : '-',
+                },
+                {
+                    label: isDesktop ? "WCN" : "WCN Number",
+                    accessorKey: "wcn",
+                    accessor: "wcn",
+                    columnValues: { type: "both", data: columnUniqueValues.wcn },
+                    Cell: ({ value }: any) => (value && value.toString().trim() !== '') ? value : '-',
+                }
+            );
+
+            if (!isDesktop) {
+                baseColumns.push({
+                    label: "Completion %",
+                    accessorKey: "pct",
+                    accessor: "pct",
+                    columnValues: { type: "both", data: columnUniqueValues.pct },
+                    Cell: ({ value }: any) => `${value ?? 0}%`,
+                });
+            }
+
+            baseColumns.push({
                 label: "Status",
                 accessorKey: "status",
                 accessor: "status",
@@ -577,21 +742,25 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         )}
                     </div>
                 ),
-            },
-            {
-                label: "Modified by",
-                accessorKey: "lastModifiedBy",
-                accessor: "lastModifiedBy",
-                filtering: false,
-                sorting: false,
-                Cell: ({ row: { original } }: any) => (
-                    <div className="d-flex flex-column gap-1">
-                        <span>{original.lastModifiedBy || 'N/A'}</span>
-                        <span className="text-muted small">{original.lastModifiedDate || ''}</span>
-                    </div>
-                )
-            },
-            {
+            });
+
+            if (!isDesktop) {
+                baseColumns.push({
+                    label: "Modified by",
+                    accessorKey: "lastModifiedBy",
+                    accessor: "lastModifiedBy",
+                    filtering: false,
+                    sorting: false,
+                    Cell: ({ row: { original } }: any) => (
+                        <div className="d-flex flex-column gap-1">
+                            <span>{original.lastModifiedBy || 'N/A'}</span>
+                            <span className="text-muted small">{original.lastModifiedDate || ''}</span>
+                        </div>
+                    )
+                });
+            }
+
+            baseColumns.push({
                 label: "Action",
                 accessorKey: "action",
                 accessor: "action",
@@ -604,35 +773,27 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             startIcon={<Icon.ArrowRight />}
                             onClick={() => onSelectProject(original)}
                         ></Button>
-                        <button
-                            type="button"
-                            className="btn btn-sm btn-outline-primary p-1 d-flex align-items-center justify-content-center"
-                            style={{ borderRadius: '6px', width: '32px', height: '32px' }}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setDownloadConfirmProject(original);
-                            }}
-                            title="Download Offline"
-                        >
-                            <Icon.CloudArrowDown size={16} />
-                        </button>
-                        <button
-                            type="button"
-                            className="btn btn-sm btn-outline-success p-1 d-flex align-items-center justify-content-center"
-                            style={{ borderRadius: '6px', width: '32px', height: '32px' }}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setSyncConfirmProject(original);
-                            }}
-                            title="Save / Sync to Online"
-                        >
-                            <Icon.ArrowRepeat size={16} />
-                        </button>
+                        {isDesktop && navigator.onLine && (
+                            <button
+                                type="button"
+                                className="btn btn-sm btn-outline-success p-1 d-flex align-items-center justify-content-center"
+                                style={{ borderRadius: '6px', width: '32px', height: '32px' }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSyncConfirmProject(original);
+                                }}
+                                title="Save to Online"
+                            >
+                                <Icon.ArrowRepeat size={16} />
+                            </button>
+                        )}
                     </div>
                 )
-            },
-        ],
-        [projects, onSelectProject, columnUniqueValues]
+            });
+
+            return baseColumns;
+        },
+        [projects, onSelectProject, columnUniqueValues, isDesktop]
     );
 
     useEffect(() => {
@@ -729,29 +890,17 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const startIdx = pageAppliedFilters.pageIndex * pageSizeNum;
     const pagedProjects = fullyFilteredProjects.slice(startIdx, startIdx + pageSizeNum);
 
-    const handleStartDownload = () => {
-        if (!downloadConfirmProject) return;
-        setIsDownloading(true);
-        setDownloadProgress(15);
-        const timer = setInterval(() => {
-            setDownloadProgress((prev) => {
-                if (prev >= 90) {
-                    clearInterval(timer);
-                    setIsDownloading(false);
-                    setDownloadConfirmProject(null);
-                    setDownloadSuccessModal(true);
-                    return 100;
+    useEffect(() => {
+        if (!loading && loadSuccess && !loadError && isDesktop && allProjects.length === 0 && navigator.onLine) {
+            projectService.getOnlineUrl().then((res: any) => {
+                if (res?.data?.url) {
+                    window.location.href = res.data.url;
                 }
-                return prev + 25;
+            }).catch(() => {
+                // If fetching online URL fails, do not redirect
             });
-        }, 350);
-    };
-
-    const handleConfirmSync = () => {
-        if (!syncConfirmProject) return;
-        setSyncConfirmProject(null);
-        setSyncSuccessModal(true);
-    };
+        }
+    }, [loading, loadSuccess, loadError, isDesktop, allProjects.length]);
 
     return (
         <>
@@ -833,38 +982,74 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     </div>
                 </div>
 
-                {!loading && allProjects.length === 0 ? (
-                    <EmptyProjectView onRetry={loadProjects} />
+                {isDesktop && navigator.onLine && (
+                    <div className="d-flex justify-content-between align-items-center mb-3 p-3 bg-white rounded shadow-sm">
+                        <h4 className="mb-0 _600">All Projects</h4>
+                        <div className="d-flex align-items-center gap-2">
+                            <select
+                                className="form-select"
+                                style={{ minWidth: '260px' }}
+                                value={selectedOnlineProjectId ?? ''}
+                                onChange={(e) => setSelectedOnlineProjectId(e.target.value ? Number(e.target.value) : null)}
+                                disabled={loadingOnlineProjects || isDownloading}
+                            >
+                                <option value="">Select project</option>
+                                {availableOnlineProjects.map((p) => (
+                                    <option key={p.projectId} value={p.projectId}>
+                                        {p.projectName}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                type="button"
+                                className="btn btn-primary d-flex align-items-center gap-2"
+                                onClick={handleTriggerDownloadFromDropdown}
+                                disabled={isDownloading}
+                            >
+                                <Icon.Download size={16} />
+                                Download Offline
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {loadError ? (
+                    <div className="alert alert-danger mt-3" role="alert">
+                        {loadError}
+                    </div>
+                ) : !loading && allProjects.length === 0 ? (
+                    <EmptyProjectView />
                 ) : (
                     <>
-                        <div className="alert alert-info d-flex align-items-center gap-2 mb-3 py-2 px-3" style={{ fontSize: '14px', borderRadius: '8px' }}>
-                            <Icon.InfoCircleFill className="flex-shrink-0 text-primary" size={18} />
-                            <div>
-                                <span>All listed projects are online. If you need to report offline, you can download projects for offline use. Ensure network connectivity of at least 10 Mbps when downloading or saving projects to online.</span>
+                        {isDesktop && (
+                            <div className="alert alert-danger d-flex align-items-center gap-2 mb-3 py-2 px-3" style={{ fontSize: '14px', borderRadius: '8px' }}>
+                                <div>
+                                    <span>Ensure your network connection is having at least 10mbps download and upload speeds when either downloading or saving the project to online.</span>
+                                </div>
                             </div>
-                        </div>
+                        )}
                         <div className="row">
                             <div className="col-12 overflow-x-auto custom-table-responsive">
                                 <AbsReactTable
-                            columns={columns}
-                            data={pagedProjects}
-                            pagination={true}
-                            expand={false}
-                            allowColumnsShowHide={true}
-                            shadow={true}
-                            allDataProvided
-                            dataCount={dataCount}
-                            isloading={loading}
-                            pageOptions={["50", "100", "150", "200"]}
-                            applyFilterCallback={applyFilter}
-                            appliedFilters={{
-                                ...pageAppliedFilters,
-                                pageIndex: pageAppliedFilters.pageIndex.toString(),
-                                pageSize: pageAppliedFilters.pageSize,
-                                resetPageIndex: pageAppliedFilters.resetPageIndex,
-                                searchType: "all"
-                            }}
-                        />
+                                    columns={columns}
+                                    data={pagedProjects}
+                                    pagination={true}
+                                    expand={false}
+                                    allowColumnsShowHide={true}
+                                    shadow={true}
+                                    allDataProvided
+                                    dataCount={dataCount}
+                                    isloading={loading}
+                                    pageOptions={["50", "100", "150", "200"]}
+                                    applyFilterCallback={applyFilter}
+                                    appliedFilters={{
+                                        ...pageAppliedFilters,
+                                        pageIndex: pageAppliedFilters.pageIndex.toString(),
+                                        pageSize: pageAppliedFilters.pageSize,
+                                        resetPageIndex: pageAppliedFilters.resetPageIndex,
+                                        searchType: "all"
+                                    }}
+                                />
                             </div>
                         </div>
                     </>
@@ -989,86 +1174,141 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 </Modal>
             )}
 
-            {/* Download Confirm / Progress Modal */}
+            {/* Download Confirm Modal */}
             <Modal
-                show={!!downloadConfirmProject || isDownloading}
-                onHide={() => !isDownloading && setDownloadConfirmProject(null)}
+                show={showDownloadConfirm}
+                onHide={() => setShowDownloadConfirm(false)}
                 centered
-                backdrop="static"
             >
-                <Modal.Header closeButton={!isDownloading}>
-                    <Modal.Title>
-                        <Icon.CloudArrowDown className="me-2 text-primary" />
-                        Download Project Offline
-                    </Modal.Title>
+                <Modal.Header closeButton>
+                    <Modal.Title>Confirm</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
-                    {!isDownloading ? (
-                        <div>
+                    <div className="d-flex align-items-center gap-3">
+                        <div className="img-wrapper">
+                            <i className="fas fa-exclamation text-warning" style={{ fontSize: '24px' }}></i>
+                        </div>
+                        <div className="alert-content">
                             <h5>Are you sure?</h5>
-                            <p className="text-muted mb-3">
-                                Download <strong>{downloadConfirmProject?.name}</strong> to local encrypted offline storage. All survey parts, reports, and sections will be stored locally on your device for offline work.
+                            <p className="mb-0">
+                                Download offline mode which include all parts.<br />
+                                Do you want to continue this?
                             </p>
-                            <div className="alert alert-secondary py-2 small">
-                                <Icon.InfoCircle className="me-1" /> Please ensure you have a stable network connection during download.
-                            </div>
                         </div>
-                    ) : (
-                        <div className="text-center py-3">
-                            <h5 className="mb-3">Downloading project offline...</h5>
-                            <div className="progress mb-3" style={{ height: '20px' }}>
-                                <div
-                                    className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-                                    role="progressbar"
-                                    style={{ width: `${downloadProgress}%` }}
-                                >
-                                    {downloadProgress}%
-                                </div>
-                            </div>
-                            <p className="text-muted small mb-0">Syncing database records, templates and section cards...</p>
-                        </div>
-                    )}
+                    </div>
                 </Modal.Body>
-                {!isDownloading && (
-                    <Modal.Footer className="gap-2">
-                        <Button variant={BUTTONS.SECONDARY} onClick={() => setDownloadConfirmProject(null)}>
-                            No, Cancel
-                        </Button>
-                        <Button variant={BUTTONS.PRIMARY} onClick={handleStartDownload}>
-                            Yes, Proceed
-                        </Button>
-                    </Modal.Footer>
-                )}
+                <Modal.Footer className="d-flex justify-content-end gap-2">
+                    <Button variant={BUTTONS.SECONDARY} onClick={() => setShowDownloadConfirm(false)}>
+                        No, Cancel
+                    </Button>
+                    <Button variant={BUTTONS.SECONDARY} onClick={handleProceedDropdownDownload}>
+                        Yes, Proceed
+                    </Button>
+                </Modal.Footer>
             </Modal>
 
-            {/* Sync to Online Modal */}
+            {/* Download Warning Modal */}
             <Modal
-                show={!!syncConfirmProject}
-                onHide={() => setSyncConfirmProject(null)}
+                show={showDownloadWarning}
+                onHide={() => setShowDownloadWarning(false)}
+                centered
+            >
+                <Modal.Header closeButton>
+                    <Modal.Title>Confirm</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <div className="d-flex align-items-center gap-3">
+                        <div className="img-wrapper">
+                            <i className="fas fa-exclamation text-warning" style={{ fontSize: '24px' }}></i>
+                        </div>
+                        <div className="alert-content">
+                            <h5>Are you sure?</h5>
+                            <p className="mb-0">
+                                This CAP Project already Downloaded,Please Check with Admin
+                            </p>
+                        </div>
+                    </div>
+                </Modal.Body>
+                <Modal.Footer className="d-flex justify-content-end gap-2">
+                    <Button variant={BUTTONS.SECONDARY} onClick={() => setShowDownloadWarning(false)}>
+                        Ok
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
+            {/* Download In Progress Modal */}
+            <Modal
+                show={isDownloading && !isDownloadInBackground}
+                onHide={handleStopDropdownDownload}
                 centered
                 backdrop="static"
             >
                 <Modal.Header closeButton>
-                    <Modal.Title>
-                        <Icon.ArrowRepeat className="me-2 text-success" />
-                        Save Project to Online
-                    </Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
-                    <h5>Sync Changes to Online</h5>
-                    <p className="text-muted mb-3">
-                        Upload all local survey updates and card ratings for <strong>{syncConfirmProject?.name}</strong> back to the cloud database.
-                    </p>
+                    <div className="d-flex align-items-center gap-3 mb-3">
+                        <div className="img-wrapper">
+                            <i className="fas fa-download text-primary" style={{ fontSize: '24px' }}></i>
+                        </div>
+                        <div className="alert-content flex-grow-1">
+                            <h5 className="mb-0">Downloading the {downloadingProjectName} project in Offline Mode</h5>
+                        </div>
+                    </div>
+                    <div className="progress" style={{ height: '10px' }}>
+                        <div
+                            className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                            role="progressbar"
+                            style={{ width: "100%" }}
+                        />
+                    </div>
                 </Modal.Body>
-                <Modal.Footer className="gap-2">
-                    <Button variant={BUTTONS.SECONDARY} onClick={() => setSyncConfirmProject(null)}>
-                        Cancel
+                <Modal.Footer className="d-flex justify-content-end gap-2">
+                    <Button variant={BUTTONS.SECONDARY} onClick={handleStopDropdownDownload}>
+                        No, Cancel
                     </Button>
-                    <Button variant={BUTTONS.PRIMARY} onClick={handleConfirmSync}>
-                        Sync to Online
+                    <Button variant={BUTTONS.SECONDARY} onClick={() => setIsDownloadInBackground(true)}>
+                        Download in Background
                     </Button>
                 </Modal.Footer>
             </Modal>
+
+            {isDownloadInBackground && isDownloading && (
+                <div className="minimize-section" style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1050 }}>
+                    <div className="minimize-card card shadow" style={{ minWidth: '320px', backgroundColor: '#fff', border: '1px solid #dee2e6', borderRadius: '8px' }}>
+                        <div className="card-body p-3">
+                            <div className="d-flex align-items-center gap-3">
+                                <div className="img-wrapper">
+                                    <i className="fas fa-download download-icon text-primary" style={{ fontSize: '20px' }}></i>
+                                </div>
+                                <div className="alert-content flex-grow-1">
+                                    <h6 className="mb-1" style={{ fontSize: '14px', fontWeight: 600 }}>Download Offline is Inprogress</h6>
+                                    <div className="progress" style={{ height: '6px' }}>
+                                        <div
+                                            className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                                            role="progressbar"
+                                            style={{ width: "100%" }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="actions d-flex justify-content-end gap-2 mt-2">
+                                <button type="button" className="btn btn-sm btn-light" onClick={handleStopDropdownDownload}> No, Cancel </button>
+                                <button type="button" className="btn btn-sm btn-light" onClick={() => setIsDownloadInBackground(false)}>
+                                    <i className="fas fa-expand"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <SyncConfirmModal
+                project={syncConfirmProject ? { id: syncConfirmProject.id!, name: syncConfirmProject.name } : null}
+                onClose={() => setSyncConfirmProject(null)}
+                onSuccess={async () => {
+                    await loadProjects();
+                }}
+            />
 
             {/* Download Success Modal */}
             <Modal
@@ -1077,14 +1317,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 centered
             >
                 <Modal.Header closeButton>
-                    <Modal.Title className="text-success">
-                        <Icon.CheckCircleFill className="me-2" />
-                        Download Complete
-                    </Modal.Title>
+                    <Modal.Title>Success</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
                     <p className="mb-0">
-                        Project successfully downloaded to local encrypted storage. You can now continue working seamlessly even when disconnected from the network.
+                        Download completed successfully
                     </p>
                 </Modal.Body>
                 <Modal.Footer>
@@ -1094,25 +1331,22 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 </Modal.Footer>
             </Modal>
 
-            {/* Sync Success Modal */}
+            {/* Error Modal */}
             <Modal
-                show={syncSuccessModal}
-                onHide={() => setSyncSuccessModal(false)}
+                show={Boolean(transferError)}
+                onHide={() => setTransferError(null)}
                 centered
             >
                 <Modal.Header closeButton>
-                    <Modal.Title className="text-success">
-                        <Icon.CheckCircleFill className="me-2" />
-                        Sync Successful
-                    </Modal.Title>
+                    <Modal.Title>Error</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
                     <p className="mb-0">
-                        Offline records and survey ratings have been synchronized to the cloud database.
+                        {transferError || "Unable to Sync/Download due to a very low internet connection. Please proceed when your internet connection is having at least 10 mbps download and upload speed."}
                     </p>
                 </Modal.Body>
                 <Modal.Footer>
-                    <Button variant={BUTTONS.PRIMARY} onClick={() => setSyncSuccessModal(false)}>
+                    <Button variant={BUTTONS.SECONDARY} onClick={() => setTransferError(null)}>
                         Ok
                     </Button>
                 </Modal.Footer>

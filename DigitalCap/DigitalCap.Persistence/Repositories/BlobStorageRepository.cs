@@ -32,25 +32,29 @@ namespace DigitalCap.Persistence.Repositories
             var connectionString = configuration.GetBlobStorageConnectionString();
             var containerName = configuration.GetBlobStorageContainerName();
 
-            if (string.IsNullOrWhiteSpace(connectionString))
+            if (string.IsNullOrWhiteSpace(connectionString) || string.IsNullOrWhiteSpace(containerName))
             {
-                throw new InvalidOperationException(
-                    "Blob storage is not configured: set 'Blob:ConnectionString' in appsettings (see ConfigurationConstants.ConfigurationKeys.BlobStorage).");
+                // Can be unconfigured offline
+                return;
             }
 
-            if (string.IsNullOrWhiteSpace(containerName))
+            try
             {
-                throw new InvalidOperationException(
-                    "Blob storage is not configured: set 'Blob:ContainerName' in appsettings.");
+                var storageAccount = CloudStorageAccount.Parse(connectionString);
+                var blobClient = storageAccount.CreateCloudBlobClient();
+                BlobContainer = blobClient.GetContainerReference(containerName);
             }
-
-            var storageAccount = CloudStorageAccount.Parse(connectionString);
-            var blobClient = storageAccount.CreateCloudBlobClient();
-            BlobContainer = blobClient.GetContainerReference(containerName);
+            catch
+            {
+                BlobContainer = null;
+            }
         }
 
         public async Task<string> SaveFile(IFormFile file, string id = null)
         {
+            if (BlobContainer == null || !DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return null;
+
             if (string.IsNullOrWhiteSpace(id))
                 id = Guid.NewGuid().ToString();
 
@@ -66,6 +70,9 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<string> GetFileDownloadUrl(string id)
         {
+            if (BlobContainer == null || !DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return null;
+
             var blockBlob = BlobContainer.GetBlockBlobReference(id);
 
             if (!await blockBlob.ExistsAsync())
@@ -83,12 +90,18 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task DeleteFile(string id)
         {
+            if (BlobContainer == null || !DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return;
+
             var blockBlob = BlobContainer.GetBlockBlobReference(id);
             await blockBlob.DeleteIfExistsAsync();
         }
 
         public async Task<byte[]> GetContent(string id)
         {
+            if (BlobContainer == null || !DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return null;
+
             var blockBlob = BlobContainer.GetBlockBlobReference(id);
 
             if (!await blockBlob.ExistsAsync())
@@ -104,6 +117,9 @@ namespace DigitalCap.Persistence.Repositories
         public async Task<MemoryStream> GetZipAsync(
             IEnumerable<ProjectFile> files)
         {
+            if (BlobContainer == null || !DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return null;
+
             var ms = new MemoryStream();
 
             using (var zipOutputStream = new ZipOutputStream(ms))

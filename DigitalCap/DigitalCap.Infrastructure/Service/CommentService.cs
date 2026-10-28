@@ -1,4 +1,5 @@
-﻿using DigitalCap.Core.Interfaces.Repository;
+﻿using DigitalCap.Core.Helpers.Extensions;
+using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Interfaces.Service;
 using DigitalCap.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -39,6 +40,11 @@ namespace DigitalCap.Infrastructure.Service
 
         public async Task<IEnumerable<CommentModel>> TransferExistingNotesToComment(int projectId, int? projectTaskId, string currentUser, string notes)
         {
+            // Offline comments are read-only (CommentRepository refuses writes), so the legacy notes stay as they are
+            // and are moved into a comment the next time the task is opened online.
+            if (_unitOfWork.UsesLocalDatabase())
+                return await GetComments(projectId, projectTaskId);
+
             await CreateComment(projectId, projectTaskId, currentUser, notes);
             return await GetComments(projectId, projectTaskId);
         }

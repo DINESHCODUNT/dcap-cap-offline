@@ -76,28 +76,9 @@ namespace DigitalCap.Persistence
                     }
                 }
 
-                // If online in desktop mode, connect to Azure SQL Server like web mode
-                if (isOnline && !string.IsNullOrWhiteSpace(sqlServerConn))
-                {
-                    try
-                    {
-                        var sqlConn = new SqlConnection(sqlServerConn);
-                        sqlConn.Open();
-                        Connection = sqlConn;
-                        _connectionString = sqlServerConn;
-                    }
-                    catch
-                    {
-                        // Fallback to SQLite if Azure SQL Server is unreachable
-                        Connection = new SqliteConnection(sqliteConnStr);
-                        _connectionString = sqliteConnStr;
-                    }
-                }
-                else
-                {
-                    Connection = new SqliteConnection(sqliteConnStr);
-                    _connectionString = sqliteConnStr;
-                }
+                // Desktop (Electron) mode always uses the local SQLCipher SQLite database
+                Connection = new SqliteConnection(sqliteConnStr);
+                _connectionString = sqliteConnStr;
             }
             else
             {

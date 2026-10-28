@@ -7,6 +7,7 @@ using DigitalCap.Core.Models.Tank;
 using DigitalCap.Core.Models.VesselModel;
 using DigitalCap.Core.Models.View.Admin;
 using DigitalCap.Core.ViewModels;
+using DigitalCap.Persistence.Extensions;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Logging;
@@ -25,6 +26,19 @@ namespace DigitalCap.Persistence.Repositories
         {
             _logger = logger;
         }
+
+        // Tank image cards with the image (base64) as src, like dbo.GetTankImageCard. The report services ask for every
+        // section of a part with an empty section id and filter on SectionId, so the section id is returned and the
+        // empty id means all (the reference query SQLiteQueries.Tank.GetProjectTankImageCard did neither).
+        private const string SqliteProjectTankImageCard = @"
+SELECT TankImageCard.Id, TankImageCard.ProjectId, TankImageCard.TemplateId, TankImageCard.SectionId, CardName, CardNumber,
+       DescriptionId, AdditionalDescription, CurrentCondition, TankImageCard.ImageId, IsActive, ImageData.Base64String AS src
+FROM TankImageCard
+LEFT OUTER JOIN ImageData ON TankImageCard.ImageId = ImageData.ImageId
+WHERE TankImageCard.ProjectId = @ProjectId AND TankImageCard.TemplateId = @TemplateId
+  AND (@SectionId = '00000000-0000-0000-0000-000000000000' OR TankImageCard.SectionId = @SectionId)
+  AND TankImageCard.IsActive = 1
+ORDER BY TankImageCard.SectionId, CardNumber";
 
         public async Task<List<VesselTank>> GetTanks_VesselByIMO(string imonumber)
         {
@@ -334,6 +348,10 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<List<TankUI>> GetTemplateTanks(int templateId, string imonumber, string vesseltype, int projectId)
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<TankUI>(DigitalCap.Core.Constants.SQLiteQueries.Tank.GetTempaleTanks,
+                    new { TemplateId = templateId, ImoNumber = imonumber, VesselType = vesseltype, ProjectId = projectId }, Transaction);
+
             try
             {
 
@@ -360,6 +378,11 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<TankCheckBox>> GetTemplateTankGradingCondition(int Id)
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<TankCheckBox>(
+                    DigitalCap.Core.Constants.SQLiteQueries.Tank.GetTankGradingConditionById + " ORDER BY GradingCondition.Id",
+                    new { Id }, Transaction);
+
             try
             {
                 await using var connection = new SqlConnection(_unitOfWork.ConnectionString);
@@ -384,6 +407,10 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<TankGradingUI>> GetTemplateTankGrading(int tanktypeId, int projectId, string vesseltype)
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<TankGradingUI>(DigitalCap.Core.Constants.SQLiteQueries.Tank.GetTempaleTankGrading,
+                    new { TankTypeId = tanktypeId, ProjectId = projectId, VesselType = vesseltype }, Transaction);
+
             try
             {
                 var result = await Connection.QueryAsync<TankGradingUI>(
@@ -408,6 +435,10 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<TankImageCard>> GetProjectTankImageCard(int projectId, int templateId, Guid sectionId)
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<TankImageCard>(SqliteProjectTankImageCard,
+                    new { ProjectId = projectId, TemplateId = templateId, SectionId = sectionId }, Transaction);
+
             await using var connection = new SqlConnection(_unitOfWork.ConnectionString);
 
             await connection.OpenAsync();
@@ -429,6 +460,15 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection.IsSqlite())
+                {
+                    var list = await Connection.QueryMappedAsync<TankImageCard>(
+                        DigitalCap.Core.Constants.SQLiteQueries.Tank.GetProjectTankImageCardById,
+                        new { ProjectId = projectId, TemplateId = templateId, SectionId = sectionId, CardNumber = cardNumber },
+                        Transaction);
+                    return list.FirstOrDefault()!;
+                }
+
                 var result = await Connection.QueryFirstOrDefaultAsync<TankImageCard>(
                     sql: "dbo.GetProjectTankImageCardByName",
                     param: new
@@ -451,6 +491,31 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<bool> UpdateProjectTankImageCard(TankImageCard tankImageCard)
         {
+            if (Connection.IsSqlite())
+            {
+                var p = new DynamicParameters();
+                p.Add("@Id", tankImageCard.Id);
+                p.Add("@ProjectId", tankImageCard.ProjectId);
+                p.Add("@TemplateId", tankImageCard.TemplateId);
+                p.Add("@SectionId", tankImageCard.SectionId);
+                p.Add("@CardNumber", tankImageCard.CardNumber);
+                p.Add("@DescriptionId", tankImageCard.DescriptionId);
+                p.Add("@AdditionalDescription", tankImageCard.AdditionalDescription ?? "");
+                p.Add("@CurrentCondition", tankImageCard.CurrentCondition);
+                p.Add("@ImageId", tankImageCard.ImageId);
+                p.Add("@CreatedDttm", tankImageCard.CreatedDttm == DateTime.MinValue ? DateTime.Now : tankImageCard.CreatedDttm);
+                p.Add("@UpdatedDttm", DateTime.Now);
+                p.Add("@IsActive", tankImageCard.IsActive ? 1 : 0);
+                p.Add("@CardName", tankImageCard.CardName);
+
+                var rows = await Connection.ExecuteAsync(
+                    DigitalCap.Core.Constants.SQLiteQueries.Tank.UpdateProjectTankImageCard,
+                    p,
+                    Transaction);
+                Commit();
+                return rows > 0;
+            }
+
             var affectedRows = await Connection.ExecuteAsync(
                 sql: "dbo.UpdateTankImageCard",
                 param: new
@@ -473,6 +538,31 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<bool> CreateProjectTankImageCard(TankImageCard tankImageCard)
         {
+            if (Connection.IsSqlite())
+            {
+                var p = new DynamicParameters();
+                p.Add("@ProjectId", tankImageCard.ProjectId);
+                p.Add("@TemplateId", tankImageCard.TemplateId);
+                p.Add("@SectionId", tankImageCard.SectionId);
+                p.Add("@CardNumber", tankImageCard.CardNumber);
+                p.Add("@DescriptionId", tankImageCard.DescriptionId);
+                p.Add("@AdditionalDescription", tankImageCard.AdditionalDescription ?? "");
+                p.Add("@CurrentCondition", tankImageCard.CurrentCondition);
+                p.Add("@ImageId", tankImageCard.ImageId);
+                p.Add("@CreatedDttm", tankImageCard.CreatedDttm == DateTime.MinValue ? DateTime.Now : tankImageCard.CreatedDttm);
+                p.Add("@UpdatedDttm", tankImageCard.UpdatedDttm == DateTime.MinValue ? DateTime.Now : tankImageCard.UpdatedDttm);
+                p.Add("@IsActive", tankImageCard.IsActive ? 1 : 0);
+                p.Add("@CardName", tankImageCard.CardName);
+                p.Add("@IsSync", 1);
+
+                var rows = await Connection.ExecuteAsync(
+                    DigitalCap.Core.Constants.SQLiteQueries.Tank.CreateProjectTankImageCard,
+                    p,
+                    Transaction);
+                Commit();
+                return rows > 0;
+            }
+
             var affectedRows = await Connection.ExecuteAsync(
                 sql: "dbo.CreateTankImageCard",
                 param: new

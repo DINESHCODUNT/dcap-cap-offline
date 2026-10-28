@@ -1,6 +1,8 @@
 ﻿using Dapper;
 using DigitalCap.Core.Interfaces.Repository;
+using DigitalCap.Core.Constants;
 using DigitalCap.Core.Models;
+using DigitalCap.Persistence.Extensions;
 using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
@@ -29,6 +31,20 @@ namespace DigitalCap.Persistence.Repositories
             var connection = _unitOfWork?.Connection;
             if (connection == null)
                 throw new InvalidOperationException("Database connection is not initialized.");
+
+            // Offline: reference GradeofflineService.GetProjectGrades (SQLiteQueries.Grades.ReadProjectGrades).
+            if (connection.IsSqlite())
+            {
+                try
+                {
+                    return (await connection.QueryFirstMappedAsync<ProjectGrades>(
+                        SQLiteQueries.Grades.ReadProjectGrades, new { ProjectId = projectId }, _unitOfWork?.Transaction))!;
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException($"Error retrieving project grades for project ID {projectId}: {ex.Message}", ex);
+                }
+            }
 
             // Ensure connection is open
             if (connection.State != ConnectionState.Open)
@@ -71,12 +87,19 @@ namespace DigitalCap.Persistence.Repositories
             }
         }
 
+        // The reference had no working offline grade writes (it ran CAP.Create/Update_Project_Grades against the
+        // local file) and the sync does not upload ProjectGrades, so they are refused offline instead of being lost.
+        private const string OfflineGradesWriteMessage =
+            "Report details (project grades) can only be changed online; changes made offline would not be synchronized.";
+
         public async Task<int> CreateProjectGrades(int projectId)
         {
             // Capture connection and transaction
             var connection = _unitOfWork?.Connection;
             if (connection == null)
                 throw new InvalidOperationException("Database connection is not initialized.");
+            if (connection.IsSqlite())
+                throw new InvalidOperationException(OfflineGradesWriteMessage);
 
             // Ensure connection is open
             if (connection.State != ConnectionState.Open)
@@ -128,6 +151,8 @@ namespace DigitalCap.Persistence.Repositories
             var connection = _unitOfWork?.Connection;
             if (connection == null)
                 throw new InvalidOperationException("Database connection is not initialized.");
+            if (connection.IsSqlite())
+                throw new InvalidOperationException(OfflineGradesWriteMessage);
 
             // Ensure connection is open
             if (connection.State != ConnectionState.Open)

@@ -23,16 +23,19 @@ namespace DigitalCap.Infrastructure.Service
         private readonly RoleManager<Microsoft.AspNetCore.Identity.IdentityRole> _roleManager;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IUserAccountRepository _userAccountRepository;
+        private readonly IUserPermissionRepository _userPermissionRepository;
 
         public SecurityService(
         UserManager<ApplicationUser> userManager, RoleManager<Microsoft.AspNetCore.Identity.IdentityRole> roleManager
             , IHttpContextAccessor httpContextAccessor, IUserAccountRepository userAccountRepository
+            , IUserPermissionRepository userPermissionRepository
             )
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _httpContextAccessor = httpContextAccessor;
             _userAccountRepository = userAccountRepository;
+            _userPermissionRepository = userPermissionRepository;
         }
 
         public async Task<ServiceResult<ApplicationDto>> GetCurrentUserAsync_Temp()
@@ -172,6 +175,24 @@ namespace DigitalCap.Infrastructure.Service
                     };
 
                     return ServiceResult<ApplicationDto>.Success(dto);
+                }
+
+                // Desktop offline: AspNetUsers is empty locally, so use the roles and permission claims that were
+                // stored for this user when a project was downloaded (null when online or nothing was stored).
+                var offlineSecurity = await _userPermissionRepository.GetOfflineUserSecurityAsync(email);
+                if (offlineSecurity != null)
+                {
+                    return ServiceResult<ApplicationDto>.Success(new ApplicationDto
+                    {
+                        Id = string.IsNullOrWhiteSpace(offlineSecurity.AspNetUserId)
+                            ? claimsPrincipal.FindFirstValue(ClaimTypes.NameIdentifier) ?? email
+                            : offlineSecurity.AspNetUserId,
+                        Email = email,
+                        UserName = email,
+                        IsEnabled = true,
+                        Roles = offlineSecurity.Roles.ToArray(),
+                        Permissions = new HashSet<Permission>(offlineSecurity.Claims.ToPermissions())
+                    });
                 }
 
                 // Fallback using token claims for offline mode or unmapped accounts

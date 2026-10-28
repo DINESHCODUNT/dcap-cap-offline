@@ -1,5 +1,7 @@
 using System;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
@@ -15,6 +17,17 @@ namespace DigitalCap.Infrastructure.Service
 
     public class OnlineStatusService
     {
+        // Azure AD is what online features (sign-in, token validation, sync) depend on,
+        // so reachability of its HTTPS endpoint is the meaningful "online" signal.
+        // ICMP is avoided because ships and corporate networks often block it.
+        private const string ProbeHost = "login.microsoftonline.com";
+        private const int ProbePort = 443;
+        private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(2);
+        private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(30);
+
+        private static readonly SemaphoreSlim ProbeLock = new SemaphoreSlim(1, 1);
+        private static DateTime _lastChecked = DateTime.MinValue;
+
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IConfiguration _configuration;
 
@@ -24,25 +37,47 @@ namespace DigitalCap.Infrastructure.Service
             _configuration = configuration;
         }
 
+        /// <summary>
+        /// Returns the cached status, re-probing at most once per <see cref="CacheDuration"/>.
+        /// Concurrent callers never wait on more than one probe.
+        /// </summary>
         public async Task<bool> DetermineOnlineStatus()
         {
+            if (DateTime.UtcNow - _lastChecked < CacheDuration)
+                return IsOnline.OnlineOrOffline;
+
+            if (!await ProbeLock.WaitAsync(0))
+                return IsOnline.OnlineOrOffline;
+
             try
             {
-                using var ping = new Ping();
-                var reply = await ping.SendPingAsync("8.8.8.8", 1500);
-                bool online = reply.Status == IPStatus.Success;
-
+                var online = await ProbeAsync();
                 IsOnline.OnlineOrOffline = online;
                 IsOnline.Mode = online;
+                _lastChecked = DateTime.UtcNow;
                 return online;
+            }
+            finally
+            {
+                ProbeLock.Release();
+            }
+        }
+
+        private static async Task<bool> ProbeAsync()
+        {
+            if (!NetworkInterface.GetIsNetworkAvailable())
+                return false;
+
+            try
+            {
+                using var client = new TcpClient();
+                using var cts = new CancellationTokenSource(ProbeTimeout);
+                await client.ConnectAsync(ProbeHost, ProbePort, cts.Token);
+                return client.Connected;
             }
             catch
             {
-                // Fallback check
-                bool networkUp = NetworkInterface.GetIsNetworkAvailable();
-                IsOnline.OnlineOrOffline = networkUp;
-                IsOnline.Mode = networkUp;
-                return networkUp;
+                return false;
             }
         }
     }

@@ -1,4 +1,5 @@
 import axios, { type AxiosResponse } from "axios";
+import { isElectron } from "./runtime";
 
 interface AppConfig {
   azureAdConfig: {
@@ -17,7 +18,7 @@ export const getApiScopes = async (): Promise<string[]> => {
   try {
     const environment: string = import.meta.env.VITE_APP_ENV || import.meta.env.REACT_APP_ENV || "local";
 
-    if (environment.toLowerCase() === "local") {
+    if (environment.toLowerCase() === "local" || isElectron()) {
       const configModule = await import(`../config.local.json`);
       const config: AppConfig = configModule.default;
       return config.azureAdConfig.scopes || ["d8a3a596-6fcc-4047-ac76-d990b30f1bb0/.default"];

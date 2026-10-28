@@ -27,6 +27,7 @@ namespace DigitalCap.Core.Models
         }
         public string MostRecentComment { get; set; }
         public string CommentCreatedBy { get; set; }
+        public string LastModifiedBy { get; set; }
         public DateTimeOffset? CommentLastModifiedDate { get; set; }
         public DateTime? ProjectLastUpdatedDate { get; set; }
         public byte? PercentComplete { get; set; }

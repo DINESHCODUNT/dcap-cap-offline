@@ -564,14 +564,90 @@ export function parseReleaseFlagFromLanding(apiData: unknown): boolean {
     return v === true || v === "True" || v === "true";
 }
 
-export function getDownloadedDataExists(projectId: number): Promise<AxiosResponse<boolean>> {
+export function getDownloadedDataExists(projectId: number, signal?: AbortSignal): Promise<AxiosResponse<boolean>> {
     return axiosInstance.get<boolean>(`/api/DataTransferAPI/GetDownloadedData`, {
         params: { projectId },
+        signal
     });
 }
-export function updateOfflineReleasedStatus(projectId: number | string): Promise<AxiosResponse<unknown>> {
+export interface TransferResult {
+    success: boolean;
+    message?: string;
+    released?: boolean;
+    uploaded?: boolean;
+    lockedBy?: { name?: string; email?: string };
+}
+
+export interface PendingChanges {
+    hasChanges: boolean;
+    sectionCount: number;
+}
+
+/** Copies the project from the online database into the desktop's local database. */
+export function downloadProjectOffline(projectId: number, signal?: AbortSignal): Promise<AxiosResponse<TransferResult>> {
+    return axiosInstance.post<TransferResult>(`/api/DataTransferAPI/Download`, null, {
+        params: { projectId },
+        signal
+    });
+}
+
+/** Uploads offline changes; with release the local copy is removed and the online lock freed. */
+export function syncProjectOnline(projectId: number, release: boolean): Promise<AxiosResponse<TransferResult>> {
+    return axiosInstance.post<TransferResult>(`/api/DataTransferAPI/Sync`, null, {
+        params: { projectId, release },
+    });
+}
+
+/** Discards the local copy without uploading and frees the online lock. */
+export function releaseProjectWithoutSync(projectId: number, signal?: AbortSignal): Promise<AxiosResponse<TransferResult>> {
+    return axiosInstance.post<TransferResult>(`/api/DataTransferAPI/Release`, null, {
+        params: { projectId },
+        signal
+    });
+}
+
+export function getDownloadedProjectIds(): Promise<AxiosResponse<number[]>> {
+    return axiosInstance.get<number[]>(`/api/DataTransferAPI/GetDownloadedProjects`);
+}
+
+export function getPendingChanges(projectId: number, signal?: AbortSignal): Promise<AxiosResponse<PendingChanges>> {
+    return axiosInstance.get<PendingChanges>(`/api/DataTransferAPI/GetPendingChanges`, {
+        params: { projectId },
+        signal
+    });
+}
+
+export interface OnlineLockStatus {
+    isLocal: boolean;
+    isOnline: boolean;
+    lockedByMe: boolean;
+    lockedBy: { name?: string | null; email?: string | null } | null;
+}
+
+/** Whether this computer still holds the online download lock for a local project. */
+export function getOnlineLockStatus(projectId: number, signal?: AbortSignal): Promise<AxiosResponse<OnlineLockStatus>> {
+    return axiosInstance.get<OnlineLockStatus>(`/api/DataTransferAPI/GetOnlineLockStatus`, {
+        params: { projectId },
+        signal
+    });
+}
+
+/** The server's message from a failed transfer call, or a fallback. */
+export function getTransferErrorMessage(error: unknown, fallback: string): string {
+    const data = (error as { response?: { data?: unknown } })?.response?.data;
+    if (data && typeof data === "object" && "message" in data && (data as TransferResult).message) {
+        const result = data as TransferResult;
+        const owner = result.lockedBy?.name || result.lockedBy?.email;
+        return owner ? `${result.message} (${owner})` : String(result.message);
+    }
+    if (typeof data === "string" && data.trim() && !data.trim().startsWith("<")) return data;
+    return fallback;
+}
+
+export function updateOfflineReleasedStatus(projectId: number | string, signal?: AbortSignal): Promise<AxiosResponse<unknown>> {
     return axiosInstance.post(`/Offline/UpdateReleasedStatus`, null, {
         params: { projectId },
+        signal
     });
 }
 
@@ -665,4 +741,19 @@ export function releaseOfflineDownload(projectId: number): Promise<AxiosResponse
     return axiosInstance.post(routePath, null, {
         params: { projectId }
     });
+}
+
+export interface DropdownProject {
+    projectId: number;
+    projectName: string;
+    imo: string;
+}
+
+/** Online projects available to download for offline work. */
+export function getAvailableOnlineProjects(): Promise<AxiosResponse<DropdownProject[]>> {
+    return axiosInstance.get<DropdownProject[]>('/api/DataTransferAPI/GetProjectData');
+}
+
+export function getOnlineUrl(): Promise<AxiosResponse<{ url: string }>> {
+    return axiosInstance.get<{ url: string }>('/api/Offline/GetOnlineUrl');
 }

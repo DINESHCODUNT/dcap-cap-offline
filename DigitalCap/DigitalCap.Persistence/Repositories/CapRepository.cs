@@ -1,5 +1,7 @@
 using DigitalCap.Core.Interfaces.Repository;
+using DigitalCap.Core.Constants;
 using DigitalCap.Core.Models;
+using DigitalCap.Persistence.Extensions;
 using System.Data;
 using Dapper;
 using Newtonsoft.Json;
@@ -20,8 +22,28 @@ namespace DigitalCap.Persistence.Repositories
             _unitOfWork?.Commit();
         }
         
+        // ------------------------------------------------------------------ offline (local SQLite)
+        // The chart queries are the reference's SQLiteQueries (CapOfflineRepository), which return one JSON cell.
+
+        private const string SqliteCapIndex = @"
+            SELECT p.ID, p.Name, s.[Status] AS ProjectStatusName, p.CapRegion, p.IMO, p.VesselName, p.PIDNumber,
+                   p.ProjectPriority, p.CompanyName, p.WCN
+            FROM Projects p LEFT JOIN Statuses s ON s.ID = p.ProjectStatus
+            ORDER BY p.ID DESC";
+
+        private async Task<List<T>> QuerySqliteJson<T>(string sql)
+        {
+            var json = (await Connection.ExecuteScalarAsync(sql, transaction: Transaction))?.ToString();
+            if (string.IsNullOrWhiteSpace(json))
+                return new List<T>();
+            return JsonConvert.DeserializeObject<List<T>>(json) ?? new List<T>();
+        }
+
         public async Task<List<ProjectsGrid>> GetCapIndexAsync()
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<ProjectsGrid>(SqliteCapIndex, transaction: Transaction);
+
             try
             {
                 var result = await Connection.QueryAsync<ProjectsGrid>(
@@ -40,6 +62,9 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<ProjectCharts>> GetProjectByStatusesAsync()
         {
+            if (Connection.IsSqlite())
+                return await QuerySqliteJson<ProjectCharts>(SQLiteQueries.Project.ByStatus);
+
             var result = await Connection.QueryAsync<ProjectCharts>(
             sql : "[CAP].[Read_Project_Statuses]",
             commandType: CommandType.StoredProcedure,
@@ -55,12 +80,12 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
-                var result = await Connection.QueryAsync<ProjectCharts>(
-                sql: "[CAP].[Read_Certs_ByRegion]",
-                commandType: CommandType.StoredProcedure,
-                transaction: Transaction);
-
-                var list = result.ToList();
+                var list = Connection.IsSqlite()
+                    ? await QuerySqliteJson<ProjectCharts>(SQLiteQueries.ReadCertsByRegion)
+                    : (await Connection.QueryAsync<ProjectCharts>(
+                        sql: "[CAP].[Read_Certs_ByRegion]",
+                        commandType: CommandType.StoredProcedure,
+                        transaction: Transaction)).ToList();
 
                 // Preserve original empty logic
                 if (list == null || !list.Any())
@@ -91,6 +116,9 @@ namespace DigitalCap.Persistence.Repositories
         /// </summary>
         public async Task<List<ProjectChartsCount>> GetProjectCountAsync()
         {
+            if (Connection.IsSqlite())
+                return await QuerySqliteJson<ProjectChartsCount>(SQLiteQueries.Project.Count);
+
             try
             {
                 var scalar = await Connection.ExecuteScalarAsync(
@@ -114,6 +142,9 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<ProjectChartsCount>> GetCertsCountAsync()
         {
+            if (Connection.IsSqlite())
+                return await QuerySqliteJson<ProjectChartsCount>(SQLiteQueries.ReadCertsCount);
+
             try
             {
                 var result = await Connection.QueryAsync<ProjectChartsCount>(

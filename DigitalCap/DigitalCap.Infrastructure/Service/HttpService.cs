@@ -33,6 +33,8 @@ namespace DigitalCap.Infrastructure.Service
 
         public async Task<IEnumerable<TResult>> GetDataAsync<TContainer, TResult>(string clientUrl) where TContainer : IJsonContainer<TResult>
         {
+            if (!IsOnline.OnlineOrOffline)
+                return Enumerable.Empty<TResult>();
 
             var options = new RestClientOptions(clientUrl)
             {

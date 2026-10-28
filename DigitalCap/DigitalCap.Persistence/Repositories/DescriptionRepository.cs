@@ -5,6 +5,7 @@ using DigitalCap.Core.Models.Grading;
 using DigitalCap.Core.Models.ImageDescription;
 using DigitalCap.Core.Models.ReportConfig;
 using DigitalCap.Core.Models.Survey;
+using DigitalCap.Persistence.Extensions;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
@@ -59,6 +60,12 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<ImageDescriptions>> GetImageDescriptionsByProjectId(int projectId)
         {
+            // Offline: the project's downloaded descriptions mapped to the legacy template sections and to tank types.
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<ImageDescriptions>(
+                    DigitalCap.Core.Constants.SQLiteQueries.ImageDescription.GetImageDescriptionsByProjectId,
+                    new { projectId }, Transaction);
+
             try
             {
                 await using var connection = new SqlConnection(_unitOfWork.ConnectionString);

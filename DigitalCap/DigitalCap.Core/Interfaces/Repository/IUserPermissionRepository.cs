@@ -20,5 +20,11 @@ namespace DigitalCap.Core.Interfaces.Repository
         Task<UserRolePermission> GetRolePermissionById(string id);
         Task<List<Role>> GetAllRoles();
         Task<List<UserRolePermissionViewModel>> GetRolePermission(string id);
+
+        /// <summary>
+        /// Desktop offline only: the user's roles, permission claims and AspNetUsers id stored at download time.
+        /// Returns null when the unit of work is not using the local database or nothing was stored for the user.
+        /// </summary>
+        Task<DigitalCap.Core.Models.DataTransfer.OfflineUserSecurity?> GetOfflineUserSecurityAsync(string userName);
     }
 }

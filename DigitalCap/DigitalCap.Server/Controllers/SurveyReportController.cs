@@ -9,6 +9,7 @@ using DigitalCap.Core.Models.Tank;
 using DigitalCap.Core.Security;
 using DigitalCap.Core.ViewModels;
 using DigitalCap.Infrastructure.Service;
+using DigitalCap.WebApi.Auth;
 using DigitalCap.WebApi.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
@@ -45,7 +46,9 @@ namespace DigitalCap.WebApi.Controllers
         public async Task<IActionResult> SurveyReportIndex(int projectId, int? templateSectionId = null)
         {
             
+            // The offline identity's Name claim is the display name; its permissions are stored under the e-mail.
             var currentUserName = User.FindFirstValue(ClaimTypes.Upn)
+                ?? (User.Identity?.AuthenticationType == OfflineAuthenticationHandler.SchemeName ? User.FindFirstValue(ClaimTypes.Email) : null)
                 ?? User.FindFirstValue(ClaimTypes.Name);
 
             var result = await _surveyReportService.GetIndexAsync(projectId, currentUserName, templateSectionId);

@@ -1,4 +1,5 @@
 using DigitalCap.Core.Enumerations;
+using DigitalCap.Core.Helpers.Extensions;
 using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Interfaces.Service;
 using DigitalCap.Core.Models;
@@ -58,13 +59,15 @@ namespace DigitalCap.Infrastructure.Service
         private readonly IDescriptionRepository _descriptionRepository;
         private readonly IFreedomAPIRepository _freedomAPIRepository;
         private readonly IProjectReportRepository _projectReportRepository;
+        private readonly IUnitOfWork _unitOfWork;
         public SurveyReportService(ILogger<SurveyReportService> logger, IConfiguration configuration,
             IUserPermissionRepository userPermissionRepository, ITransferDataOnlinetoOfflineRepository transferDataOnlinetoOfflineRepository,
             IUserAccountRepository userAccountRepository, ISecurityService securityService,
             ISurveyReportRepository surveyReportRepository, IProjectRepository projectRepository,
             ITankRepository tankRepository, IVesselRepository vesselRepository, IDescriptionRepository descriptionRepository
-            , IFreedomAPIRepository freedomAPIRepository, IProjectReportRepository projectReportRepository)
+            , IFreedomAPIRepository freedomAPIRepository, IProjectReportRepository projectReportRepository, IUnitOfWork unitOfWork)
         {
+            _unitOfWork = unitOfWork;
             _logger = logger;
             _configuration = configuration;
             _userPermissionRepository = userPermissionRepository;
@@ -139,6 +142,8 @@ namespace DigitalCap.Infrastructure.Service
             }
 
             model.SynchedOnline = isSync;
+            var proj = await _projectRepository.GetProject(projectId);
+            model.IsRleased = proj?.IsReadOnlyEnabled ?? false;
 
             return ServiceResult<SurveyReportViewModel>.Success(model);
         }
@@ -147,7 +152,9 @@ namespace DigitalCap.Infrastructure.Service
             var surveyReport = await PrepareSurveyReportViewModel(projectId, null);
             var isReportExist = surveyReport.ReportPartGrid.Where(x => x.TemplateId == templateSectionId).Select(x => x.ReportPartExists).FirstOrDefault();
             var isSync = await _transferDataOnlinetoOfflineRepository.GetDownloadOfflineProjects(projectId);
-            if (!isReportExist)
+            // Opening a part for the first time creates its ProjectTemplateMapping rows. Offline the report is only
+            // read here: the downloaded mappings are used as they are and nothing is written on tab open.
+            if (!isReportExist && !_unitOfWork.UsesLocalDatabase())
             {
                 var isCreated = await CreateReport(projectId, templateSectionId.Value);
             }
@@ -351,10 +358,9 @@ namespace DigitalCap.Infrastructure.Service
                     retApp.Vessel.Environment = ReportVessel.environment;
                     retApp.Vessel.SelectedPrefix = ReportVessel.selectedPrefix.ToString();
                     retApp.Vessel.FirstVisitDate = ReportVessel.firstVisitDate;
-                    //retApp.Vessel.FirstVisitDate = ReportVessel.firstVisitDate != null  ? DateTime.ParseExact(ReportVessel.firstVisitDate, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None).ToString("dd-MMM-yyyy") : "";
 
                     retApp.Vessel.LastVisitDate = ReportVessel.lastVisitDate;
-                    //retApp.Vessel.LastVisitDate = ReportVessel.lastVisitDate != null  ? DateTime.ParseExact(ReportVessel.lastVisitDate, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None).ToString("dd-MMM-yyyy") : "";
+
                 }
 
                 var surveyStatusTask = _vesselRepository.GetSurveyStatus(projectId);
@@ -960,11 +966,9 @@ namespace DigitalCap.Infrastructure.Service
                     retApp.Vessel.Other = ReportVessel.other;
                     retApp.Vessel.Environment = ReportVessel.environment;
                     retApp.Vessel.SelectedPrefix = ReportVessel.selectedPrefix.ToString();
-                    //retApp.Vessel.FirstVisitDate = ReportVessel.firstVisitDate;
-                    retApp.Vessel.FirstVisitDate = ReportVessel.firstVisitDate != null ? DateTime.ParseExact(ReportVessel.firstVisitDate, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None).ToString("dd-MMM-yyyy") : "";
+                    retApp.Vessel.FirstVisitDate = FormatVesselDate(ReportVessel.firstVisitDate);
 
-                    //retApp.Vessel.LastVisitDate = ReportVessel.lastVisitDate;
-                    retApp.Vessel.LastVisitDate = ReportVessel.lastVisitDate != null ? DateTime.ParseExact(ReportVessel.lastVisitDate, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None).ToString("dd-MMM-yyyy") : "";
+                    retApp.Vessel.LastVisitDate = FormatVesselDate(ReportVessel.lastVisitDate);
 
                 }
 
@@ -1358,7 +1362,7 @@ namespace DigitalCap.Infrastructure.Service
         {
             try
             {
-                string root = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "tempdocument", id);
+                string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DigitalCap", "temp", "tempdocument", id);
 
                 string path = Path.Combine(root, templateId.ToString());
 
@@ -1402,7 +1406,7 @@ namespace DigitalCap.Infrastructure.Service
             if (!allTemplate)
                 surveyReportViewModel.ReportPartGrid = surveyReportViewModel.ReportPartGrid.Where(x => x.TemplateId == templateId).ToList();
             //string root = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            string root = Path.Combine(Directory.GetCurrentDirectory(), @"wwwroot\tempdocument");
+            string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DigitalCap", "temp", "tempdocument");
 
             string path = root + @"\" + id + @"\";
             var documents = Directory.GetFiles(path, "*.pdf", SearchOption.AllDirectories);
@@ -1766,14 +1770,14 @@ namespace DigitalCap.Infrastructure.Service
                 retApp.Vessel.Environment = ReportVessel.environment;
                 retApp.Vessel.SelectedPrefix = ReportVessel.selectedPrefix.ToString();
                 retApp.Vessel.FirstVisitDate = ReportVessel.firstVisitDate;
-                //retApp.Vessel.FirstVisitDate = ReportVessel.firstVisitDate != null  ? DateTime.ParseExact(ReportVessel.firstVisitDate, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None).ToString("dd-MMM-yyyy") : "";
 
                 retApp.Vessel.LastVisitDate = ReportVessel.lastVisitDate;
-                //retApp.Vessel.LastVisitDate = ReportVessel.lastVisitDate != null  ? DateTime.ParseExact(ReportVessel.lastVisitDate, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None).ToString("dd-MMM-yyyy") : "";
 
             }
 
-            if (projectydetails.ProjectStatus != 11 && projectydetails.ProjectStatus != 10)
+            // Refreshing calls the Freedom API and stores the result; offline there is no API, so the downloaded
+            // survey status and certificates are returned as they are.
+            if (projectydetails.ProjectStatus != 11 && projectydetails.ProjectStatus != 10 && !_unitOfWork.UsesLocalDatabase())
             {
                 retApp = this.MapStatuatoryCertificates(projectydetails.AbsClassID, retApp);
                 retApp.SurveyStatus = await _surveyReportRepository.MapSurveyStatus(projectydetails.AbsClassID, retApp.Vessel.ImoNumber);
@@ -3049,9 +3053,9 @@ namespace DigitalCap.Infrastructure.Service
                 var fileBytes = ms.ToArray();
                 resizedImage = ResizeImage(fileBytes);
 
-                var imgId = await _surveyReportRepository.UploadImage(assignmentId, newFileId);
+                var imgId = await _surveyReportRepository.UploadImage(assignmentId, newFileId, projectId);
 
-                await _surveyReportRepository.AddEditImageNew(imgId, resizedImage);
+                await _surveyReportRepository.AddEditImageNew(imgId, resizedImage, projectId);
 
                 if (replaceImage && !string.IsNullOrEmpty(fileId))
                 {
@@ -3121,8 +3125,8 @@ namespace DigitalCap.Infrastructure.Service
                     uploadedFile.CopyTo(ms);
                     var fileBytes = ms.ToArray();
                     var resizedImage = ResizeImage(fileBytes);
-                    var imgId = await _surveyReportRepository.UploadImage(assignmentId, newfileId);
-                    await _surveyReportRepository.AddEditImageNew(imgId, resizedImage);
+                    var imgId = await _surveyReportRepository.UploadImage(assignmentId, newfileId, projectId);
+                    await _surveyReportRepository.AddEditImageNew(imgId, resizedImage, projectId);
                     _surveyReportRepository.InsertBulkUploadImage(imgId);
                     return ServiceResult<int>.Success(imgId);
                 }
@@ -3256,8 +3260,8 @@ namespace DigitalCap.Infrastructure.Service
                     file.CopyTo(ms);
                     var fileBytes = ms.ToArray();
                     resizedImage = ResizeImage(fileBytes);
-                    var imgId = await _surveyReportRepository.UploadImage("unknown", newfileId);
-                    await _surveyReportRepository.AddEditImageNew(imgId, resizedImage);
+                    var imgId = await _surveyReportRepository.UploadImage("unknown", newfileId, projectId);
+                    await _surveyReportRepository.AddEditImageNew(imgId, resizedImage, projectId);
                     var imageCard = _projectReportRepository.GetGenericImagCardByName(projectId, templateId, sectionId, cardId).Result;
                     if (imageCard == null || imageCard.Id == 0)
                     {
@@ -3325,8 +3329,8 @@ namespace DigitalCap.Infrastructure.Service
                     await file.CopyToAsync(ms);
                     var fileBytes = ms.ToArray();
                     resizedImage = ResizeImage(fileBytes);
-                    var imgId = await _surveyReportRepository.UploadImage("unknown", newfileId);
-                    await _surveyReportRepository.AddEditImageNew(imgId, resizedImage);
+                    var imgId = await _surveyReportRepository.UploadImage("unknown", newfileId, projectId);
+                    await _surveyReportRepository.AddEditImageNew(imgId, resizedImage, projectId);
 
                     var imageCard = await _surveyReportRepository.GetProjectImagCardById(projectId, templateId, sectionId, cardId);
                     if (imageCard == null || imageCard.Id == 0)
@@ -4106,6 +4110,20 @@ namespace DigitalCap.Infrastructure.Service
                 conditions = data.CurrentCondition
             });
         }
+
+        private static string FormatVesselDate(string? dateStr)
+        {
+            if (string.IsNullOrWhiteSpace(dateStr))
+                return string.Empty;
+
+            string[] formats = { "dd-MM-yyyy", "yyyy-MM-dd", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-ddTHH:mm:ss", "dd/MM/yyyy" };
+            if (DateTime.TryParseExact(dateStr.Trim(), formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt) ||
+                DateTime.TryParse(dateStr.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out dt))
+            {
+                return dt.ToString("dd-MMM-yyyy");
+            }
+
+            return string.Empty;
+        }
     }
 }
-

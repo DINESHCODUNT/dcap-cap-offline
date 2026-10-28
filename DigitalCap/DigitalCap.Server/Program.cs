@@ -2,7 +2,11 @@ using Azure.Identity;
 using DigitalCap.Core.Services;
 using DigitalCap.Infrastructure.DbContext;
 using DigitalCap.Infrastructure.Service;
+using DigitalCap.Core.Interfaces.Repository;
+using DigitalCap.Core.Models.Survey;
 using DigitalCap.Persistence.Extensions;
+using DigitalCap.WebApi.Auth;
+using Microsoft.AspNetCore.Authentication;
 using DigitalCap.WebApi.Core;
 using ElectronNET.API;
 using ElectronNET.API.Entities;
@@ -55,8 +59,23 @@ else
     var pathService = new OneDrivePathService();
     var workingDbPath = pathService.GetDatabasePath();
     var decryptedKey = AppKeyService.GetDecryptedKey();
+
+    // In desktop (Electron) mode, ApplicationDbContext always uses the local SQLCipher SQLite database
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseSqlite($"Data Source={workingDbPath};Password={decryptedKey};"));
+
+    var websiteUrl = configuration["URL"];
+    var websiteOrigin = !string.IsNullOrWhiteSpace(websiteUrl) ? websiteUrl.TrimEnd('/') : string.Empty;
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("AllowSpecificOrigin", policy =>
+        {
+            policy.WithOrigins(websiteOrigin)
+                  .AllowAnyHeader()
+                  .AllowCredentials()
+                  .AllowAnyMethod();
+        });
+    });
 }
 
 
@@ -70,12 +89,24 @@ var validIssuers = new[]
     $"https://login.microsoftonline.com/{tenantId}/v2.0"
 };
 
+// Desktop requests made while Azure AD is unreachable use the offline scheme;
+// everything else (web, or desktop while online) validates the Azure AD token.
+const string AuthSelectorScheme = "AzureAdOrOffline";
+
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultAuthenticateScheme = AuthSelectorScheme;
+    options.DefaultChallengeScheme = AuthSelectorScheme;
+    options.DefaultScheme = AuthSelectorScheme;
 })
+.AddPolicyScheme(AuthSelectorScheme, AuthSelectorScheme, options =>
+{
+    options.ForwardDefaultSelector = _ =>
+        HybridSupport.IsElectronActive && !IsOnline.OnlineOrOffline
+            ? OfflineAuthenticationHandler.SchemeName
+            : JwtBearerDefaults.AuthenticationScheme;
+})
+.AddScheme<AuthenticationSchemeOptions, OfflineAuthenticationHandler>(OfflineAuthenticationHandler.SchemeName, null)
 .AddJwtBearer(options =>
 {
     // Authority drives automatic OIDC discovery (signing keys, issuer).
@@ -124,7 +155,7 @@ builder.Services.AddAuthentication(options =>
             Console.WriteLine($"[JWT] Challenge: error={context.Error}, desc={context.ErrorDescription}");
             return Task.CompletedTask;
         },
-        OnTokenValidated = context =>
+        OnTokenValidated = async context =>
         {
             // Resolve username from claims in priority order (v2 → v1 → fallbacks)
             var principal = context.Principal;
@@ -137,7 +168,29 @@ builder.Services.AddAuthentication(options =>
             Console.WriteLine($"[JWT] Token valid. User={username}, Iss={principal?.FindFirst("iss")?.Value}, Aud={principal?.FindFirst("aud")?.Value}");
             context.HttpContext.Items["AuthProvider"] = "AzureAd";
             context.HttpContext.Items["AuthUser"] = username;
-            return Task.CompletedTask;
+
+            // Remember who signed in so the desktop app can identify them when offline.
+            if (HybridSupport.IsElectronActive && !string.IsNullOrWhiteSpace(username))
+            {
+                try
+                {
+                    var syncRepository = context.HttpContext.RequestServices.GetRequiredService<ISyncRepository>();
+                    await syncRepository.SaveUserInfo(new LoginData
+                    {
+                        Id = principal?.FindFirst("oid")?.Value
+                            ?? principal?.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier")?.Value
+                            ?? username,
+                        FirstName = principal?.FindFirst(ClaimTypes.GivenName)?.Value ?? string.Empty,
+                        LastName = principal?.FindFirst(ClaimTypes.Surname)?.Value ?? string.Empty,
+                        ProviderKey = principal?.FindFirst("oid")?.Value ?? string.Empty,
+                        EmailId = username
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Offline] Could not record offline identity: {ex.Message}");
+                }
+            }
         },
         OnMessageReceived = context =>
         {
@@ -177,14 +230,26 @@ if (!HybridSupport.IsElectronActive)
 
 app.UseMiddleware<OnlineStatusMiddleware>();
 
+if (HybridSupport.IsElectronActive)
+{
+    app.UseCors("AllowSpecificOrigin");
+}
+
+// Runs after the online check so the auth selector sees the current status.
+app.UseAuthentication();
 app.UseAuthorization();
 
-// Ensure local SQLite database exists in OneDrive or LocalAppData from template
+// Ensure local SQLite database exists in OneDrive or LocalAppData from template,
+// then bring its schema up to date before any request touches it.
 if (HybridSupport.IsElectronActive)
 {
     var webRoot = app.Environment.WebRootPath ?? Path.Combine(AppContext.BaseDirectory, "wwwroot");
     var offlineDbManager = new OfflineDatabaseManager(webRoot);
     offlineDbManager.EnsureWorkingDatabaseExists();
+    offlineDbManager.EnsureSchema(message => Console.WriteLine($"[Schema] {message}"));
+
+    // Establish the online status up front so the first requests pick the right auth scheme.
+    await app.Services.GetRequiredService<OnlineStatusService>().DetermineOnlineStatus();
 }
 
 app.MapControllers();

@@ -5,6 +5,7 @@ using DigitalCap.Core.Constants;
 using DigitalCap.Core.DTO;
 using DigitalCap.Core.Enumerations;
 using DigitalCap.Core.Helpers.Constants;
+using DigitalCap.Core.Helpers.Extensions;
 using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Interfaces.Service;
 using DigitalCap.Core.Models;
@@ -49,6 +50,7 @@ namespace DigitalCap.Infrastructure.Service
         private readonly IGradeRepository _gradeRepository;
         private readonly ITransferDataOnlinetoOfflineRepository _transferDataOnlinetoOfflineRepository;
         private readonly IUserAccountRepository _userAccountRepository;
+        private readonly IUnitOfWork _unitOfWork;
 
         public object User { get; private set; }
 
@@ -60,8 +62,10 @@ namespace DigitalCap.Infrastructure.Service
             IFileStorageRepository fileStorageRepository, IUserRepository userRepository
 , ISyncRepository syncRepository, ISecurityService securityService, UserManager<ApplicationUser> userManager,
             IClientRepository clientRepository, IGradeRepository gradeRepository
-            , ITransferDataOnlinetoOfflineRepository transferDataOnlinetoOfflineRepository, IUserAccountRepository userAccountRepository)
+            , ITransferDataOnlinetoOfflineRepository transferDataOnlinetoOfflineRepository, IUserAccountRepository userAccountRepository
+            , IUnitOfWork unitOfWork)
         {
+            _unitOfWork = unitOfWork;
             _projectRepository = projectRepository;
             _tankRepository = tankRepository;
             _taskRepository = taskRepository;
@@ -199,9 +203,20 @@ namespace DigitalCap.Infrastructure.Service
 
             return ServiceResult<int>.Success(1);
         }
+        /// <summary>
+        /// Desktop offline: the unit of work is on the local database. Work that only exists online (stored
+        /// procedures, creating rows the sync does not upload) is skipped.
+        /// </summary>
+        private bool IsOfflineDatabase => _unitOfWork.UsesLocalDatabase();
+
         public async Task<ServiceResult<byte>> UpdateProjectPercentComplete(int projectId, string currentUser)
         {
             var percentComplete = await _taskRepository.UpdateProjectPercentComplete(projectId);
+
+            // Offline the value is only calculated from the local task snapshot: CAP.Update_Project_Percent_Complete
+            // does not exist locally and Projects rows are not uploaded by the sync.
+            if (IsOfflineDatabase)
+                return ServiceResult<byte>.Success(percentComplete);
 
             await _projectRepository.UpdatePercentComplete(projectId, percentComplete, currentUser);
 
@@ -373,6 +388,11 @@ namespace DigitalCap.Infrastructure.Service
         }
         public async Task<ServiceResult<object>> GetList(string currentUser, bool isElectron)
         {
+            // Offline (local database): add/export/cancel/delete need the live database, so the buttons are off.
+            // Same response shape as online, which is what the project page reads.
+            if (IsOfflineDatabase)
+                return ServiceResult<object>.Success(new ProjectPermissions());
+
             // NON-ELECTRON FLOW
             if (!isElectron)
             {
@@ -443,6 +463,7 @@ namespace DigitalCap.Infrastructure.Service
                 {
                     if (project.PercentComplete == null && project.Id.HasValue)
                     {
+                        // Offline this only calculates from the local tasks (see UpdateProjectPercentComplete).
                         var percentResult = await UpdateProjectPercentComplete(project.Id.Value, userName);
 
                         if (percentResult.IsSuccess)
@@ -453,7 +474,8 @@ namespace DigitalCap.Infrastructure.Service
                 }
             }
 
-            if (!isElectron)
+            // Offline every local project was downloaded by a user allowed to open it (no AspNet roles locally).
+            if (!isElectron && !IsOfflineDatabase)
             {
                 var currentUserResult = await _securityService.GetCurrentUserAsync();
 
@@ -600,7 +622,19 @@ namespace DigitalCap.Infrastructure.Service
             var invoiceSum = tasks.Where(t => t.Type == TypeNames.ClientInvoices).Select(i => i.Value).Sum();
             var projectGrading = await _gradeRepository.GetProjectGrades(id.Value);
 
-            if (projectGrading == null)
+            if (projectGrading == null && IsOfflineDatabase)
+            {
+                // As digital-cap-offline OfflineController.Landing: no grades row is created offline (the sync does
+                // not upload ProjectGrades); show the CAP1 values from the local tasks without saving them.
+                var cap1Tasks = await _taskRepository.GetTasks(id.Value);
+                projectGrading = new ProjectGrades
+                {
+                    CAP1CertificateIssuanceDate = cap1Tasks.FirstOrDefault(x => x.Task == "CAP Grade Received from CAPCOM")?.StatusDate,
+                    CAP1FinalGrade = cap1Tasks.FirstOrDefault(x => x.Task == "CAP Grade Received from CAPCOM")?.Notes,
+                    ProjectId = id.Value
+                };
+            }
+            else if (projectGrading == null)
             {
                 var projectGradesId = await _gradeRepository.CreateProjectGrades(id.Value);
                 var cap1Tasks = await _taskRepository.GetTasks(id.Value);

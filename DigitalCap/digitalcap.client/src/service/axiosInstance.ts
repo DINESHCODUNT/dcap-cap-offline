@@ -2,6 +2,7 @@ import axios from "axios";
 import type { AxiosInstance, AxiosResponse, AxiosError } from "axios";
 import initializeMsal from "../msalInstance";
 import { API_BASE_URL } from "../api/apiConfig";
+import { isOfflineDesktop } from "../utils/runtime";
 import type { SilentRequest, PopupRequest } from "@azure/msal-browser";
 
 const axiosInstance: AxiosInstance = axios.create({
@@ -59,6 +60,12 @@ const renewToken = async (): Promise<string | null> => {
 };
 
 axiosInstance.interceptors.request.use(async (config) => {
+    // Offline in the desktop app the local server identifies the user itself,
+    // and token renewal would only fail (or open a sign-in popup) without a network.
+    if (await isOfflineDesktop()) {
+        return config;
+    }
+
     let token = localStorage.getItem("token");
 
     if (!token) {
@@ -83,6 +90,10 @@ axiosInstance.interceptors.response.use(
         }
 
         const originalConfig = error.config as any;
+
+        if (await isOfflineDesktop()) {
+            return Promise.reject(error);
+        }
 
         if (originalConfig._retried) {
             localStorage.removeItem("token");

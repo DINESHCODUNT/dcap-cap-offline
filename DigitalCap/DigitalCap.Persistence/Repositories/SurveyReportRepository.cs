@@ -5,6 +5,7 @@ using DigitalCap.Core.Models.ReportConfig;
 using DigitalCap.Core.Models.Survey;
 using DigitalCap.Core.Models.VesselModel;
 using DigitalCap.Core.ViewModels;
+using DigitalCap.Persistence.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
@@ -37,6 +38,33 @@ namespace DigitalCap.Persistence.Repositories
         {
             _unitOfWork?.Commit();
         }
+
+        // ---- Local SQLite (desktop offline) reads, ported from digital-cap-offline SurveyReportOfflineRepository
+        // (SQLiteQueries.ReportView / ProjectMapping / ProjectImageCards). The dbo.Select* procedures are called with an
+        // empty section id (and grading id 0) to mean "every section" by the report services; the ports do the same.
+        private const string EmptyGuidText = "00000000-0000-0000-0000-000000000000";
+
+        private static readonly string SqliteTemplateSections =
+            DigitalCap.Core.Constants.SQLiteQueries.ReportView.GetTemplateSections + " ORDER BY TemplateSectionMapping.Id";
+
+        private const string SqliteProjectTemplateMapping = @"
+SELECT Id, ProjectId, TemplateId, SectionId, Notes, CreatedDttm, UpdatedDttm, IsDeleted
+FROM ProjectTemplateMapping
+WHERE ProjectId = @ProjectId AND TemplateId = @TemplateId AND (@SectionId = '" + EmptyGuidText + @"' OR SectionId = @SectionId)
+  AND IsDeleted = 0";
+
+        private const string SqliteProjectGradingMapping = @"
+SELECT Id, ProjectId, TemplateId, SectionId, GradingId, Value, CreatedDttm, UpdatedDttm, IsDeleted
+FROM ProjectGradingMapping
+WHERE ProjectId = @ProjectId AND TemplateId = @TemplateId AND (@SectionId = '" + EmptyGuidText + @"' OR SectionId = @SectionId)
+  AND IsDeleted = 0";
+
+        private const string SqliteProjectGradingConditionMapping = @"
+SELECT Id, ProjectId, TemplateId, SectionId, GradingId, GradingConditionLabel, GradingConditionValue, CreatedDttm, UpdatedDttm, IsDeleted
+FROM ProjectGradingConditionMapping
+WHERE ProjectId = @ProjectId AND TemplateId = @TemplateId AND (@SectionId = '" + EmptyGuidText + @"' OR SectionId = @SectionId)
+  AND (@GradingId = 0 OR GradingId = @GradingId) AND IsDeleted = 0";
+
         public DateTime? FindSpecialHull(int num, IEnumerable<VesselSurvey> vesselSurvey)
         {
 
@@ -44,6 +72,9 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<SurveyStatus> MapSurveyStatus(string classNumber, int imo)
         {
+            if (Connection.IsSqlite() || !DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return new SurveyStatus() { IMONum = imo };
+
             var vesselSurvey = _freedomApiRepository.GetSurveys(classNumber).Result;
             SurveyStatus survey = new SurveyStatus();
             if (vesselSurvey != null)
@@ -80,6 +111,9 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<Report> MapStatuatoryCertificates(string classNumber, Report report)
         {
+            if (Connection.IsSqlite() || !DigitalCap.Infrastructure.Service.IsOnline.OnlineOrOffline)
+                return report;
+
             try
             {
 
@@ -242,6 +276,9 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<List<ReportTemplateSection>> GetTemplateSections(int templateId)
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<ReportTemplateSection>(SqliteTemplateSections, new { TemplateId = templateId }, Transaction);
+
             try
             {
                 var result = await Connection.QueryAsync<ReportTemplateSection>(
@@ -260,6 +297,10 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<List<ReportTemplate>> GetReportTemplateList()
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<ReportTemplate>(
+                    DigitalCap.Core.Constants.SQLiteQueries.SurveyReport.GetReportTemplateList + " ORDER BY Id", transaction: Transaction);
+
             var result = await Connection.QueryAsync<ReportTemplate>(
                          sql: "dbo.GetReportTemplateList",
                      commandType: CommandType.StoredProcedure,
@@ -270,6 +311,11 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<List<int>> GetExistingReportPartsSectionIds(int projectId)
         {
+            if (Connection.IsSqlite())
+                return (await Connection.QueryAsync<int>(
+                    DigitalCap.Core.Constants.SQLiteQueries.SurveyReport.GetExistingReportPartsSectionIds,
+                    new { ProjectId = projectId }, Transaction)).Distinct().ToList();
+
             var result = await Connection.QueryAsync<int>(
                    sql: "GetExistingReportPartsSectionIds",
                   param: new { ProjectId = projectId },
@@ -294,6 +340,10 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<ReportTemplateUI> GetTemplateTitle(int templateId)
         {
+            if (Connection.IsSqlite())
+                return (await Connection.QueryFirstMappedAsync<ReportTemplateUI>(
+                    DigitalCap.Core.Constants.SQLiteQueries.ReportView.GetTemplate, new { TemplateId = templateId }, Transaction))!;
+
             try
             {
                 await using var connection = new SqlConnection(_unitOfWork.ConnectionString);
@@ -315,6 +365,10 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<CurrentCondition>> GetCurrentCondition()
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<CurrentCondition>(
+                    DigitalCap.Core.Constants.SQLiteQueries.ReportView.GetCurrentCondition + " ORDER BY Id", transaction: Transaction);
+
             await using var connection = new SqlConnection(_unitOfWork.ConnectionString);
 
             await connection.OpenAsync();
@@ -327,6 +381,10 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<ProjectReportMapping> GetProjectReportTemplate(int projectId, int templateId, Guid sectionId)
         {
+            if (Connection.IsSqlite())
+                return (await Connection.QueryFirstMappedAsync<ProjectReportMapping>(SqliteProjectTemplateMapping,
+                    new { ProjectId = projectId, TemplateId = templateId, SectionId = sectionId }, Transaction))!;
+
             try
             {
                 var result = await Connection.QueryAsync<ProjectReportMapping>(
@@ -352,6 +410,10 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<ProjectReportMapping>> GetProjectReportTemplate(int projectId, int templateId)
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<ProjectReportMapping>(SqliteProjectTemplateMapping,
+                    new { ProjectId = projectId, TemplateId = templateId, SectionId = Guid.Empty }, Transaction);
+
             await using var connection = new SqlConnection(_unitOfWork.ConnectionString);
 
             await connection.OpenAsync();
@@ -371,6 +433,10 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<ProjectGradingMapping>> GetProjectGrading(int projectId, int templateId, Guid sectionId)
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<ProjectGradingMapping>(SqliteProjectGradingMapping,
+                    new { ProjectId = projectId, TemplateId = templateId, SectionId = sectionId }, Transaction);
+
             DataTable dt = new DataTable();
             try
             {
@@ -401,6 +467,10 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<ProjectGradingConditionMapping>> GetProjectGradingConditionMapping(int projectId, int templateId, Guid sectionId, int gradingId)
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<ProjectGradingConditionMapping>(SqliteProjectGradingConditionMapping,
+                    new { ProjectId = projectId, TemplateId = templateId, SectionId = sectionId, GradingId = gradingId }, Transaction);
+
             try
             {
                 await using var connection = new SqlConnection(_unitOfWork.ConnectionString);
@@ -431,6 +501,11 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<GradingUI>> GetTemplatGradings(int templateId, int projectId)
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<GradingUI>(
+                    DigitalCap.Core.Constants.SQLiteQueries.ReportView.GetSectionGrading,
+                    new { ProjectId = projectId, TemplateId = templateId }, Transaction);
+
             var result = await Connection.QueryAsync<GradingUI>(
                 sql: "dbo.GetSectionGrading",
                 param: new
@@ -448,6 +523,10 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<ImageCardUI>> GetImageCard(int templateId)
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<ImageCardUI>(
+                    DigitalCap.Core.Constants.SQLiteQueries.ReportView.GetImageCards, new { TemplateId = templateId }, Transaction);
+
             var result = await Connection.QueryAsync<ImageCardUI>(
                sql: "dbo.GetImageCards",
                param: new
@@ -463,6 +542,11 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<GradingConditionUI>> GetGradingCondition(int templateId, int projectid)
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<GradingConditionUI>(
+                    DigitalCap.Core.Constants.SQLiteQueries.ReportView.GetGradingCondition,
+                    new { TemplateId = templateId, ProjectId = projectid }, Transaction);
+
             var result = await Connection.QueryAsync<GradingConditionUI>(
              sql: "dbo.GetGradingConditions",
              param: new
@@ -479,6 +563,12 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<ProjectCardMapping>> GetProjectImageCard(int projectId, int templateId, Guid sectionId)
         {
+            // Legacy-template image cards with the image (base64) as Src.
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<ProjectCardMapping>(
+                    DigitalCap.Core.Constants.SQLiteQueries.ProjectImageCards.GetProjectImageCard,
+                    new { ProjectId = projectId, TemplateId = templateId, SectionId = sectionId }, Transaction);
+
 
             var result = await Connection.QueryAsync<ProjectCardMapping>(
              sql: "dbo.SelectProjectImageCards",
@@ -499,6 +589,10 @@ namespace DigitalCap.Persistence.Repositories
         //dbo.GetH_IReport
         public async Task<HandIReport> GetHIReport(int projectId)
         {
+            if (Connection.IsSqlite())
+                return (await Connection.QueryFirstMappedAsync<HandIReport>(
+                    DigitalCap.Core.Constants.SQLiteQueries.ProjectMapping.GetH_IReport, new { projectId }, Transaction))!;
+
             var result = await Connection.QueryFirstOrDefaultAsync<HandIReport>(
                 sql: "dbo.GetH_IReport",
                 param: new { ProjectId = projectId },
@@ -511,6 +605,9 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<ReportTemplateSection>> GetTemplatSections(int templateId)
         {
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<ReportTemplateSection>(SqliteTemplateSections, new { TemplateId = templateId }, Transaction);
+
             await using var connection =
                 new SqlConnection(_unitOfWork.ConnectionString);
 
@@ -531,6 +628,11 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<UpskillImageData>> GetBulkUploadUnplacedImages()
         {
+            // Bulk-uploaded (unplaced) images exist only online (dbo.GetBulkUploadImage); the download does not bring
+            // them into the local database, so offline there are none to list.
+            if (Connection.IsSqlite())
+                return new List<UpskillImageData>();
+
             var result = await Connection.QueryAsync<UpskillImageData>(
                 sql: "dbo.GetBulkUploadImage",
                 commandType: CommandType.StoredProcedure,
@@ -544,6 +646,27 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection.IsSqlite())
+                {
+                    var p = new DynamicParameters();
+                    p.Add("@Id", model.Id == Guid.Empty ? Guid.NewGuid() : model.Id);
+                    p.Add("@ProjectId", model.ProjectId);
+                    p.Add("@TemplateId", model.TemplateId);
+                    p.Add("@SectionId", model.SectionId);
+                    p.Add("@Notes", model.Notes ?? "");
+                    p.Add("@CreatedDttm", model.CreatedDttm == DateTime.MinValue ? DateTime.Now : model.CreatedDttm);
+                    p.Add("@UpdateDttm", model.UpdateDttm == DateTime.MinValue ? DateTime.Now : model.UpdateDttm);
+                    p.Add("@IsDeleted", model.IsDeleted ? 1 : 0);
+                    p.Add("@IsSync", 1);
+
+                    var rows = await Connection.ExecuteAsync(
+                        DigitalCap.Core.Constants.SQLiteQueries.ProjectMapping.CreateProjectReportTemplate,
+                        p,
+                        Transaction);
+                    Commit();
+                    return rows > 0;
+                }
+
                 var result = await Connection.ExecuteAsync(
          sql: "dbo.CreateProjectTemplate",
          param: new
@@ -609,8 +732,27 @@ namespace DigitalCap.Persistence.Repositories
                 transaction: Transaction
             );
         }
-        public async Task<bool> AddEditImageNew(int imgId, string imageBase64)
+        public async Task<bool> AddEditImageNew(int imgId, string imageBase64, int projectId)
         {
+            if (Connection.IsSqlite())
+            {
+                const string sql = @"
+UPDATE ImageData
+SET Base64String = @Base64String,
+    UpdateDttm = datetime('now'),
+    IsSync = CASE WHEN IsSync IS NOT NULL THEN IsSync ELSE 0 END,
+    ProjectId = @ProjectId
+WHERE ImageId = @ImageId;
+
+INSERT INTO ImageData (ImageId, Base64String, CreateDttm, UpdateDttm, IsSync, ProjectId)
+SELECT @ImageId, @Base64String, datetime('now'), datetime('now'), 1, @ProjectId
+WHERE NOT EXISTS (SELECT 1 FROM ImageData WHERE ImageId = @ImageId);";
+
+                await Connection.ExecuteAsync(sql, new { ImageId = imgId, Base64String = imageBase64, ProjectId = projectId }, Transaction);
+                Commit();
+                return true;
+            }
+
             var result = await Connection.ExecuteScalarAsync<int>(
                 sql: "[upskill].[sp_AddEdit_Image_New]",
                 param: new
@@ -672,6 +814,16 @@ namespace DigitalCap.Persistence.Repositories
         {
             assignmentId ??= "Unknown";
 
+            if (Connection.IsSqlite())
+            {
+                var rows = await Connection.ExecuteAsync(
+                    "UPDATE Images SET IsSync = CASE WHEN IsSync IS NOT NULL THEN IsSync ELSE 0 END WHERE FileId = @FileId;",
+                    new { FileId = fileId },
+                    Transaction);
+                Commit();
+                return rows > 0;
+            }
+
             var affectedRows = await Connection.ExecuteAsync(
                 sql: "[upskill].[sp_Delete_Image]",
                 param: new
@@ -687,6 +839,23 @@ namespace DigitalCap.Persistence.Repositories
         }
         public async Task<bool> DeleteCard(int projectId, string cardId, string sequenceId, string assignmentId, string appId)
         {
+            if (Connection.IsSqlite())
+            {
+                var rows = await Connection.ExecuteAsync(@"
+UPDATE ProjectImageCards
+SET IsDeleted = 1, UpdateDttm = datetime('now'),
+    IsSync = CASE WHEN IsSync IS NOT NULL THEN IsSync ELSE 0 END
+WHERE ProjectId = @ProjectId AND CardId = @CardId;
+
+UPDATE GenericImageCard
+SET IsDeleted = 1, UpdatedDttm = datetime('now'),
+    IsSync = CASE WHEN IsSync IS NOT NULL THEN IsSync ELSE 0 END
+WHERE ProjectId = @ProjectId AND (CardNumber = @CardId OR CardName = @CardId);
+", new { ProjectId = projectId, CardId = cardId }, Transaction);
+                Commit();
+                return true;
+            }
+
             var result = await Connection.ExecuteScalarAsync<int>(
                 sql: "[upskill].[sp_Delete_Card]",
                 param: new
@@ -703,9 +872,17 @@ namespace DigitalCap.Persistence.Repositories
             this.Commit();
             return result == 1;
         }
-        public async Task<int> UploadImage(string assignmentId, string fileId)
+        public async Task<int> UploadImage(string assignmentId, string fileId, int projectId)
         {
             assignmentId ??= "Unknown";
+
+            if (Connection.IsSqlite())
+            {
+                const string sql = "INSERT INTO Images (AssignmentId, FileId, InsertDate, IsSync, ProjectId) VALUES (@AssignmentId, @FileId, datetime('now'), 1, @ProjectId); SELECT last_insert_rowid();";
+                var newId = await Connection.ExecuteScalarAsync<long>(sql, new { AssignmentId = assignmentId, FileId = fileId, ProjectId = projectId }, Transaction);
+                Commit();
+                return (int)newId;
+            }
 
             var result = await Connection.ExecuteScalarAsync<int>(
                 sql: "[upskill].[sp_AddEdit_Image]",
@@ -837,6 +1014,29 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection.IsSqlite())
+                {
+                    var p = new DynamicParameters();
+                    p.Add("@ProjectId", model.ProjectId);
+                    p.Add("@TemplateId", model.TemplateId);
+                    p.Add("@SectionId", model.SectionId);
+                    p.Add("@CardId", model.CardId);
+                    p.Add("@DescriptionId", model.DescriptionId);
+                    p.Add("@AdditionalDescription", model.AdditionalDescription ?? "");
+                    p.Add("@CurrentCondition", model.CurrentCondition);
+                    p.Add("@ImageId", model.ImageId);
+                    p.Add("@CreatedDttm", model.CreatedDttm == DateTime.MinValue ? DateTime.Now : model.CreatedDttm);
+                    p.Add("@UpdateDttm", model.UpdateDttm == DateTime.MinValue ? DateTime.Now : model.UpdateDttm);
+                    p.Add("@IsDeleted", model.IsDeleted ? 1 : 0);
+
+                    var rows = await Connection.ExecuteAsync(
+                        DigitalCap.Core.Constants.SQLiteQueries.ProjectImageCards.CreateProjectImageCard,
+                        p,
+                        Transaction);
+                    Commit();
+                    return rows > 0;
+                }
+
                 var affectedRows = await Connection.ExecuteAsync(
                     sql: "dbo.CreateProjectImageCard",
                     param: new
@@ -869,6 +1069,30 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection.IsSqlite())
+                {
+                    var p = new DynamicParameters();
+                    p.Add("@Id", model.Id);
+                    p.Add("@ProjectId", model.ProjectId);
+                    p.Add("@TemplateId", model.TemplateId);
+                    p.Add("@SectionId", model.SectionId);
+                    p.Add("@CardId", model.CardId);
+                    p.Add("@DescriptionId", model.DescriptionId);
+                    p.Add("@AdditionalDescription", model.AdditionalDescription ?? "");
+                    p.Add("@CurrentCondition", model.CurrentCondition);
+                    p.Add("@ImageId", model.ImageId);
+                    p.Add("@CreatedDttm", model.CreatedDttm == DateTime.MinValue ? DateTime.Now : model.CreatedDttm);
+                    p.Add("@UpdateDttm", DateTime.Now);
+                    p.Add("@IsDeleted", model.IsDeleted ? 1 : 0);
+
+                    var rows = await Connection.ExecuteAsync(
+                        DigitalCap.Core.Constants.SQLiteQueries.ProjectImageCards.UpdateProjectImageCard,
+                        p,
+                        Transaction);
+                    Commit();
+                    return rows > 0;
+                }
+
                 var affectedRows = await Connection.ExecuteAsync(
                     sql: "dbo.UpdateProjectImageCard",
                     param: new
@@ -957,6 +1181,27 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection.IsSqlite())
+                {
+                    var p = new DynamicParameters();
+                    p.Add("@Id", model.Id);
+                    p.Add("@ProjectId", model.ProjectId);
+                    p.Add("@TemplateId", model.TemplateId);
+                    p.Add("@SectionId", model.SectionId);
+                    p.Add("@GradingId", model.GradingId);
+                    p.Add("@Value", model.Value ?? "");
+                    p.Add("@CreatedDttm", model.CreatedDttm == DateTime.MinValue ? DateTime.Now : model.CreatedDttm);
+                    p.Add("@UpdateDttm", DateTime.Now);
+                    p.Add("@IsDeleted", model.IsDeleted ? 1 : 0);
+
+                    var rows = await Connection.ExecuteAsync(
+                        DigitalCap.Core.Constants.SQLiteQueries.ProjectMapping.UpdateProjectGrading,
+                        p,
+                        Transaction);
+                    Commit();
+                    return rows > 0;
+                }
+
                 var affectedRows = await Connection.ExecuteAsync(
                     sql: "dbo.UpdateProjectGrading",
                     param: new
@@ -986,6 +1231,27 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection.IsSqlite())
+                {
+                    var p = new DynamicParameters();
+                    p.Add("@ProjectId", model.ProjectId);
+                    p.Add("@TemplateId", model.TemplateId);
+                    p.Add("@SectionId", model.SectionId);
+                    p.Add("@GradingId", model.GradingId);
+                    p.Add("@Value", model.Value ?? "");
+                    p.Add("@CreatedDttm", model.CreatedDttm == DateTime.MinValue ? DateTime.Now : model.CreatedDttm);
+                    p.Add("@UpdateDttm", model.UpdateDttm == DateTime.MinValue ? DateTime.Now : model.UpdateDttm);
+                    p.Add("@IsDeleted", model.IsDeleted ? 1 : 0);
+                    p.Add("@IsSync", 1);
+
+                    var rows = await Connection.ExecuteAsync(
+                        DigitalCap.Core.Constants.SQLiteQueries.ProjectMapping.CreateProjectGrading,
+                        p,
+                        Transaction);
+                    Commit();
+                    return rows > 0;
+                }
+
                 var affectedRows = await Connection.ExecuteAsync(
                     sql: "dbo.CreateProjectGrading",
                     param: new
@@ -1015,6 +1281,28 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection.IsSqlite())
+                {
+                    var p = new DynamicParameters();
+                    p.Add("@Id", model.Id);
+                    p.Add("@ProjectId", model.ProjectId);
+                    p.Add("@TemplateId", model.TemplateId);
+                    p.Add("@SectionId", model.SectionId);
+                    p.Add("@GradingId", model.GradingId);
+                    p.Add("@GradingConditionLabel", model.GradingConditionLabel ?? "");
+                    p.Add("@GradingConditionValue", model.GradingConditionValue ? 1 : 0);
+                    p.Add("@CreatedDttm", model.CreatedDttm == DateTime.MinValue ? DateTime.Now : model.CreatedDttm);
+                    p.Add("@UpdateDttm", DateTime.Now);
+                    p.Add("@IsDeleted", model.IsDeleted ? 1 : 0);
+
+                    var rows = await Connection.ExecuteAsync(
+                        DigitalCap.Core.Constants.SQLiteQueries.ProjectMapping.UpdateProjectGradingCondition,
+                        p,
+                        Transaction);
+                    Commit();
+                    return rows > 0;
+                }
+
                 var affectedRows = await Connection.ExecuteAsync(
                     sql: "dbo.UpdateProjectGradingConditionMapping",
                     param: new
@@ -1045,6 +1333,28 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection.IsSqlite())
+                {
+                    var p = new DynamicParameters();
+                    p.Add("@ProjectId", model.ProjectId);
+                    p.Add("@TemplateId", model.TemplateId);
+                    p.Add("@SectionId", model.SectionId);
+                    p.Add("@GradingId", model.GradingId);
+                    p.Add("@GradingConditionLabel", model.GradingConditionLabel ?? "");
+                    p.Add("@GradingConditionValue", model.GradingConditionValue ? 1 : 0);
+                    p.Add("@CreatedDttm", model.CreatedDttm == DateTime.MinValue ? DateTime.Now : model.CreatedDttm);
+                    p.Add("@UpdateDttm", model.UpdateDttm == DateTime.MinValue ? DateTime.Now : model.UpdateDttm);
+                    p.Add("@IsDeleted", model.IsDeleted ? 1 : 0);
+                    p.Add("@IsSync", 1);
+
+                    var rows = await Connection.ExecuteAsync(
+                        DigitalCap.Core.Constants.SQLiteQueries.ProjectMapping.CreateProjectGradingCondition,
+                        p,
+                        Transaction);
+                    Commit();
+                    return rows > 0;
+                }
+
                 var affectedRows = await Connection.ExecuteAsync(
                     sql: "dbo.CreateProjectGradingConditionMapping",
                     param: new
@@ -1075,6 +1385,26 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection.IsSqlite())
+                {
+                    var p = new DynamicParameters();
+                    p.Add("@Id", model.Id);
+                    p.Add("@ProjectId", model.ProjectId);
+                    p.Add("@TemplateId", model.TemplateId);
+                    p.Add("@SectionId", model.SectionId);
+                    p.Add("@Notes", model.Notes ?? "");
+                    p.Add("@CreatedDttm", model.CreatedDttm == DateTime.MinValue ? DateTime.Now : model.CreatedDttm);
+                    p.Add("@UpdateDttm", DateTime.Now);
+                    p.Add("@IsDeleted", model.IsDeleted ? 1 : 0);
+
+                    var rows = await Connection.ExecuteAsync(
+                        DigitalCap.Core.Constants.SQLiteQueries.ProjectMapping.UpdateProjectReportTemplate,
+                        p,
+                        Transaction);
+                    Commit();
+                    return rows > 0;
+                }
+
                 var affectedRows = await Connection.ExecuteAsync(
                     sql: "dbo.UpdateProjectTemplate",
                     param: new
@@ -1103,6 +1433,102 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                var p = new
+                {
+                    model.Id,
+                    model.ProjectId,
+                    model.CompanyName,
+                    model.CertificateNumber,
+                    model.ExpiryDate,
+                    model.ThicknessMeasurementA,
+                    model.ThicknessMeasurementB,
+                    model.ThicknessMeasurementC,
+                    model.AdditionalSurveyorComments,
+                    model.MaintenanceExecuted,
+                    model.Accommodation,
+                    model.PhotoGraphs,
+                    model.OperationalTestLocation,
+                    model.OperationalTestStart,
+                    model.OperationalTestFinish,
+                    model.OptionalTestSatisFactory,
+                    model.AssociatedReportNumber,
+                    model.AssociatedReportDate,
+                    model.Remarks,
+                    model.LeadSurveyorName,
+                    model.LeadSurveyorNumber,
+                    model.SurveyorName,
+                    model.SurveyorNumber,
+                    model.LastVisitDate,
+                    model.IndividualA,
+                    model.IndividualB,
+                    model.IndividualC,
+                    model.IndividualD,
+                    model.IndividualE,
+                    model.IndividualF,
+                    model.ScouringOrPitting,
+                    model.SubstantialCorrosionRemaining,
+                    model.StatutoryDeficiencies,
+                    model.FoundSatisfactory,
+                    model.UnderRemarks,
+                    model.BottomPlattingScouringOrPitting,
+                    model.IsActive,
+                    model.IsDeleted,
+                    CreatedDttm = model.CreatedDttm,
+                    UpdatedDttm = DateTime.Now,
+                    OthersDescription = (string)null
+                };
+
+                if (Connection.IsSqlite())
+                {
+                    const string sql = @"
+UPDATE H_IReportTemplate SET
+    [CompanyName] = @CompanyName,
+    [CertificateNumber] = @CertificateNumber,
+    [ExpiryDate] = @ExpiryDate,
+    [ThicknessMeasurementA] = @ThicknessMeasurementA,
+    [ThicknessMeasurementB] = @ThicknessMeasurementB,
+    [ThicknessMeasurementC] = @ThicknessMeasurementC,
+    [AdditionalSurveyorComments] = @AdditionalSurveyorComments,
+    [MaintenanceExecuted] = @MaintenanceExecuted,
+    [Accommodation] = @Accommodation,
+    [PhotoGraphs] = @PhotoGraphs,
+    [OperationalTestLocation] = @OperationalTestLocation,
+    [OperationalTestStart] = @OperationalTestStart,
+    [OperationalTestFinish] = @OperationalTestFinish,
+    [OptionalTestSatisFactory] = @OptionalTestSatisFactory,
+    [AssociatedReportNumber] = @AssociatedReportNumber,
+    [AssociatedReportDate] = @AssociatedReportDate,
+    [Remarks] = @Remarks,
+    [LeadSurveyorName] = @LeadSurveyorName,
+    [LeadSurveyorNumber] = @LeadSurveyorNumber,
+    [SurveyorName] = @SurveyorName,
+    [SurveyorNumber] = @SurveyorNumber,
+    [LastVisitDate] = @LastVisitDate,
+    [IndividualA] = @IndividualA,
+    [IndividualB] = @IndividualB,
+    [IndividualC] = @IndividualC,
+    [IndividualD] = @IndividualD,
+    [IndividualE] = @IndividualE,
+    [IndividualF] = @IndividualF,
+    [SubstantialCorrosionRemaining] = @SubstantialCorrosionRemaining,
+    [StatutoryDeficiencies] = @StatutoryDeficiencies,
+    [FoundSatisfactory] = @FoundSatisfactory,
+    [UnderRemarks] = @UnderRemarks,
+    [ScouringOrPitting] = @ScouringOrPitting,
+    [BottomPlattingScouringOrPitting] = @BottomPlattingScouringOrPitting,
+    [IsActive] = @IsActive,
+    [IsDeleted] = @IsDeleted,
+    [CreatedDttm] = @CreatedDttm,
+    [UpdatedDttm] = @UpdatedDttm,
+    [OthersDescription] = COALESCE(@OthersDescription, [OthersDescription]),
+    [IsSync] = CASE WHEN [IsSync] = 1 THEN 1 ELSE 0 END
+WHERE ProjectId = @ProjectId AND [IsActive] = 1 AND [IsDeleted] = 0 AND Id = @Id;";
+
+                    var rows = await Connection.ExecuteAsync(sql, p, Transaction);
+                    Commit();
+                    return rows > 0;
+                }
+
                 var affectedRows = await Connection.ExecuteAsync(
                     sql: "dbo.UpdateH_IReport",
                     param: new
@@ -1163,6 +1589,61 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                var p = new
+                {
+                    model.Id,
+                    model.ProjectId,
+                    model.CompanyName,
+                    model.CertificateNumber,
+                    model.ExpiryDate,
+                    model.ThicknessMeasurementA,
+                    model.ThicknessMeasurementB,
+                    model.ThicknessMeasurementC,
+                    model.AdditionalSurveyorComments,
+                    model.MaintenanceExecuted,
+                    model.Accommodation,
+                    model.PhotoGraphs,
+                    model.OperationalTestLocation,
+                    model.OperationalTestStart,
+                    model.OperationalTestFinish,
+                    model.OptionalTestSatisFactory,
+                    model.AssociatedReportNumber,
+                    model.AssociatedReportDate,
+                    model.Remarks,
+                    model.LeadSurveyorName,
+                    model.LeadSurveyorNumber,
+                    model.SurveyorName,
+                    model.SurveyorNumber,
+                    model.LastVisitDate,
+                    model.IndividualA,
+                    model.IndividualB,
+                    model.IndividualC,
+                    model.IndividualD,
+                    model.IndividualE,
+                    model.IndividualF,
+                    model.ScouringOrPitting,
+                    model.SubstantialCorrosionRemaining,
+                    model.StatutoryDeficiencies,
+                    model.FoundSatisfactory,
+                    model.UnderRemarks,
+                    model.BottomPlattingScouringOrPitting,
+                    model.IsActive,
+                    model.IsDeleted,
+                    CreatedDttm = model.CreatedDttm == DateTime.MinValue ? DateTime.Now : model.CreatedDttm,
+                    UpdatedDttm = model.UpdatedDttm == DateTime.MinValue ? DateTime.Now : model.UpdatedDttm,
+                    OthersDescription = (string)null
+                };
+
+                if (Connection.IsSqlite())
+                {
+                    var rows = await Connection.ExecuteAsync(
+                        DigitalCap.Core.Constants.SQLiteQueries.ProjectMapping.CreateH_IReport,
+                        p,
+                        Transaction);
+                    Commit();
+                    return rows > 0;
+                }
+
                 var affectedRows = await Connection.ExecuteAsync(
                     sql: "dbo.CreateH_IReport",
                     param: new

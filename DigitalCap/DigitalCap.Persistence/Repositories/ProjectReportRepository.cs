@@ -1,7 +1,8 @@
-﻿using Dapper;
+using Dapper;
 using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Models.ReportConfig;
 using DigitalCap.Core.Models.Survey;
+using DigitalCap.Persistence.Extensions;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Logging;
@@ -29,6 +30,15 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection.IsSqlite())
+                {
+                    var list = await Connection.QueryMappedAsync<GenericImageCard>(
+                        DigitalCap.Core.Constants.SQLiteQueries.ProjectReport.GetGenericImageCardById,
+                        new { ProjectId = projectId, TemplateId = templateId, SectionId = sectionId, CardNumber = cardNumber },
+                        Transaction);
+                    return list.FirstOrDefault();
+                }
+
                 var result = await Connection.QueryAsync<GenericImageCard>(
                    sql: "[config].[GetGenericImagecardByName]",
                       new
@@ -54,6 +64,32 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection.IsSqlite())
+                {
+                    var p = new DynamicParameters();
+                    p.Add("@Id", model.Id);
+                    p.Add("@ProjectId", model.ProjectId);
+                    p.Add("@TemplateId", model.TemplateId);
+                    p.Add("@SectionId", model.SectionId);
+                    p.Add("@CardNumber", model.CardNumber);
+                    p.Add("@DescriptionId", model.DescriptionId);
+                    p.Add("@AdditionalDescription", model.AdditionalDescription ?? "");
+                    p.Add("@CurrentCondition", model.CurrentCondition);
+                    p.Add("@ImageId", model.ImageId);
+                    p.Add("@CreatedDttm", model.CreatedDttm == DateTime.MinValue ? DateTime.Now : model.CreatedDttm);
+                    p.Add("@UpdatedDttm", DateTime.Now);
+                    p.Add("@IsDeleted", model.IsDeleted ? 1 : 0);
+                    p.Add("@IsActive", model.IsActive ? 1 : 0);
+                    p.Add("@CardName", model.CardName);
+
+                    var rows = await Connection.ExecuteAsync(
+                        DigitalCap.Core.Constants.SQLiteQueries.ProjectReport.UpdateGenericImageCard,
+                        p,
+                        Transaction);
+                    Commit();
+                    return rows > 0;
+                }
+
                 var parameters = new DynamicParameters();
 
                 foreach (var prop in typeof(GenericImageCard).GetProperties())
@@ -85,6 +121,30 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
+                if (Connection.IsSqlite())
+                {
+                    var p = new DynamicParameters();
+                    p.Add("@ProjectId", model.ProjectId);
+                    p.Add("@TemplateId", model.TemplateId);
+                    p.Add("@SectionId", model.SectionId);
+                    p.Add("@CardNumber", model.CardNumber);
+                    p.Add("@DescriptionId", model.DescriptionId);
+                    p.Add("@AdditionalDescription", model.AdditionalDescription ?? "");
+                    p.Add("@CurrentCondition", model.CurrentCondition);
+                    p.Add("@ImageId", model.ImageId);
+                    p.Add("@CreatedDttm", model.CreatedDttm == DateTime.MinValue ? DateTime.Now : model.CreatedDttm);
+                    p.Add("@UpdatedDttm", model.UpdatedDttm == DateTime.MinValue ? DateTime.Now : model.UpdatedDttm);
+                    p.Add("@IsActive", model.IsActive ? 1 : 0);
+                    p.Add("@CardName", model.CardName);
+
+                    var rows = await Connection.ExecuteAsync(
+                        DigitalCap.Core.Constants.SQLiteQueries.ProjectReport.CreateGenericImageCard,
+                        p,
+                        Transaction);
+                    Commit();
+                    return rows > 0;
+                }
+
                 var parameters = new DynamicParameters();
 
                 foreach (var prop in typeof(GenericImageCard).GetProperties())
@@ -119,6 +179,12 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<List<ProjectPart>> GetProjectTemplatebyProjectId(int projectId)
         {
+            // Offline: the downloaded ReportPart rows plus the fixed Vessel Main Data (1) and Part H&I (2) parts.
+            if (Connection.IsSqlite())
+                return await Connection.QueryMappedAsync<ProjectPart>(
+                    DigitalCap.Core.Constants.SQLiteQueries.ProjectReport.GetReportPartsByProjectId,
+                    new { projectId }, Transaction);
+
             var result = await Connection.QueryAsync<ProjectPart>(
             sql: "[Config].[GetReportPartsByProjectId]",
             param: new { projectId },

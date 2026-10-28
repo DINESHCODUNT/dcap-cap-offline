@@ -19,6 +19,8 @@ import { usePermissions } from '../../context/PermissionContext';
 import { ROLES } from '../../constants/roles';
 import InformationPopup from '../../Common/InformationPopup';
 import ConfirmationPopup from '../../Common/ConfirmationPopup';
+import { isElectron } from '../../utils/runtime';
+import SyncConfirmModal from '../Project/SyncConfirmModal';
 import { ExportConfigurationModal } from './ExportConfigurationModal';
 import { ExportAllConfigurationModal } from './ExportAllConfigurationModal';
 function UnsavedConfirmationModal({
@@ -108,15 +110,18 @@ const ReportOverview: React.FC = () => {
     const isOfflineProjectStatus =
         String(projectStatus ?? "").toLowerCase() === "offline";
 
+    const isDesktop = isElectron();
     const [loading, setLoading] = useState(false);
-
     const [data, setData] = useState<any | null>(null);
 
-    const isOfflineProject = isOfflineProjectStatus || data?.synchedOnline != null;
+    // In desktop app for local copy, project is never read-only (unless discarded by admin).
+    // Read-only alert only applies on the website when synchedOnline != null.
+    const isOfflineProject = !isDesktop && (isOfflineProjectStatus || data?.synchedOnline != null);
 
-    const [showDiscardOfflineWarning] = useState(false);
+    const [showDiscardOfflineWarning, setShowDiscardOfflineWarning] = useState(false);
     const [showReleaseOfflinePopup, setShowReleaseOfflinePopup] = useState(false);
     const [isReleasingOffline, setIsReleasingOffline] = useState(false);
+    const [showSyncModal, setShowSyncModal] = useState(false);
 
     const [activeView, setActiveView] = useState<{
         part: string;
@@ -197,6 +202,14 @@ const ReportOverview: React.FC = () => {
     };
 
     useEffect(() => {
+        if (!isDesktop) {
+            setShowDiscardOfflineWarning(false);
+            return;
+        }
+        setShowDiscardOfflineWarning(Boolean(data?.isRleased || data?.isReadOnlyEnabled));
+    }, [isDesktop, data?.isRleased, data?.isReadOnlyEnabled]);
+
+useEffect(() => {
         if (!projectId) return;
 
         surveyReportService.GetConfig(projectId)
@@ -1162,11 +1175,11 @@ const ReportOverview: React.FC = () => {
 
             <div className="page-title" ref={pageTopRef}>
 
-                {isOfflineProject && (
+                {!isDesktop && data?.synchedOnline != null && (
                     <div className="alert alert-danger mb-2" role="alert">
                         <ul className="mb-0 ps-3">
                             <li>
-                                {data?.projectName} - Report sections are Read-Only all parts have been downloaded for offline.
+                                {data?.projectName} Report sections are Read-Only all parts have been downloaded for offline.
                             </li>
                             {data?.synchedOnline && (
                                 <li>
@@ -1176,14 +1189,11 @@ const ReportOverview: React.FC = () => {
                         </ul>
                     </div>
                 )}
-                {showDiscardOfflineWarning && (
-                    <div className="alert alert-danger mb-2" role="alert" style={{ margin: "0 20px", fontSize: 16 }}>
+                {isDesktop && showDiscardOfflineWarning && (
+                    <div className="alert alert-danger" style={{ margin: "0px 20px", fontSize: 16 }} id="discard-warning-text">
                         <ul className="mb-0">
                             <li>
-                                <p className="mb-0">
-                                    The CAP Administrator has discarded your offline project. Any changes made in this
-                                    project will not be synchronized with the online application.
-                                </p>
+                                <p className="mb-0">The CAP Administrator has discarded your offline project. Any changes made in this project  will not be synchronized with the online application.</p>
                             </li>
                         </ul>
                     </div>
@@ -1226,7 +1236,7 @@ const ReportOverview: React.FC = () => {
                             </Dropdown.Menu>
                         </Dropdown>
 
-                        {isOfflineProject && hasRole(ROLES.ADMIN_CAP_HQ) && (
+                        {data?.synchedOnline != null && hasRole(ROLES.ADMIN_CAP_HQ) && (
                             <Button
                                 variant={BUTTONS.SECONDARY}
                                 onClick={() => setShowReleaseOfflinePopup(true)}
@@ -1234,6 +1244,15 @@ const ReportOverview: React.FC = () => {
                                 style={{ marginLeft: "8px" }}
                             >
                                 {isReleasingOffline ? "Canceling..." : "Cancel Offline Download"}
+                            </Button>
+                        )}
+                        {isDesktop && navigator.onLine && (
+                            <Button
+                                variant={BUTTONS.SECONDARY}
+                                onClick={() => setShowSyncModal(true)}
+                                style={{ marginLeft: "8px" }}
+                            >
+                                Save to Online
                             </Button>
                         )}
                         {reportIndex?.resetTemplate === true && activeView.part !== "VMD" && (
@@ -1410,6 +1429,20 @@ const ReportOverview: React.FC = () => {
                     }}
                 />
 
+            )}
+
+            {isDesktop && (
+                <SyncConfirmModal
+                    project={showSyncModal ? { id: projectId, name: data?.projectName || 'Project' } : null}
+                    onClose={() => setShowSyncModal(false)}
+                    onSuccess={(released) => {
+                        if (released) {
+                            navigate("/app/Project", { replace: true, state: { showOverview: true } });
+                        } else {
+                            window.location.reload();
+                        }
+                    }}
+                />
             )}
 
             {showReleaseOfflinePopup && (
