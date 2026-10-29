@@ -307,7 +307,7 @@ const Overview: React.FC = () => {
                                 />
                             </div>
                             <div className="col-12 col-xl-4">
-                                <div className="card-area h-100 mb-0">
+                                <div className="card-area h-100 mb-0 d-flex flex-column">
                                     <ActivityLog source="overview" refreshTrigger={refreshTrigger} />
                                 </div>
                             </div>

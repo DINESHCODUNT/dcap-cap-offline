@@ -913,7 +913,7 @@ const CommonAttachment = forwardRef<CommonAttachmentHandle, CommonAttachmentProp
         <>
             <StyledTable className="po-attachments">
                 {activeTab !== 'vessel' && !isElectron() && (
-                    <div className="upload-section col-lg-12 mb-3">
+                    <div className="upload-section w-100 mb-3">
                         <Dropzone
                             onDrop={handleDrop}
                             multiple

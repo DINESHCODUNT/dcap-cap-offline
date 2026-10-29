@@ -282,15 +282,15 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, readOnl
 
             <div className="report-area">
                 <div className="report-header">
-                    <div className="section-title d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between p-3 p-md-4">
+                    <div className="section-title d-flex flex-column flex-md-row align-items-start align-items-md-center gap-4 p-3 p-md-4">
                         <img src={ABSLogo} alt="Vessel Main Data" className="report-header-image mb-3 mb-md-0" />
 
-                        <div className="section-actions w-100 w-md-25">
-                            <div className="row align-items-center mb-3">
-                                <div className="col-3">
+                        <div className="report-header-fields">
+                            <div className="report-header-row">
+                                <div className="report-header-label">
                                     <Label name="Report No" bold inline />
                                 </div>
-                                <div className="col-9">
+                                <div>
                                     <Input
                                         placeholder="Enter Report No"
                                         value={formData.report_no || ""}
@@ -302,11 +302,11 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, readOnl
                                 </div>
                             </div>
 
-                            <div className="row align-items-center mb-3">
-                                <div className="col-3">
+                            <div className="report-header-row">
+                                <div className="report-header-label">
                                     <Label name="Port/Date" bold inline />
                                 </div>
-                                <div className="col-9 d-flex flex-column flex-md-row gap-2">
+                                <div className="d-flex flex-column flex-md-row gap-2">
                                     <Input
                                         placeholder="Enter Port"
                                         value={formData.port || ""}
