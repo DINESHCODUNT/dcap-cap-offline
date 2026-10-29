@@ -23,7 +23,6 @@ const ConfirmationPopup: React.FC<ConfirmationPopupProps> = ({
     message = "Are you sure you want to continue?",
     confirmText = "Yes, Proceed",
     cancelText = "Cancel",
-    danger = false,
     loading = false,
     onConfirm,
     onClose
@@ -59,8 +58,7 @@ const ConfirmationPopup: React.FC<ConfirmationPopupProps> = ({
                     {cancelText}
                 </Button>
                 <Button
-                    variant={danger ? "danger" : BUTTONS.PRIMARY}
-                    className={danger ? "btn-danger" : ""}
+                    variant={BUTTONS.PRIMARY}
                     onClick={onConfirm}
                     disabled={loading}
                 >

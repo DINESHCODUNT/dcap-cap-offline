@@ -1,8 +1,9 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import ABSLogo from '../../assets/images/ABSLogo.svg';
 import { Label, Input, DatePickerInput, AbsSelect } from "customer_portal-ui-shared";
 import { updateReport } from "../../service/SurveyReportService";
 import { parseVisitDate, formatVisitDateForSave } from "../../utils/dateTime";
+import { usePopup } from "../../Common/PopupProvider";
 
 type FormData = {
     report_no: string;
@@ -61,6 +62,8 @@ const SurveyStatus: React.FC<{
     onSurveyStatusFieldChange?: (field: string, value: any, specialHullNo?: number | string) => void;
     onVesselNameChange?: (vesselName: string) => void;
 }> = ({ reportData, isOfflineProject = false, readOnly, onVesselFieldChange, onSurveyStatusFieldChange }) => {
+    const popup = usePopup();
+    const saveErrorOpenRef = useRef(false);
     const isLocked = Boolean(readOnly || isOfflineProject);
 
     const [formData, setFormData] = React.useState<FormData>({
@@ -208,6 +211,12 @@ const SurveyStatus: React.FC<{
             });
 
         } catch (error) {
+            if (!saveErrorOpenRef.current) {
+                saveErrorOpenRef.current = true;
+                popup.error("Your change could not be saved. Please try again.", "Save").finally(() => {
+                    saveErrorOpenRef.current = false;
+                });
+            }
         }
     };
 

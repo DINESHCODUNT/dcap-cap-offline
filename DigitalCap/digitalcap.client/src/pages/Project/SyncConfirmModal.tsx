@@ -409,8 +409,7 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
                 centered
             >
                 <Modal.Header closeButton>
-                    <Modal.Title className="text-success">
-                        <Icon.CheckCircleFill className="me-2" />
+                    <Modal.Title>
                         Sync Successful
                     </Modal.Title>
                 </Modal.Header>

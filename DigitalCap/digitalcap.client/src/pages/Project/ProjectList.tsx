@@ -5,6 +5,8 @@ import Modal from 'react-bootstrap/Modal';
 import { AbsSearch, AbsSelect, Button, BUTTONS, AbsReactTable, Toggle } from 'customer_portal-ui-shared';
 import * as Icon from "react-bootstrap-icons";
 import * as projectService from '../../service/ProjectService';
+import { usePopup } from '../../Common/PopupProvider';
+import { resultMessage } from '../../Common/UtilityMessage';
 import moment from 'moment';
 import EmptyProjectView from './EmptyProjectView';
 import SyncConfirmModal from './SyncConfirmModal';
@@ -85,6 +87,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     externalRegionFilter = null,
     navigatedProjectId,
 }) => {
+    const popup = usePopup();
     const [val, updateVal] = useState<string>("");
     const [statusFilter, setStatusFilter] = useState<string | null>(null);
     const [regionFilter, setRegionFilter] = useState<string | null>(null);
@@ -1165,8 +1168,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         try {
                                             await projectService.updatePriority(targetProjectToUpdate.id, selectedPriority);
                                             setModalProject(null);
+                                            popup.success(resultMessage(targetProjectToUpdate.name || "Project", "Updated"), "Change Priority");
                                             loadProjects();
-                                        } catch (error) {
+                                        } catch (error: any) {
+                                            popup.error(error?.response?.data || error?.message || "Unable to update priority. Please try again.", "Change Priority");
                                         }
                                     }
                                 }}

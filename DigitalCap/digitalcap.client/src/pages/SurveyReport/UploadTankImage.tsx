@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BUTTONS, Button, Input, Label, AbsSelect } from "customer_portal-ui-shared";
 import * as Icon from "react-bootstrap-icons";
 import FormAttachment from "./Attachment";
@@ -89,6 +89,7 @@ const UploadTankImage: React.FC<Props> = ({ activeTank, projectId, tanks, onNavi
         )?.text;
 
     const popup = usePopup();
+    const saveErrorOpenRef = useRef(false);
     const [clearFile, setClearFile] = useState(false);
     const [error, setError] = useState(false);
     const [clearingImage, setClearingImage] = useState(false);
@@ -412,10 +413,21 @@ const UploadTankImage: React.FC<Props> = ({ activeTank, projectId, tanks, onNavi
                 }, 100);
             }
 
-            await popup.success("File has been uploaded successfully.", "Upload File");
+            if (file) {
+                await popup.success("File has been uploaded successfully.", "Upload File");
+            }
             onClose();
         } catch (err: any) {
-            popup.error({ message: err?.message || "Failed to upload file." });
+            if (file) {
+                popup.error(err?.response?.data || err?.message || "Failed to upload file.", "Upload File");
+            } else {
+                if (!saveErrorOpenRef.current) {
+                    saveErrorOpenRef.current = true;
+                    popup.error("Your change could not be saved. Please try again.", "Save").finally(() => {
+                        saveErrorOpenRef.current = false;
+                    });
+                }
+            }
         }
     };
 

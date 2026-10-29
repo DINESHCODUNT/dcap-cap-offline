@@ -373,7 +373,8 @@ const ManageTemplate: React.FC = () => {
             );
 
             onVesselTypeChange(Number(formData.vesselTypeId), true);
-        } catch (err) {
+        } catch (err: any) {
+            popup.error(err?.response?.data || err?.message || "Unable to save the section order. Please try again.", "Manage Template");
         }
     };
 

@@ -298,10 +298,12 @@ const CommonAttachment = forwardRef<CommonAttachmentHandle, CommonAttachmentProp
                 dataType: editDraft.dataType,
                 availableToClient: availableToClient ?? false,
             });
+            popup.success(resultMessage(name, "Updated"), "Project Files");
             cancelEditServerRow();
             await loadServerRows();
             return true;
-        } catch (e) {
+        } catch (e: any) {
+            popup.error(e?.response?.data || e?.message || "Could not save file details. Try again.", "Project Files");
             setDropErrors(["Could not save file details. Try again."]);
             return false;
         } finally {

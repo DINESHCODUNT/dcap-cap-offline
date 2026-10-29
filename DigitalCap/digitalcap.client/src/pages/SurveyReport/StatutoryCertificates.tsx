@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import ABSLogo from '../../assets/images/ABSLogo.svg';
 import { Label, Input, DatePickerInput, AbsSelect } from "customer_portal-ui-shared";
 import { updateReport } from "../../service/SurveyReportService";
 import { parseVisitDate, formatVisitDateForSave } from "../../utils/dateTime";
+import { usePopup } from "../../Common/PopupProvider";
 
 interface CertField {
     id: string;
@@ -119,6 +120,18 @@ const StatutoryCertificates: React.FC<{
     onVesselFieldChange?: (field: string, value: any) => void;
     onVesselNameChange?: (vesselName: string) => void;
 }> = ({ reportData, isOfflineProject = false, readOnly, onVesselFieldChange }) => {
+    const popup = usePopup();
+    const saveErrorOpenRef = useRef(false);
+
+    const handleSaveError = () => {
+        if (!saveErrorOpenRef.current) {
+            saveErrorOpenRef.current = true;
+            popup.error("Your change could not be saved. Please try again.", "Save").finally(() => {
+                saveErrorOpenRef.current = false;
+            });
+        }
+    };
+
     const isLocked = Boolean(readOnly || isOfflineProject);
 
     const [formData, setFormData] = useState<FormData>({
@@ -236,6 +249,7 @@ const StatutoryCertificates: React.FC<{
             });
 
         } catch (error) {
+            handleSaveError();
         }
     };
 
@@ -273,6 +287,7 @@ const StatutoryCertificates: React.FC<{
             });
 
         } catch (error) {
+            handleSaveError();
         }
     };
     return (
@@ -312,7 +327,7 @@ const StatutoryCertificates: React.FC<{
                                                         portdate instanceof Date
                                                             ? portdate.toISOString()
                                                             : "",
-                                                });
+                                                }).catch(handleSaveError);
                                                 onVesselFieldChange?.("report_no", value);
                                             }}
                                             disabled={isLocked}
@@ -339,7 +354,7 @@ const StatutoryCertificates: React.FC<{
                                                         portdate instanceof Date
                                                             ? portdate.toISOString()
                                                             : "",
-                                                });
+                                                }).catch(handleSaveError);
                                                 onVesselFieldChange?.("port", value);
                                             }}
                                             disabled={isLocked}
@@ -389,7 +404,7 @@ const StatutoryCertificates: React.FC<{
                                                         portdate instanceof Date
                                                             ? portdate.toISOString()
                                                             : "",
-                                                });
+                                                }).catch(handleSaveError);
                                                 onVesselFieldChange?.("name_prefix", String(selectedValue));
                                             }}
                                             options={[
@@ -422,7 +437,7 @@ const StatutoryCertificates: React.FC<{
                                                     portdate instanceof Date
                                                         ? portdate.toISOString()
                                                         : "",
-                                            });
+                                            }).catch(handleSaveError);
                                             onVesselFieldChange?.("vessel_name", e.target.value);
                                         }}
                                         disabled={isLocked}

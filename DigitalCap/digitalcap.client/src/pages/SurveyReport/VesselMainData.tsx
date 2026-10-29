@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import ABSLogo from '../../assets/images/ABSLogo.svg';
 import { Label, Input, DatePickerInput, Divider, AbsSelect } from "customer_portal-ui-shared";
 import RichTextEditor from "../../Common/RichTextEditor";
@@ -6,6 +6,7 @@ import Spinner from 'react-bootstrap/Spinner';
 import { updateReport } from "../../service/SurveyReportService";
 import { formatClassNotationsForDisplay, formatClassNotationsForSave } from "../../utils/classNotationFormatter";
 import { parseVisitDate, formatVisitDateForSave } from "../../utils/dateTime";
+import { usePopup } from "../../Common/PopupProvider";
 
 type FormData = {
     report_no: string;
@@ -61,6 +62,8 @@ interface Props {
 }
 
 const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, readOnly, onVesselFieldChange }) => {
+    const popup = usePopup();
+    const saveErrorOpenRef = useRef(false);
     const isLocked = Boolean(readOnly || isOfflineProject);
 
     const [formData, setFormData] = React.useState<FormData>({
@@ -260,6 +263,12 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, readOnl
             });
 
         } catch (error) {
+            if (!saveErrorOpenRef.current) {
+                saveErrorOpenRef.current = true;
+                popup.error("Your change could not be saved. Please try again.", "Save").finally(() => {
+                    saveErrorOpenRef.current = false;
+                });
+            }
         }
     };
 

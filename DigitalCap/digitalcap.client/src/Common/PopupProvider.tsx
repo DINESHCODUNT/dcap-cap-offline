@@ -66,11 +66,15 @@ export const PopupProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const showInfo = useCallback(
         (variant: 'success' | 'error' | 'info', input: InfoPopupInput, title?: string): Promise<void> => {
             const options = normalizeInfoOptions(input, title);
+            let msg: any = options.message;
+            if (msg == null || msg === "" || (typeof msg === "object" && !React.isValidElement(msg))) {
+                msg = (msg && (msg.message || msg.title || msg.detail)) || "Something went wrong. Please try again.";
+            }
             return new Promise((resolve) => {
                 setInfoState({
                     show: true,
                     title: options.title || (variant === 'success' ? 'Success' : variant === 'error' ? 'Error' : 'Information'),
-                    message: options.message,
+                    message: msg,
                     variant,
                     okText: options.okText || 'Ok',
                     onCloseAction: () => {

@@ -427,7 +427,8 @@ useEffect(() => {
                 setValidateWarnings(warnings);
             }
 
-        } catch (err) {
+        } catch (err: any) {
+            popup.error(err?.response?.data || err?.message || "Validation failed. Please try again.", "Validate");
         } finally {
             setIsValidating(false);
         }
@@ -497,7 +498,8 @@ useEffect(() => {
 
             setValidateAllWarnings(allWarnings);
 
-        } catch (err) {
+        } catch (err: any) {
+            popup.error(err?.response?.data || err?.message || "Validation failed. Please try again.", "Validate");
         } finally {
             setIsValidatingAll(false);
         }
@@ -612,6 +614,7 @@ useEffect(() => {
         } catch (err) {
             setModal(null);
             setIsExporting(false);
+            popup.error("Exported  falied!", "Export");
         }
     };
 
@@ -642,7 +645,8 @@ useEffect(() => {
 
             const warnings = parseValidateGradingResponse(response.data);
             setValidateWarnings(warnings);
-        } catch (err) {
+        } catch (err: any) {
+            popup.error(err?.response?.data || err?.message || "Validation failed. Please try again.", "Validate");
         } finally {
             setIsValidating(false);
         }
@@ -725,6 +729,7 @@ useEffect(() => {
         } catch (err) {
             setModal(null);
             setIsExporting(false);
+            popup.error("Exported  falied!", "Export");
         }
     };
 
@@ -753,6 +758,7 @@ useEffect(() => {
                 setModal(null);
                 setIsExporting(false);
                 setIsExportingAll(false);
+                popup.success("Exported successfully!", "Export");
             },
             onClose: () => {
                 window.URL.revokeObjectURL(url);
@@ -1089,6 +1095,7 @@ useEffect(() => {
         } catch (err) {
             setModal(null);
             setIsExportingAll(false);
+            popup.error("Exported  falied!", "Export");
         }
     };
 
@@ -1296,11 +1303,8 @@ useEffect(() => {
 
                                 return warnings.length === 0 ? (
                                     <div className="cl-header">
-                                        <div className="cl-icon" style={{ color: "#2e7d32" }}>
-                                            <Icon.CheckCircle />
-                                        </div>
                                         <div className="cl-header-text">
-                                            <div className="cl-title" style={{ color: "#2e7d32" }}>
+                                            <div className="cl-title">
                                                 All validations passed
                                             </div>
                                             <div className="cl-subtitle">

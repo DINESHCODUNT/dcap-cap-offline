@@ -300,6 +300,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
             }
         } catch (err) {
             console.error(err);
+            handleSaveError();
         }
     };
 
@@ -328,6 +329,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
             }
         } catch (err) {
             console.error(err);
+            handleSaveError();
         }
     };
 
@@ -355,6 +357,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
             }
         } catch (err) {
             console.error(err);
+            handleSaveError();
         }
     };
 
@@ -418,6 +421,16 @@ const ReportContent: React.FC<ReportContentProps> = ({
     };
 
     const popup = usePopup();
+    const saveErrorOpenRef = useRef(false);
+
+    const handleSaveError = () => {
+        if (!saveErrorOpenRef.current) {
+            saveErrorOpenRef.current = true;
+            popup.error("Your change could not be saved. Please try again.", "Save").finally(() => {
+                saveErrorOpenRef.current = false;
+            });
+        }
+    };
     const tooltipRef = useRef<HTMLDivElement>(null);
 
     const sideDialog = useContext(SideDialogManagerContext) as any;
@@ -867,6 +880,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                 });
 
             } catch (err) {
+                handleSaveError();
             }
 
             return;
@@ -958,7 +972,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
             });
 
         } catch (err) {
-
+            handleSaveError();
         }
     };
 
@@ -1478,7 +1492,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                                                     });
 
                                                                 } catch (err) {
-
+                                                                    handleSaveError();
                                                                 }
                                                             }}
                                                             maxLength={20}
@@ -1560,7 +1574,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                                 value: value
                                             });
                                         } catch (err) {
-
+                                            handleSaveError();
                                         }
                                     }}
                                     placeholder="Enter Notes here..."

@@ -5,6 +5,7 @@ import * as Icon from "react-bootstrap-icons";
 import * as projectService from '../../service/ProjectService';
 import type { ProjectLifecycleAction, SynchedOnlineContact } from '../../service/ProjectService';
 import { usePopup } from '../../Common/PopupProvider';
+import { resultMessage } from '../../Common/UtilityMessage';
 import moment from 'moment';
 import { getRelativeTime } from '../../utils/dateTime';
 import { TextField, Tab, Button, BUTTONS } from "customer_portal-ui-shared";
@@ -406,6 +407,8 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
 
         try {
             await projectService.postProjectLifecycleAction(action, project.id);
+            const actionText = action === "close" ? "Closed" : action === "cancel" ? "Cancelled" : "Deleted";
+            await popup.success(resultMessage(project.name || "Project", actionText as any), title);
             onProjectsChanged?.();
             if (action === "delete") {
                 onBack();

@@ -18,6 +18,8 @@ import {
 } from "../../constants/reportGrades";
 import * as projectService from "../../service/ProjectService";
 import type { ReportDetailsViewModel } from "../../service/ProjectService";
+import { usePopup } from "../../Common/PopupProvider";
+import { resultMessage } from "../../Common/UtilityMessage";
 
 export interface ReportCertificateProps {
     id: string;
@@ -50,6 +52,7 @@ const ReportCertificate: React.FC<ReportCertificateProps> = ({
     initial,
     onSaveSuccess,
 }) => {
+    const popup = usePopup();
     const sideDialog = useContext(SideDialogManagerContext) as {
         removeDialog?: (dialogId: string) => void;
     };
@@ -156,9 +159,11 @@ const ReportCertificate: React.FC<ReportCertificateProps> = ({
         setSaving(true);
         try {
             await projectService.saveReportDetails(payload);
+            popup.success(resultMessage("Report Details", "Updated"), "Edit Report Details");
             onSaveSuccess?.();
             handleClose();
-        } catch (e) {
+        } catch (e: any) {
+            popup.error(e?.response?.data || e?.message || "Unable to save report details. Please try again.", "Edit Report Details");
         } finally {
             setSaving(false);
         }

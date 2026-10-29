@@ -52,9 +52,6 @@ export default function InformationPopup({
     };
 
     const renderIcon = () => {
-        if (variant === 'success') {
-            return <Icon.CheckCircleFill className="text-success flex-shrink-0" size={18} />;
-        }
         if (variant === 'error') {
             return <Icon.ExclamationCircleFill className="text-danger flex-shrink-0" size={18} />;
         }

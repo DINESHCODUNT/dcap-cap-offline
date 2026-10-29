@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 import { Label, Input, DatePickerInput, Divider, Card, RadioInput, CheckboxInput } from "customer_portal-ui-shared";
 import RichTextEditor from "../../Common/RichTextEditor";
 import { updateHIReport, updateGradingCondition, updateGradingNotes } from "../../service/SurveyReportService";
 import { getPartDisplayLabel } from "./partUtils";
+import { usePopup } from "../../Common/PopupProvider";
 
 type GradeOption = string | number;
 
@@ -55,6 +56,17 @@ type FormData = {
 const GRADE_OPTIONS: GradeOption[] = [1, 2, 3, 4, 5, 'N/A'];
 
 const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOfflineProject }) => {
+    const popup = usePopup();
+    const saveErrorOpenRef = useRef(false);
+
+    const handleSaveError = () => {
+        if (!saveErrorOpenRef.current) {
+            saveErrorOpenRef.current = true;
+            popup.error("Your change could not be saved. Please try again.", "Save").finally(() => {
+                saveErrorOpenRef.current = false;
+            });
+        }
+    };
 
     const [formData, setFormData] = React.useState<FormData>({
         report_no: "",
@@ -342,6 +354,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
             await updateHIReport(payload);
 
         } catch (error) {
+            handleSaveError();
         }
     };
 
@@ -373,6 +386,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
             };
             await updateGradingCondition(payload);
         } catch (error) {
+            handleSaveError();
         }
     };
 
@@ -1071,6 +1085,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                                         gradingId: grade.id,
                                                                         value: val
                                                                     }).catch(() => {
+                                                                        handleSaveError();
                                                                     });
                                                                 }}
                                                                 maxLength={20}

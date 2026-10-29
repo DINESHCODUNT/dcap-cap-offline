@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Button, BUTTONS, CheckboxInput } from "customer_portal-ui-shared";
 import * as Icon from "react-bootstrap-icons";
 import * as reportConfigService from "../../../../service/ReportConfigService";
+import { usePopup } from "../../../../Common/PopupProvider";
+import { resultMessage } from "../../../../Common/UtilityMessage";
 
 type Props = {
     tankSections: any[];
@@ -18,6 +20,7 @@ const TankSection: React.FC<Props> = ({
     selectedPartName,
     onRefresh
 }) => {
+    const popup = usePopup();
 
     const [editId, setEditId] = useState<number | null>(null);
     const [row, setRow] = useState<any | null>(null);
@@ -54,15 +57,19 @@ const TankSection: React.FC<Props> = ({
             ]
         };
 
-        await reportConfigService.saveReportTemplateConfig(
-            vesselTypeId,
-            payload as any
-        );
+        try {
+            await reportConfigService.saveReportTemplateConfig(
+                vesselTypeId,
+                payload as any
+            );
 
-
-        onRefresh();
-        setEditId(null);
-        setRow(null);
+            popup.success(resultMessage("Tank Section", "Saved"), "Tank Section");
+            onRefresh();
+            setEditId(null);
+            setRow(null);
+        } catch (err: any) {
+            popup.error(err?.response?.data || err?.message || "Unable to save tank section. Please try again.", "Tank Section");
+        }
     };
     useEffect(() => {
         setCurrentPage(1);
