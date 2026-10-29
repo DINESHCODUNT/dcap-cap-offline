@@ -249,6 +249,19 @@ namespace DigitalCap.Infrastructure.Service
                 return new DataTransferResult { Status = DataTransferStatus.Error, Message = "Could not read the local database: " + ex.Message };
             }
 
+            // Safety net: verify the online download lock before uploading anything.
+            try
+            {
+                var marker = await _online.GetDownloadedProjectAsync(projectId, ct);
+                if (marker == null)
+                    return DataTransferResult.Fail(DataTransferStatus.Conflict, "CAP Administrator has cancelled the project from offline download.  You may contact CAP HQ for further queries.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sync {ProjectId}: checking online download lock failed", projectId);
+                return new DataTransferResult { Status = DataTransferStatus.Error, Message = "Could not check online project status: " + ex.Message };
+            }
+
             // Upload (reference DataSyncing). Nothing is final online until MoveToOnlineTable succeeds.
             try
             {
