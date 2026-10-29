@@ -703,7 +703,7 @@ ORDER BY TankImageCard.SectionId, CardNumber";
         {
             try
             {
-                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
+                if (Connection.IsSqlite())
                 {
                     var sqliteResult = await Connection.QueryAsync<dynamic>(
                         sql: DigitalCap.Core.Constants.SQLiteQueries.Tank.GetTanksOfVessel,
@@ -721,6 +721,7 @@ ORDER BY TankImageCard.SectionId, CardNumber";
                         IMONumber = r.ImoNumber != null ? r.ImoNumber.ToString() : string.Empty,
                         VesselName = r.VesselName != null ? r.VesselName.ToString() : string.Empty,
                         TankType = r.TankType != null ? r.TankType.ToString() : string.Empty,
+                        IsDeleted = r.IsDeleted != null ? Convert.ToBoolean(r.IsDeleted) : false,
                         ProjectName = r.ProjectName != null ? r.ProjectName.ToString() : string.Empty,
                         Subheader = r.Subheader != null ? r.Subheader.ToString() : string.Empty
                     });
@@ -772,6 +773,36 @@ ORDER BY TankImageCard.SectionId, CardNumber";
         {
             try
             {
+                if (Connection.IsSqlite())
+                {
+                    var result = await Connection.QueryFirstOrDefaultAsync<VesselTank>(
+                        sql: DigitalCap.Core.Constants.SQLiteQueries.Tank.GetTanksOfVesselById,
+                        param: new { Id = Id?.ToString() },
+                        transaction: Transaction);
+
+                    if (result == null && Id.HasValue)
+                    {
+                        result = await Connection.QueryFirstOrDefaultAsync<VesselTank>(
+                            sql: DigitalCap.Core.Constants.SQLiteQueries.Tank.GetTanksOfVesselById,
+                            param: new { Id = Id.Value.ToString().ToUpper() },
+                            transaction: Transaction);
+                    }
+
+                    return result;
+                }
+
+                return await GetTanks_VesselByIdSqlServer(Id, Projectid);
+            }
+            catch (Exception ex)
+            {
+                return null;
+            }
+        }
+
+        private async Task<VesselTank> GetTanks_VesselByIdSqlServer(Guid? Id, int? Projectid)
+        {
+            try
+            {
                 var result = await Connection.QueryAsync<VesselTank>(
                     sql: "dbo.Get_Vessel_Tank_ById",
                       new
@@ -792,6 +823,41 @@ ORDER BY TankImageCard.SectionId, CardNumber";
         }
 
         public async Task<bool> UpdateTank(VesselTank vesselTank)
+        {
+            try
+            {
+                if (Connection.IsSqlite())
+                {
+                    var rows = await Connection.ExecuteAsync(
+                        sql: DigitalCap.Core.Constants.SQLiteQueries.Tank.UpdateTankOfVessel,
+                        param: new
+                        {
+                            Id = vesselTank.Id.ToString(),
+                            VesselType = vesselTank.VesselType,
+                            ImoNumber = vesselTank.ImoNumber,
+                            TankTypeId = vesselTank.TankTypeId,
+                            TankName = vesselTank.TankName,
+                            IsActive = vesselTank.IsActive ? 1 : 0,
+                            CreatedDttm = vesselTank.CreatedDttm == DateTime.MinValue ? DateTime.Now : vesselTank.CreatedDttm,
+                            UpdateDttm = DateTime.Now,
+                            IsDeleted = vesselTank.IsDeleted ? 1 : 0,
+                            Subheader = vesselTank.Subheader
+                        },
+                        transaction: Transaction);
+
+                    this.Commit();
+                    return rows > 0;
+                }
+
+                return await UpdateTankSqlServer(vesselTank);
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+
+        private async Task<bool> UpdateTankSqlServer(VesselTank vesselTank)
         {
             try
             {
@@ -863,6 +929,39 @@ ORDER BY TankImageCard.SectionId, CardNumber";
         }
 
         public async Task<bool> UpdateStatus(List<Guid> tankIds, bool status)
+        {
+            if (tankIds == null || tankIds.Count == 0)
+                return false;
+
+            try
+            {
+                if (Connection.IsSqlite())
+                {
+                    int total = 0;
+                    foreach (var id in tankIds)
+                    {
+                        total += await Connection.ExecuteAsync(
+                            sql: DigitalCap.Core.Constants.SQLiteQueries.Tank.UpdateTankStatus,
+                            param: new
+                            {
+                                Id = id.ToString(),
+                                Status = status ? 1 : 0
+                            },
+                            transaction: Transaction);
+                    }
+                    this.Commit();
+                    return total > 0;
+                }
+
+                return await UpdateStatusSqlServer(tankIds, status);
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+
+        private async Task<bool> UpdateStatusSqlServer(List<Guid> tankIds, bool status)
         {
             if (tankIds == null || tankIds.Count == 0)
                 return false;

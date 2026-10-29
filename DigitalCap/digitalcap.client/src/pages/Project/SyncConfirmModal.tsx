@@ -35,8 +35,8 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
             }
             setSyncReleased(Boolean(response.data.released));
             setSyncSuccessModal(true);
-        } catch {
-            setTransferError("Unable to Sync/Download due to a very low internet connection. Please proceed when your internet connection is having at least 10 mbps download and upload speed.");
+        } catch (err: any) {
+            setTransferError(projectService.getTransferErrorMessage(err, "Unable to Sync/Download due to a very low internet connection. Please proceed when your internet connection is having at least 10 mbps download and upload speed."));
         } finally {
             setIsSyncing(false);
         }

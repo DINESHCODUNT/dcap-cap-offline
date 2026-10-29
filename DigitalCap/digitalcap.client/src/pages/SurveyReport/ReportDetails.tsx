@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import ReportCertificate from "./ReportCerticiate";
 import * as projectService from "../../service/ProjectService";
 import type { ReportDetailsViewModel } from "../../service/ProjectService";
+import { isElectron } from "../../utils/runtime";
 import {
     getFinalGradeLabel,
     getSubGradeLabel,
@@ -124,7 +125,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({
             <div className="mt-3">
                 <div className="section-title mb-3">
                     <h5 className='_600'>CAP Report /Certificates</h5>
-                    {canEditReportDetails &&
+                    {!isElectron() && canEditReportDetails &&
                         globalPermission("AbsProjectLandingPageReassessmentButton") && (
                             <div className="section-actions">
                                 <Button variant={BUTTONS.TABLEDOWNLOAD} onClick={handleEdit} startIcon={<Icon.Pencil />}></Button>

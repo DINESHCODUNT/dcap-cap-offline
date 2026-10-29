@@ -1,4 +1,5 @@
 using DigitalCap.Core.DTO;
+using DigitalCap.Core.Helpers.Extensions;
 using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Interfaces.Service;
 using DigitalCap.Core.Models;
@@ -33,12 +34,16 @@ namespace DigitalCap.Infrastructure.Service
         private readonly ISecurityService _securityService;
         private readonly IUserPermissionRepository _userPermissionRepository;
         private readonly Microsoft.AspNetCore.Identity.UserManager<DigitalCap.WebApi.Core.ApplicationUser> _userManager;
+        private readonly IUnitOfWork? _unitOfWork;
+
+        private bool IsDesktop => _unitOfWork.UsesLocalDatabase() || _configuration.GetValue<bool>("IsElectron", false);
 
         public TankService(ITankRepository tankRepository, ISurveyReportRepository surveyReportRepository
             , ISurveyReportService surveyReportService, IConfiguration configuration,
             IProjectRepository projectRepository, ISecurityService securityService,
             IUserPermissionRepository userPermissionRepository,
-            Microsoft.AspNetCore.Identity.UserManager<DigitalCap.WebApi.Core.ApplicationUser> userManager)
+            Microsoft.AspNetCore.Identity.UserManager<DigitalCap.WebApi.Core.ApplicationUser> userManager,
+            IUnitOfWork? unitOfWork = null)
         {
             _tankRepository = tankRepository;
             _surveyReportRepository = surveyReportRepository;
@@ -48,6 +53,7 @@ namespace DigitalCap.Infrastructure.Service
             _securityService = securityService;
             _userPermissionRepository = userPermissionRepository;
             _userManager = userManager;
+            _unitOfWork = unitOfWork;
         }
 
         public async Task<ServiceResult<bool>> UpdateTankImageDescriptionDropdownCard(int templateId, int projectId, Guid sectionId, int cardNumber, int value, string cardName)
@@ -500,7 +506,7 @@ namespace DigitalCap.Infrastructure.Service
             }
             // Load tanks
             List<Tank> tanks;
-            if (isAdminUser)
+            if (IsDesktop || isAdminUser)
             {
                 tanks = await _tankRepository.GetTanks_Vessel();
             }
@@ -602,12 +608,13 @@ namespace DigitalCap.Infrastructure.Service
             //    return ServiceResult<ManageTankResponse>.Failure("User not found");
 
             var currentUser = currentUserResult.Data;
-            var isAdmin = await _userManager.GetRolesAsync(await _userManager.FindByNameAsync(username));
+            var identityUser = !IsDesktop ? await _userManager.FindByNameAsync(username) : null;
+            var isAdmin = identityUser != null ? await _userManager.GetRolesAsync(identityUser) : new List<string>();
             var isAdminUser = isAdmin.Contains("Admin (CAP HQ)");
 
             // Load tanks
             List<Tank> tanks;
-            if (isAdminUser)
+            if (IsDesktop || isAdminUser)
             {
                 tanks = await _tankRepository.GetTanks_Vessel();
             }
@@ -889,7 +896,7 @@ namespace DigitalCap.Infrastructure.Service
                 var isAdmin = await _userManager.GetRolesAsync(await _userManager.FindByNameAsync(username ?? currentUser));
                 var isAdminUser = isAdmin.Contains("Admin (CAP HQ)");
 
-                if (isAdminUser)
+                if (IsDesktop || isAdminUser)
                 {
                     tanks = await _tankRepository.GetTanks_VesselByPagination(null, pageNumber, pageSize);
                 }

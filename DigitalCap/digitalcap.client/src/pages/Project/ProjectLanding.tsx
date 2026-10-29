@@ -489,7 +489,7 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
 
                                                     {/* Create Reassessment moved to Overview */}
 
-                                                    {isReadyForClosure && globalPermission("AbsProjectLandingPageCloseButton") && (
+                                                    {!isElectron() && isReadyForClosure && globalPermission("AbsProjectLandingPageCloseButton") && (
                                                         <Button onClick={() => setLifecycleModal("close")}>
                                                             Close Project
                                                         </Button>
@@ -498,7 +498,7 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
                                                     {/* Cancel Project Button moved to Overview */}
 
                                                     {/* Edit Button */}
-                                                    {isNormalStatus && globalPermission("AbsProjectLandingPageReassessmentButton") && (
+                                                    {!isElectron() && isNormalStatus && globalPermission("AbsProjectLandingPageReassessmentButton") && (
                                                         <Button
                                                             variant={BUTTONS.TABLEDOWNLOAD}
                                                             startIcon={<Icon.Pencil />}
@@ -511,7 +511,7 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
                                                     )}
 
                                                     {/* Delete Button */}
-                                                    {isNormalStatus && !isGridOfflineDownloadStatus(project) && (
+                                                    {!isElectron() && isNormalStatus && !isGridOfflineDownloadStatus(project) && (
                                                         <Button
                                                             variant={BUTTONS.TABLEDOWNLOAD}
                                                             startIcon={<Icon.Trash />}
@@ -546,8 +546,8 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
                                             }
                                             <FieldBlock label="Vessel CAP History" value={detail.vessel_cap_history} />
                                         </div>
-                                        <div className="project-landing-divider" />
-                                        {project.id != null ? <Comments projectId={project.id} globalpermission={globalPermission("AbsProjectLandingPageManageMyComments")} activeTab={activeTab} /> : null}
+                                        {!isElectron() && <div className="project-landing-divider" />}
+                                        {!isElectron() && project.id != null ? <Comments projectId={project.id} globalpermission={globalPermission("AbsProjectLandingPageManageMyComments")} activeTab={activeTab} /> : null}
                                     </>
                                 ),
                                 header: 'Project Info'
@@ -560,7 +560,7 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
                                 ),
                                 header: 'Report Details'
                             },
-                            {
+                            !isElectron() && {
                                 content: (
                                     <>
                                         <WorkflowDetails projectId={project.id} />
@@ -568,7 +568,7 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
                                 ),
                                 header: 'Workflow Details'
                             },
-                            globalPermission("AbsProjectLandingPageRevenueTracker") && {
+                            !isElectron() && globalPermission("AbsProjectLandingPageRevenueTracker") && {
                                 content: (
                                     <RevenueList projectId={project.id} />
                                 ),
@@ -586,11 +586,13 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
                                 content: (
                                     <>
                                         <ActivityLog projectId={project.id} source={"projectLanding"} activities={activities} />
-                                        <div className="text-center mt-3">
-                                            <Link className="text-primary text-decoration-none fw-medium" to="/app/Activity/ActivityLog" state={{ projectId: project.id, projectName: project.name }}>
-                                                View All Recent Activity &rarr;
-                                            </Link>
-                                        </div>
+                                        {!isElectron() && (
+                                            <div className="text-center mt-3">
+                                                <Link className="text-primary text-decoration-none fw-medium" to="/app/Activity/ActivityLog" state={{ projectId: project.id, projectName: project.name }}>
+                                                    View All Recent Activity &rarr;
+                                                </Link>
+                                            </div>
+                                        )}
                                     </>
                                 ),
                                 header: 'Project Activity'

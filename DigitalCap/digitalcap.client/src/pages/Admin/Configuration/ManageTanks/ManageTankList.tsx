@@ -6,6 +6,7 @@ import { Modal, Offcanvas, Spinner } from 'react-bootstrap';
 import * as tankService from '../../../../service/TankService';
 import * as gradingService from '../../../../service/GradingService';
 import InformationPopup from '../../../../Common/InformationPopup';
+import { isElectron } from '../../../../utils/runtime';
 
 interface ManageTankRow {
     tankId?: string;
@@ -715,15 +716,17 @@ const ManageTankList: React.FC = () => {
                                 handleEditTank(row.original);
                             }}
                         />
-                        <Button
-                            variant={BUTTONS.TABLEDOWNLOAD}
-                            startIcon={<Icon.TrashFill />}
-                            onClick={(e: any) => {
-                                e.stopPropagation();
-                                setDeletingTank(row.original);
-                                setDeleteModel(true);
-                            }}
-                        />
+                        {!isElectron() && (
+                            <Button
+                                variant={BUTTONS.TABLEDOWNLOAD}
+                                startIcon={<Icon.TrashFill />}
+                                onClick={(e: any) => {
+                                    e.stopPropagation();
+                                    setDeletingTank(row.original);
+                                    setDeleteModel(true);
+                                }}
+                            />
+                        )}
                     </div>
                 )
             }
@@ -848,16 +851,20 @@ const ManageTankList: React.FC = () => {
                                 </div>
                             </div>
                             <div className="col-md-6 d-flex justify-content-end gap-2">
-                                <div>
-                                    <Button variant={BUTTONS.PRIMARY} onClick={() => {
-                                        resetForm();
-                                        setOpen(true);
-                                    }}>Add New Tank</Button>
-                                </div>
-                                <div>
-                                    <Button variant={BUTTONS.PRIMARY} disabled={selectedIds.length === 0}
-                                        onClick={() => setStatusModel(true)}>Change Status</Button>
-                                </div>
+                                {!isElectron() && (
+                                    <>
+                                        <div>
+                                            <Button variant={BUTTONS.PRIMARY} onClick={() => {
+                                                resetForm();
+                                                setOpen(true);
+                                            }}>Add New Tank</Button>
+                                        </div>
+                                        <div>
+                                            <Button variant={BUTTONS.PRIMARY} disabled={selectedIds.length === 0}
+                                                onClick={() => setStatusModel(true)}>Change Status</Button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                         <div className="custom-react-table">
@@ -875,7 +882,7 @@ const ManageTankList: React.FC = () => {
                                     expand={false}
                                     allowColumnsShowHide={false}
                                     shadow={true}
-                                    rowSelect
+                                    rowSelect={!isElectron()}
                                     onRowSelected={handleRowSelected}
                                     dataCount={dataCount}
                                     applyFilterCallback={applyFilter}

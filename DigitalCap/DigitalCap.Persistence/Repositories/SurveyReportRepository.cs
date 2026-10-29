@@ -989,6 +989,32 @@ WHERE ProjectId = @ProjectId AND (CardNumber = @CardId OR CardName = @CardId);
         {
             try
             {
+                if (Connection.IsSqlite())
+                {
+                    var p = new DynamicParameters();
+                    p.Add("@ProjectId", projectId);
+                    p.Add("@TemplateId", templateId);
+                    p.Add("@SectionId", sectionId == Guid.Empty ? null : sectionId.ToString().ToUpper());
+                    p.Add("@CardId", cardId == 0 ? null : cardId);
+
+                    var card = await Connection.QueryFirstMappedAsync<ProjectCardMapping>(
+                        DigitalCap.Core.Constants.SQLiteQueries.ProjectImageCards.GetImageCardById,
+                        p,
+                        Transaction);
+
+                    if (card == null && sectionId != Guid.Empty)
+                    {
+                        // Fallback in case existing row was stored with lowercase Guid string
+                        p.Add("@SectionId", sectionId.ToString().ToLower());
+                        card = await Connection.QueryFirstMappedAsync<ProjectCardMapping>(
+                            DigitalCap.Core.Constants.SQLiteQueries.ProjectImageCards.GetImageCardById,
+                            p,
+                            Transaction);
+                    }
+
+                    return card!;
+                }
+
                 var result = await Connection.QueryFirstOrDefaultAsync<ProjectCardMapping>(
                     sql: "dbo.SelectProjectImagecardById",
                     param: new
@@ -1019,7 +1045,7 @@ WHERE ProjectId = @ProjectId AND (CardNumber = @CardId OR CardName = @CardId);
                     var p = new DynamicParameters();
                     p.Add("@ProjectId", model.ProjectId);
                     p.Add("@TemplateId", model.TemplateId);
-                    p.Add("@SectionId", model.SectionId);
+                    p.Add("@SectionId", model.SectionId == Guid.Empty ? null : model.SectionId.ToString().ToUpper());
                     p.Add("@CardId", model.CardId);
                     p.Add("@DescriptionId", model.DescriptionId);
                     p.Add("@AdditionalDescription", model.AdditionalDescription ?? "");
@@ -1075,7 +1101,7 @@ WHERE ProjectId = @ProjectId AND (CardNumber = @CardId OR CardName = @CardId);
                     p.Add("@Id", model.Id);
                     p.Add("@ProjectId", model.ProjectId);
                     p.Add("@TemplateId", model.TemplateId);
-                    p.Add("@SectionId", model.SectionId);
+                    p.Add("@SectionId", model.SectionId == Guid.Empty ? null : model.SectionId.ToString().ToUpper());
                     p.Add("@CardId", model.CardId);
                     p.Add("@DescriptionId", model.DescriptionId);
                     p.Add("@AdditionalDescription", model.AdditionalDescription ?? "");
@@ -1155,6 +1181,33 @@ WHERE ProjectId = @ProjectId AND (CardNumber = @CardId OR CardName = @CardId);
         {
             try
             {
+                if (Connection.IsSqlite())
+                {
+                    var p = new DynamicParameters();
+                    p.Add("@ProjectId", projectId);
+                    p.Add("@TemplateId", templateId);
+                    p.Add("@SectionId", sectionId == Guid.Empty ? null : sectionId.ToString().ToUpper());
+                    p.Add("@GradingId", gradingId == 0 ? null : (int?)gradingId);
+
+                    var card = await Connection.QueryFirstOrDefaultAsync<ProjectGradingMapping>(
+                        sql: DigitalCap.Core.Constants.SQLiteQueries.ProjectMapping.GetGradingbyId,
+                        param: p,
+                        transaction: Transaction
+                    );
+
+                    if (card == null && sectionId != Guid.Empty)
+                    {
+                        p.Add("@SectionId", sectionId.ToString().ToLower());
+                        card = await Connection.QueryFirstOrDefaultAsync<ProjectGradingMapping>(
+                            sql: DigitalCap.Core.Constants.SQLiteQueries.ProjectMapping.GetGradingbyId,
+                            param: p,
+                            transaction: Transaction
+                        );
+                    }
+
+                    return card;
+                }
+
                 var result = await Connection.QueryFirstOrDefaultAsync<ProjectGradingMapping>(
                     sql: "dbo.SelectProjectGradingCardById",
                     param: new

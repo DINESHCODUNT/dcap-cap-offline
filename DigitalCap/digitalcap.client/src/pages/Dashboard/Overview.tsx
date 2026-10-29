@@ -255,12 +255,12 @@ const Overview: React.FC = () => {
                             <Button variant={BUTTONS.SECONDARY} onClick={() => setSelectedProject(null)}>
                                 ← Back
                             </Button>
-                            {String(selectedProject.projectStatusName).toLowerCase() !== "cancelled" && (
+                            {!isElectron() && String(selectedProject.projectStatusName).toLowerCase() !== "cancelled" && (
                                 <Button onClick={() => setShowCancelModal(true)}>
                                     Cancel Project
                                 </Button>
                             )}
-                            {["closed", "cancelled"].includes(String(selectedProject.projectStatusName).toLowerCase()) && selectedProject.id != null && hasGlobalPermission("AbsProjectLandingPageReassessmentButton") && (
+                            {!isElectron() && ["closed", "cancelled"].includes(String(selectedProject.projectStatusName).toLowerCase()) && selectedProject.id != null && hasGlobalPermission("AbsProjectLandingPageReassessmentButton") && (
                                 <Button onClick={() => handleEditProject(selectedProject.id as number)}>
                                     Create Reassessment
                                 </Button>

@@ -51,6 +51,7 @@ const SurveyStatus: React.FC<{
     data: any;
     reportData: any;
     isOfflineProject?: boolean;
+    readOnly?: boolean;
     onPortChange?: (newPort: string) => void;
     onReportNoChange?: (newReportNo: string) => void;
     onReportDateChange?: (newDate: any) => void;
@@ -59,7 +60,8 @@ const SurveyStatus: React.FC<{
     onVesselFieldChange?: (field: string, value: any) => void;
     onSurveyStatusFieldChange?: (field: string, value: any, specialHullNo?: number | string) => void;
     onVesselNameChange?: (vesselName: string) => void;
-}> = ({ reportData, isOfflineProject = false, onVesselFieldChange, onSurveyStatusFieldChange }) => {
+}> = ({ reportData, isOfflineProject = false, readOnly, onVesselFieldChange, onSurveyStatusFieldChange }) => {
+    const isLocked = Boolean(readOnly || isOfflineProject);
 
     const [formData, setFormData] = React.useState<FormData>({
         report_no: "",
@@ -234,7 +236,7 @@ const SurveyStatus: React.FC<{
                                             setFormData(prev => ({ ...prev, report_no: value }));
                                             handleSurveyUpdate("report_no", value);
                                         }}
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
                                 </div>
                             </div>
@@ -250,7 +252,7 @@ const SurveyStatus: React.FC<{
                                             setFormData((prev) => ({ ...prev, port: value }));
                                             handleSurveyUpdate("port", value);
                                         }}
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
                                     <DatePickerInput
                                         onChange={(date: any) => {
@@ -258,7 +260,7 @@ const SurveyStatus: React.FC<{
                                             handleSurveyUpdate("lastVisitDate", date);
                                         }}
                                         value={lastVisitDate}
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
                                 </div>
                             </div>
@@ -297,7 +299,7 @@ const SurveyStatus: React.FC<{
                                                 : []
                                         }
                                         placeholder="Select "
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
                                 </span>
                                 <input
@@ -308,7 +310,7 @@ const SurveyStatus: React.FC<{
                                     onChange={(e) => {
                                         handleSurveyUpdate("vessel_name", e.target.value);
                                     }}
-                                    disabled={isOfflineProject}
+                                    disabled={isLocked}
                                 /><span> of </span>
                                 <span className="text-uppercase _500 certify">
                                     {formData.flag}
@@ -325,7 +327,7 @@ const SurveyStatus: React.FC<{
                                                 handleSurveyUpdate("firstVisitDate", date);
                                             }}
                                             value={firstVisitDate}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </span>
                                 </span>
@@ -354,7 +356,7 @@ const SurveyStatus: React.FC<{
                                                     date
                                                 );
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-3 form-group">
@@ -368,7 +370,7 @@ const SurveyStatus: React.FC<{
                                                     date
                                                 );
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-3 form-group">
@@ -396,7 +398,7 @@ const SurveyStatus: React.FC<{
                                                 }
 
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-3 form-group">
@@ -410,7 +412,7 @@ const SurveyStatus: React.FC<{
                                                     date
                                                 );
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-3 form-group">
@@ -428,7 +430,7 @@ const SurveyStatus: React.FC<{
                                                     date
                                                 );
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-3 form-group">
@@ -442,7 +444,7 @@ const SurveyStatus: React.FC<{
                                                     date
                                                 );
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-3 form-group">
@@ -459,7 +461,7 @@ const SurveyStatus: React.FC<{
                                                 );
 
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
 

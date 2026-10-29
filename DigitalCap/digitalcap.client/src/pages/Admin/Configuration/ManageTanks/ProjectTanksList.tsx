@@ -8,6 +8,7 @@ import { Modal, Offcanvas, Spinner } from 'react-bootstrap';
 import type { TankDto, SelectOption } from "../../../../Interface/ProjectTank";
 import * as tankService from '../../../../service/TankService';
 import * as gradingService from '../../../../service/GradingService';
+import { isElectron } from '../../../../utils/runtime';
 interface ManageTankRow {
     tankId: string;
     tankName: string;
@@ -883,10 +884,12 @@ const ProjectTankList: React.FC = () => {
                                 startIcon={<Icon.PencilFill />}
                                 onClick={() => handleEditTank(row.original)}
                             ></Button>
-                            <Button variant={BUTTONS.TABLEDOWNLOAD} onClick={() => {
-                                setDeletingTank(row.original);
-                                setDeleteModel(true);
-                            }} startIcon={<Icon.TrashFill />}></Button>
+                            {!isElectron() && (
+                                <Button variant={BUTTONS.TABLEDOWNLOAD} onClick={() => {
+                                    setDeletingTank(row.original);
+                                    setDeleteModel(true);
+                                }} startIcon={<Icon.TrashFill />}></Button>
+                            )}
                         </div>
                     );
                 }
@@ -1646,12 +1649,16 @@ const ProjectTankList: React.FC = () => {
                             </div>
                         </div>
                         <div className="col-md-6 d-flex justify-content-end gap-2">
-                            <div>
-                                <Button variant={BUTTONS.PRIMARY} onClick={handleAddNewTank}>Add New Tank</Button>
-                            </div>
-                            <div>
-                                <Button variant={BUTTONS.PRIMARY} disabled={selectedIds.length === 0} onClick={handleChangeStatusClick}>Change Status</Button>
-                            </div>
+                            {!isElectron() && (
+                                <>
+                                    <div>
+                                        <Button variant={BUTTONS.PRIMARY} onClick={handleAddNewTank}>Add New Tank</Button>
+                                    </div>
+                                    <div>
+                                        <Button variant={BUTTONS.PRIMARY} disabled={selectedIds.length === 0} onClick={handleChangeStatusClick}>Change Status</Button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                     <div className="custom-react-table">
@@ -1669,7 +1676,7 @@ const ProjectTankList: React.FC = () => {
                                 expand={false}
                                 allowColumnsShowHide={false}
                                 shadow={true}
-                                rowSelect
+                                rowSelect={!isElectron()}
                                 onRowSelected={(rows: any[]) => {
                                     const ids = rows.map((row: any) => row.tankId || row.id || "").filter((id: string) => id !== "");
                                     const names = rows.map((row: any) => row.tankName || row.tank_name || "").filter((name: string) => name !== "");

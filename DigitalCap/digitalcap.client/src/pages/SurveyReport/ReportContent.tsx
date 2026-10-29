@@ -19,6 +19,8 @@ import * as surveyReportService from '../../service/SurveyReportService';
 import ConfirmationPopup from '../../Common/ConfirmationPopup';
 import InformationPopup from '../../Common/InformationPopup';
 import { getPartDisplayLabel, findPartInGrid, getPartNameFromGrid } from './partUtils';
+import { isElectron } from '../../utils/runtime';
+import { usePermissions } from '../../context/PermissionContext';
 interface ReportContentProps {
     activePart: string;
     activeSection: string;
@@ -63,6 +65,8 @@ const ReportContent: React.FC<ReportContentProps> = ({
     isOfflineProject, refreshCurrentReport
 }) => {
     const navigate = useNavigate();
+    const { pagePermissions, hasPagePermission } = usePermissions();
+    const canManageTank = !isElectron() || !!(pagePermissions?.manageTank?.read || pagePermissions?.manageTank?.edit || hasPagePermission('manageTank') || hasPagePermission('ManageTank'));
     const reportData = useMemo(() => {
         if (!rawReportData) return null;
         return isNewProject
@@ -134,6 +138,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
         if (!reportData) return [];
 
         const appendTankSections = (sections: any[]) => {
+            if (isElectron()) return sections;
             const tankSections = toArray(
                 reportData?.tankReportView?.sections ??
                 reportData?.template?.tankReportView?.sections
@@ -1322,13 +1327,15 @@ const ReportContent: React.FC<ReportContentProps> = ({
         <div className="report-content">
             <div className="project-header">
                 <div className="section-title p-2 p-md-3 pe-5 pe-md-3 border-bottom d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-md-3 position-relative">
-                    <div className="d-md-none position-absolute" style={{ right: '54px', top: '12px', zIndex: 10 }}>
-                        <button className='info-tooltip shadow-sm'
-                            onClick={() => setVisible((prev) => !prev)}
-                            aria-label="Show grading system information"
-                            aria-expanded={visible}
-                            style={{ width: '32px', height: '32px', borderRadius: '6px', borderRight: '1px solid #dee2e6', padding: 0 }}> <Icon.InfoCircle size={16} /> </button>
-                    </div>
+                    {!isElectron() && (
+                        <div className="d-md-none position-absolute" style={{ right: '54px', top: '12px', zIndex: 10 }}>
+                            <button className='info-tooltip shadow-sm'
+                                onClick={() => setVisible((prev) => !prev)}
+                                aria-label="Show grading system information"
+                                aria-expanded={visible}
+                                style={{ width: '32px', height: '32px', borderRadius: '6px', borderRight: '1px solid #dee2e6', padding: 0 }}> <Icon.InfoCircle size={16} /> </button>
+                        </div>
+                    )}
                     <div className="d-flex flex-row gap-3 w-100 w-md-auto justify-content-between justify-content-md-start">
                         <div className="d-flex flex-column">
                             <h5>{sectionLabel}</h5>
@@ -1341,11 +1348,13 @@ const ReportContent: React.FC<ReportContentProps> = ({
                     </div>
                     <div className="section-actions w-100 w-md-auto d-flex justify-content-end mt-2 mt-md-0">
                         <div className="d-flex flex-wrap gap-2 align-items-center justify-content-end w-100">
-                            <div className="d-none d-md-block"><button className='info-tooltip'
-                                onClick={() => setVisible((prev) => !prev)}
-                                aria-label="Show grading system information"
-                                aria-expanded={visible}> <Icon.InfoCircle /> </button></div>
-                            {(activePart === "B" || activePart === "C" || activePart === "D") && (
+                            {!isElectron() && (
+                                <div className="d-none d-md-block"><button className='info-tooltip'
+                                    onClick={() => setVisible((prev) => !prev)}
+                                    aria-label="Show grading system information"
+                                    aria-expanded={visible}> <Icon.InfoCircle /> </button></div>
+                            )}
+                            {canManageTank && (activePart === "B" || activePart === "C" || activePart === "D") && (
                                 <div>
                                     <Button
                                         variant={BUTTONS.SECONDARY}
@@ -1375,7 +1384,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                     </div>
                 </div>
             </div>
-            {visible && (
+            {!isElectron() && visible && (
                 <div ref={tooltipRef} role="tooltip" className='tooltip-panel'>
                     <div className='hint-wrapper'>
                         <h5 className='hint-title d-flex justify-content-between align-items-center'>

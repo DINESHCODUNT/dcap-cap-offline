@@ -354,7 +354,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
             if (axios.isCancel(err) || err?.name === 'CanceledError') {
                 return;
             }
-            setTransferError("Unable to Sync/Download due to a very low internet connection. Please proceed when your internet connection is having at least 10 mbps download and upload speed.");
+            setTransferError(projectService.getTransferErrorMessage(err, "Unable to Sync/Download due to a very low internet connection. Please proceed when your internet connection is having at least 10 mbps download and upload speed."));
         } finally {
             setIsDownloading(false);
             setDownloadAbortController(null);

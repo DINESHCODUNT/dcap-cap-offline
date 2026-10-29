@@ -50,6 +50,7 @@ interface Props {
     data: any;
     reportData: any;
     isOfflineProject?: boolean;
+    readOnly?: boolean;
     onPortChange?: (newPort: string) => void;
     onReportNoChange?: (newReportNo: string) => void;
     onReportDateChange?: (newDate: any) => void;
@@ -59,7 +60,8 @@ interface Props {
     onVesselNameChange?: (vesselName: string) => void;
 }
 
-const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesselFieldChange }) => {
+const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, readOnly, onVesselFieldChange }) => {
+    const isLocked = Boolean(readOnly || isOfflineProject);
 
     const [formData, setFormData] = React.useState<FormData>({
         report_no: "",
@@ -295,7 +297,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                         onChange={(value: string) => {
                                             handleFieldUpdate("report_no", value);
                                         }}
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
                                 </div>
                             </div>
@@ -311,14 +313,14 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                         onChange={(value: string) => {
                                             handleFieldUpdate("port", value);
                                         }}
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
                                     <DatePickerInput
                                         onChange={(value: any) => {
                                             handleFieldUpdate("lastVisitDate", value);
                                         }}
                                         value={formData.lastVisitDate}
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
                                 </div>
                             </div>
@@ -358,7 +360,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                     onChange={(e) => {
                                         handleFieldUpdate("vessel_name", e.target.value);
                                     }}
-                                    disabled={isOfflineProject}
+                                    disabled={isLocked}
                                 /><span> of </span>
                                 <span className="text-uppercase _500 certify">
                                     {formData.flag}
@@ -375,7 +377,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                 handleFieldUpdate("firstVisitDate", value);
                                             }}
                                             value={formData.firstVisitDate}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </span>
                                 </span>
@@ -404,7 +406,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                 handleFieldUpdate("vessel_type", value)
                                             }
                                             maxLength={100}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -417,7 +419,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                 handleFieldUpdate("year_built", value)
                                             }
                                             maxLength={100}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -430,7 +432,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                 handleFieldUpdate("year_built_by", value)
                                             }
                                             maxLength={100}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -443,7 +445,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                 handleFieldUpdate("hull_no", value)
                                             }
                                             maxLength={100}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -456,7 +458,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                 handleFieldUpdate("flag", value)
                                             }
                                             maxLength={100}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -469,7 +471,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                 handleFieldUpdate("port_of_registry", value)
                                             }
                                             maxLength={100}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -482,7 +484,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                 handleFieldUpdate("official_no", value)
                                             }
                                             maxLength={100}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -495,7 +497,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                 handleFieldUpdate("call_sign", value)
                                             }
                                             maxLength={100}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -508,7 +510,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                 handleFieldUpdate("classed", value)
                                             }
                                             maxLength={100}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -521,7 +523,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                 handleFieldUpdate("class_no", value)
                                             }
                                             maxLength={100}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                 </div>
@@ -540,7 +542,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                             onBlur={(_range, _source, editor) =>
                                                 handleFieldUpdate("class_notations", getEditorHtml(editor))
                                             }
-                                            readOnly={isOfflineProject}
+                                            readOnly={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-6 form-group">
@@ -555,7 +557,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                             onBlur={(_range, _source, editor) =>
                                                 handleFieldUpdate("additional_class_notations", getEditorHtml(editor))
                                             }
-                                            readOnly={isOfflineProject}
+                                            readOnly={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-6 form-group">
@@ -570,7 +572,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                             onBlur={(_range, _source, editor) =>
                                                 handleFieldUpdate("other_notations", getEditorHtml(editor))
                                             }
-                                            readOnly={isOfflineProject}
+                                            readOnly={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-6 form-group">
@@ -585,7 +587,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                             onBlur={(_range, _source, editor) =>
                                                 handleFieldUpdate("previous_names", getEditorHtml(editor))
                                             }
-                                            readOnly={isOfflineProject}
+                                            readOnly={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-6 form-group">
@@ -600,7 +602,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                             onBlur={(_range, _source, editor) =>
                                                 handleFieldUpdate("owners", getEditorHtml(editor))
                                             }
-                                            readOnly={isOfflineProject}
+                                            readOnly={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-6 form-group">
@@ -615,7 +617,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                             onBlur={(_range, _source, editor) =>
                                                 handleFieldUpdate("managers", getEditorHtml(editor))
                                             }
-                                            readOnly={isOfflineProject}
+                                            readOnly={isLocked}
                                         />
                                     </div>
                                 </div>
@@ -631,7 +633,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                             onChange={(value: string) =>
                                                 handleFieldUpdate("length", value)
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -643,7 +645,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                             onChange={(value: string) =>
                                                 handleFieldUpdate("breadth", value)
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -655,7 +657,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                             onChange={(value: string) =>
                                                 handleFieldUpdate("depth", value)
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -667,7 +669,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                             onChange={(value: string) =>
                                                 handleFieldUpdate("summer_draft", value)
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -679,7 +681,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                             onChange={(value: string) =>
                                                 handleFieldUpdate("deadweight", value)
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -691,7 +693,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                             onChange={(value: string) =>
                                                 handleFieldUpdate("gross_tons", value)
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -703,7 +705,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                             onChange={(value: string) =>
                                                 handleFieldUpdate("net_tons", value)
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                 </div>
@@ -722,7 +724,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                     handleFieldUpdate("propulsion_type", value)
                                                 }
                                                 maxLength={100}
-                                                disabled={isOfflineProject}
+                                                disabled={isLocked}
                                             />
                                             <Input
                                                 label=""
@@ -732,7 +734,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                     handleFieldUpdate("propulsion_value", value)
                                                 }
                                                 maxLength={5}
-                                                disabled={isOfflineProject}
+                                                disabled={isLocked}
                                             />
                                             <span className="text-muted fw-semibold">KE at</span>
                                             <Input
@@ -742,7 +744,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                     handleFieldUpdate("kw", value)
                                                 }
                                                 maxLength={25}
-                                                disabled={isOfflineProject}
+                                                disabled={isLocked}
                                             />
                                             <span className="text-muted fw-semibold">Shaft RPM
                                             </span>
@@ -759,7 +761,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                 handleFieldUpdate("propulsion_manufacturer", value)
                                             }
                                             maxLength={100}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-3 form-group">
@@ -772,7 +774,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, onVesse
                                                 handleFieldUpdate("gear_manufacturer", value)
                                             }
                                             maxLength={100}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                 </div>

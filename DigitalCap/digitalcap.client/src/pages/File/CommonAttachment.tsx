@@ -9,6 +9,7 @@ import { DROP_CLICK_LABEL, SUPPORT_TYPE_LABEL, dropZoneStyle, mimiTypesAccepted 
 import * as fileService from "../../service/FileService";
 import { FileDataType, isClientDeliverablesType } from "../../constants/fileDataTypes";
 import InformationPopup from "../../Common/InformationPopup";
+import { isElectron } from "../../utils/runtime";
 
 const MAX_FILE_BYTES = 300 * 1024 * 1024;
 
@@ -911,7 +912,7 @@ const CommonAttachment = forwardRef<CommonAttachmentHandle, CommonAttachmentProp
     return (
         <>
             <StyledTable className="po-attachments">
-                {activeTab !== 'vessel' && (
+                {activeTab !== 'vessel' && !isElectron() && (
                     <div className="upload-section col-lg-12 mb-3">
                         <Dropzone
                             onDrop={handleDrop}

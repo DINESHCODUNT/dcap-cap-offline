@@ -110,6 +110,7 @@ const StatutoryCertificates: React.FC<{
     data: any;
     reportData: any;
     isOfflineProject?: boolean;
+    readOnly?: boolean;
     onPortChange?: (newPort: string) => void;
     onReportNoChange?: (newReportNo: string) => void;
     onReportDateChange?: (newDate: any) => void;
@@ -117,7 +118,8 @@ const StatutoryCertificates: React.FC<{
     onFirstVisitDateChange?: (newDate: any) => void;
     onVesselFieldChange?: (field: string, value: any) => void;
     onVesselNameChange?: (vesselName: string) => void;
-}> = ({ reportData, isOfflineProject = false, onVesselFieldChange }) => {
+}> = ({ reportData, isOfflineProject = false, readOnly, onVesselFieldChange }) => {
+    const isLocked = Boolean(readOnly || isOfflineProject);
 
     const [formData, setFormData] = useState<FormData>({
         report_no: "",
@@ -313,7 +315,7 @@ const StatutoryCertificates: React.FC<{
                                                 });
                                                 onVesselFieldChange?.("report_no", value);
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                 </div>
@@ -340,7 +342,7 @@ const StatutoryCertificates: React.FC<{
                                                 });
                                                 onVesselFieldChange?.("port", value);
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                         <DatePickerInput
                                             onChange={(date: any) => {
@@ -349,7 +351,7 @@ const StatutoryCertificates: React.FC<{
                                                 }
                                             }}
                                             value={lastVisitDate}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                 </div>
@@ -400,7 +402,7 @@ const StatutoryCertificates: React.FC<{
                                                     : []
                                             }
                                             placeholder="Select "
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </span>
                                     <input
@@ -423,7 +425,7 @@ const StatutoryCertificates: React.FC<{
                                             });
                                             onVesselFieldChange?.("vessel_name", e.target.value);
                                         }}
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     /><span> of </span>
                                     <span className="text-uppercase _500 certify">
                                         {formData.flag}
@@ -442,7 +444,7 @@ const StatutoryCertificates: React.FC<{
                                                     }
                                                 }}
                                                 value={firstVisitDate}
-                                                disabled={isOfflineProject}
+                                                disabled={isLocked}
                                             />
                                         </span>
                                     </span>
@@ -503,7 +505,7 @@ const StatutoryCertificates: React.FC<{
                                                                             <DatePickerInput
                                                                                 value={parseDate(currentDate)}
                                                                                 onChange={(val: Date) => handleDateChange(field.id, val)}
-                                                                                disabled={isOfflineProject}
+                                                                                disabled={isLocked}
                                                                             />
                                                                         </div>
 
