@@ -3,7 +3,7 @@ import { BUTTONS, Button, Input, Label, AbsSelect } from "customer_portal-ui-sha
 import * as Icon from "react-bootstrap-icons";
 import FormAttachment from "./Attachment";
 import * as surveyReportService from '../../service/SurveyReportService';
-import InformationPopup from '../../Common/InformationPopup';
+import { usePopup } from '../../Common/PopupProvider';
 
 type FormData = {
     description: string;
@@ -88,11 +88,8 @@ const UploadTankImage: React.FC<Props> = ({ activeTank, projectId, tanks, onNavi
                 String(formData.description)
         )?.text;
 
+    const popup = usePopup();
     const [clearFile, setClearFile] = useState(false);
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
-
-    const [popupPageName, setPopupPageName] = useState<string>();
-
     const [error, setError] = useState(false);
     const [clearingImage, setClearingImage] = useState(false);
 
@@ -415,12 +412,10 @@ const UploadTankImage: React.FC<Props> = ({ activeTank, projectId, tanks, onNavi
                 }, 100);
             }
 
-            setPopupPageName("UploadFile");
-
-            setShowInfoPopup(true);
-
-        } catch (err) {
-
+            await popup.success("File has been uploaded successfully.", "Upload File");
+            onClose();
+        } catch (err: any) {
+            popup.error({ message: err?.message || "Failed to upload file." });
         }
     };
 
@@ -666,19 +661,6 @@ const UploadTankImage: React.FC<Props> = ({ activeTank, projectId, tanks, onNavi
                 </div>
 
             </div>
-            {showInfoPopup && (
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    pageName={popupPageName}
-                    onClose={() => {
-                        setShowInfoPopup(false);
-                        setPopupPageName(undefined);
-                        if (popupPageName === "UploadFile") {
-                            onClose();
-                        }
-                    }}
-                />
-            )}
         </div>
 
     );

@@ -16,8 +16,7 @@ import BulkImageUpload from './BulkImageUpload';
 import ReportContentListView from './ReportContentListView';
 import Spinner from 'react-bootstrap/Spinner';
 import * as surveyReportService from '../../service/SurveyReportService';
-import ConfirmationPopup from '../../Common/ConfirmationPopup';
-import InformationPopup from '../../Common/InformationPopup';
+import { usePopup } from '../../Common/PopupProvider';
 import { getPartDisplayLabel, findPartInGrid, getPartNameFromGrid } from './partUtils';
 import { isElectron } from '../../utils/runtime';
 import { usePermissions } from '../../context/PermissionContext';
@@ -418,16 +417,11 @@ const ReportContent: React.FC<ReportContentProps> = ({
         }
     };
 
-    const [showDeletePopup, setShowDeletePopup] = useState(false);
-    const [selectedDeleteTank, setSelectedDeleteTank] = useState<any>(null);
-
-    const [deleteLoading, setDeleteLoading] = useState(false);
+    const popup = usePopup();
     const tooltipRef = useRef<HTMLDivElement>(null);
 
     const sideDialog = useContext(SideDialogManagerContext) as any;
     const id = _uniqueId("sideDialog_");
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
-    const [popupPageName, setPopupPageName] = useState<string>();
 
     const sections = useMemo(() => {
         if (!data) return [];
@@ -1180,56 +1174,74 @@ const ReportContent: React.FC<ReportContentProps> = ({
     const totalCount =
         tanks.length;
 
-    const handleDeleteImage = async () => {
+    const confirmDeleteImage = (tankToDelete: any) => {
+        if (!tankToDelete) return;
 
-        if (!selectedDeleteTank)
-            return;
-
-        try {
-            setDeleteLoading(true);
-
-            const isTankSection = toArray(
-                reportData?.tankReportView?.sections ?? reportData?.template?.tankReportView?.sections
-            ).some((tank: any) =>
-                [tank?.sectionMappingId, tank?.sectionId, tank?.id]
-                    .filter(Boolean)
-                    .map(String)
-                    .map(s => s.trim().toLowerCase())
-                    .includes(String(selectedDeleteTank.sectionId).trim().toLowerCase())
-            );
-
-            if (isTankSection) {
-                await surveyReportService.deleteTankCardImage({
-                    templateId: selectedDeleteTank.templateId ?? 0,
-                    projectId: projectId,
-                    sectionId: selectedDeleteTank.sectionId,
-                    cardNumber: selectedDeleteTank.cardId,
-                    imageId: Number(selectedDeleteTank.imageId ?? 0),
-                });
-            } else if (isNewProject) {
-                await surveyReportService.deleteGenericImage(
-                    selectedDeleteTank.templateId ?? 0,
-                    projectId,
-                    selectedDeleteTank.sectionId,
-                    selectedDeleteTank.cardId,
-                    Number(selectedDeleteTank.imageId ?? 0)
+        popup.confirmAsync({
+            title: "Delete Image",
+            message: "Are you sure you want to delete this image?",
+            confirmButtonText: "Yes",
+            cancelButtonText: "Cancel",
+            danger: true,
+            onConfirm: async () => {
+                const isTankSection = toArray(
+                    reportData?.tankReportView?.sections ?? reportData?.template?.tankReportView?.sections
+                ).some((tank: any) =>
+                    [tank?.sectionMappingId, tank?.sectionId, tank?.id]
+                        .filter(Boolean)
+                        .map(String)
+                        .map(s => s.trim().toLowerCase())
+                        .includes(String(tankToDelete.sectionId).trim().toLowerCase())
                 );
-            } else {
-                await surveyReportService.deleteImage({
-                    templateId: selectedDeleteTank.templateId,
-                    projectId: projectId,
-                    sectionId: selectedDeleteTank.sectionId,
-                    cardId: selectedDeleteTank.cardId,
-                    imageId: selectedDeleteTank.imageId,
-                    replaceImage: false
-                });
-            }
 
-            setTanks(prev =>
-                prev.map(t =>
-                    t.id === selectedDeleteTank.id
+                if (isTankSection) {
+                    await surveyReportService.deleteTankCardImage({
+                        templateId: tankToDelete.templateId ?? 0,
+                        projectId: projectId,
+                        sectionId: tankToDelete.sectionId,
+                        cardNumber: tankToDelete.cardId,
+                        imageId: Number(tankToDelete.imageId ?? 0),
+                    });
+                } else if (isNewProject) {
+                    await surveyReportService.deleteGenericImage(
+                        tankToDelete.templateId ?? 0,
+                        projectId,
+                        tankToDelete.sectionId,
+                        tankToDelete.cardId,
+                        Number(tankToDelete.imageId ?? 0)
+                    );
+                } else {
+                    await surveyReportService.deleteImage({
+                        templateId: tankToDelete.templateId,
+                        projectId: projectId,
+                        sectionId: tankToDelete.sectionId,
+                        cardId: tankToDelete.cardId,
+                        imageId: tankToDelete.imageId,
+                        replaceImage: false
+                    });
+                }
+
+                setTanks(prev =>
+                    prev.map(t =>
+                        t.id === tankToDelete.id
+                            ? {
+                                ...t,
+                                hasImage: false,
+                                imageUrl: null,
+                                imageId: 0,
+                                descriptionId: "",
+                                descriptionText: "",
+                                additionalDescription: "",
+                                selectedCondition: ""
+                            }
+                            : t
+                    )
+                );
+
+                setActiveTank(prev =>
+                    prev && prev.id === tankToDelete.id
                         ? {
-                            ...t,
+                            ...prev,
                             hasImage: false,
                             imageUrl: null,
                             imageId: 0,
@@ -1238,37 +1250,12 @@ const ReportContent: React.FC<ReportContentProps> = ({
                             additionalDescription: "",
                             selectedCondition: ""
                         }
-                        : t
-                )
-            );
+                        : prev
+                );
 
-            setShowDeletePopup(false);
-
-            setActiveTank(prev =>
-                prev && prev.id === selectedDeleteTank.id
-                    ? {
-                        ...prev,
-                        hasImage: false,
-                        imageUrl: null,
-                        imageId: 0,
-                        descriptionId: "",
-                        descriptionText: "",
-                        additionalDescription: "",
-                        selectedCondition: ""
-                    }
-                    : prev
-            );
-
-            setPopupPageName("DeleteTankImage");
-
-            setShowInfoPopup(true);
-
-        } catch (err) {
-
-        } finally {
-
-            setDeleteLoading(false);
-        }
+                popup.success("Image has been deleted successfully.", "Delete Image");
+            }
+        }).catch((err: any) => popup.error(err?.response?.data || err?.message || "Unable to delete the image. Please try again.", "Delete Image"));
     };
 
     const closePanel = () => {
@@ -1671,8 +1658,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                     onDeleteImage={(tankId) => {
                                         const tk = tanks.find(t => t.id === tankId);
                                         if (tk) {
-                                            setSelectedDeleteTank(tk);
-                                            setShowDeletePopup(true);
+                                            confirmDeleteImage(tk);
                                         }
                                     }}
                                     onConditionChange={handleConditionChange}
@@ -1735,8 +1721,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                                             title="Remove"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                setSelectedDeleteTank(tank);
-                                                                setShowDeletePopup(true);
+                                                                confirmDeleteImage(tank);
                                                             }}
                                                         >
                                                             <Icon.Trash2 size={20} />
@@ -1828,18 +1813,6 @@ const ReportContent: React.FC<ReportContentProps> = ({
                             container: { backgroundColor: "rgba(0,0,0,0.85)" },
                         }}
                     />
-                    <ConfirmationPopup
-                        onShow={showDeletePopup}
-                        title="Delete Image"
-                        message="Are you sure you want to delete this image?"
-                        confirmText="Yes"
-                        cancelText="Cancel"
-                        loading={deleteLoading}
-                        onClose={() => {
-                            setShowDeletePopup(false);
-                        }}
-                        onConfirm={handleDeleteImage}
-                    />
                 </div>
                 {!isOfflineProject && (
                     <>
@@ -1921,22 +1894,6 @@ const ReportContent: React.FC<ReportContentProps> = ({
                     </>
                 )}
             </div>
-
-            {showInfoPopup && (
-
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    pageName={popupPageName}
-                    onClose={() => {
-
-                        setShowInfoPopup(false);
-                        setPopupPageName(undefined);
-
-                    }}
-                />
-
-            )}
-
         </div>
 
 

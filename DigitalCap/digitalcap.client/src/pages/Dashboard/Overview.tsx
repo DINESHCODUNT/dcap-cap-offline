@@ -1,6 +1,5 @@
 import React, { useContext, useState, useEffect, useCallback } from 'react';
 import { Button, BUTTONS, SideDialogManagerContext, BreadcrumbBar } from "customer_portal-ui-shared";
-import { Modal } from 'react-bootstrap';
 import CreateProject from '../Project/Createproject';
 import _uniqueId from "lodash/uniqueId";
 import ActivityLog from '../Activity/ActivityLog';
@@ -8,6 +7,7 @@ import ProjectList, { type SidebarProjectRow } from '../Project/ProjectList';
 import DashboardWidgets from './DashboardWidgets';
 import ProjectLanding from '../Project/ProjectLanding';
 import * as projectService from '../../service/ProjectService';
+import { usePopup } from '../../Common/PopupProvider';
 import * as userPermissionService from "../../service/UserPermissionService";
 import { useLocation } from 'react-router-dom';
 import { isElectron } from '../../utils/runtime';
@@ -45,11 +45,11 @@ function downloadCsv(rows: Array<Record<string, string>>, filename: string): voi
 }
 
 const Overview: React.FC = () => {
+    const popup = usePopup();
     const location = useLocation();
     const sideDialog = useContext(SideDialogManagerContext) as any;
     const [selectedProject, setSelectedProject] = React.useState<SidebarProjectRow | null>(null);
     const [refreshTrigger, setRefreshTrigger] = React.useState<number>(0);
-    const [showCancelModal, setShowCancelModal] = React.useState(false);
     const [cancelSubmitting, setCancelSubmitting] = React.useState(false);
     const [sidebarStats, setSidebarStats] = React.useState<projectService.ProjectSidebarStatsAggregate | null>(null);
     const [statusChartStats, setStatusChartStats] = React.useState<projectService.ProjectSidebarStatsAggregate | null>(null);
@@ -223,21 +223,31 @@ const Overview: React.FC = () => {
                         return prev;
                     });
                 }
-            }).catch(e => console.error("Failed to refresh project data", e));
+            }).catch(e => {
+                console.error("Failed to refresh project data", e);
+                popup.error({ message: "Failed to refresh project data." });
+            });
         }
-    }, [refreshTrigger, selectedProject?.id]);
+    }, [refreshTrigger, selectedProject?.id, popup]);
 
     const handleBack = useCallback(() => setSelectedProject(null), []);
 
     const handleCancelProject = async () => {
         if (!selectedProject?.id) return;
+        const confirmed = await popup.confirm({
+            title: "Cancel Project",
+            message: "Are you sure you want to proceed with cancelling this project?",
+            confirmText: "Yes, Proceed"
+        });
+        if (!confirmed) return;
+
         setCancelSubmitting(true);
         try {
             await projectService.postProjectLifecycleAction("cancel", selectedProject.id);
-            setShowCancelModal(false);
             handleProjectsChanged();
             setSelectedProject({ ...selectedProject, projectStatusName: "Cancelled" } as any);
-        } catch (e) {
+        } catch (e: any) {
+            popup.error({ message: e?.message || "Failed to cancel project." });
         } finally {
             setCancelSubmitting(false);
         }
@@ -256,7 +266,7 @@ const Overview: React.FC = () => {
                                 ← Back
                             </Button>
                             {!isElectron() && String(selectedProject.projectStatusName).toLowerCase() !== "cancelled" && (
-                                <Button onClick={() => setShowCancelModal(true)}>
+                                <Button onClick={handleCancelProject} disabled={cancelSubmitting}>
                                     Cancel Project
                                 </Button>
                             )}
@@ -357,38 +367,6 @@ const Overview: React.FC = () => {
                     </div>
                 )}
             </div>
-
-            <Modal
-                show={showCancelModal}
-                onHide={() => !cancelSubmitting && setShowCancelModal(false)}
-                centered
-                backdrop="static"
-            >
-                <Modal.Header closeButton>
-                    <Modal.Title>Cancel Project</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    Are you sure you want to proceed with cancelling this project?
-                </Modal.Body>
-                <Modal.Footer className="gap-2">
-                    <Button
-                        type="button"
-                        variant={BUTTONS.SECONDARY}
-                        disabled={cancelSubmitting}
-                        onClick={() => setShowCancelModal(false)}
-                    >
-                        No
-                    </Button>
-                    <Button
-                        type="button"
-                        variant={BUTTONS.PRIMARY}
-                        disabled={cancelSubmitting}
-                        onClick={handleCancelProject}
-                    >
-                        {cancelSubmitting ? "Please wait..." : "Yes"}
-                    </Button>
-                </Modal.Footer>
-            </Modal>
         </>
 
     );

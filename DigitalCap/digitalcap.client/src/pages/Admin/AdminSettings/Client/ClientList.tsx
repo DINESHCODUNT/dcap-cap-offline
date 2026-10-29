@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { Button, AbsReactTable, BUTTONS, Divider, Input, TextArea, AbsSearch, Label, SideDialogManagerContext } from "customer_portal-ui-shared";
 import * as Icon from 'react-bootstrap-icons';
 import _uniqueId from "lodash/uniqueId";
-import InformationPopup from '../../../../Common/InformationPopup';
 import * as clientProfileService from '../../../../service/ClientProfileService';
-import { Modal, Offcanvas, Spinner } from 'react-bootstrap';
+import { Offcanvas, Spinner } from 'react-bootstrap';
+import { usePopup } from '../../../../Common/PopupProvider';
+import { resultMessage } from '../../../../Common/UtilityMessage';
 import ClientDetails from './ClientDetails';
 import { usePermissions } from '../../../../context/PermissionContext';
 import { PERMISSIONS } from '../../../../constants/permissions';
@@ -35,19 +36,15 @@ type FormData = {
 
 
 const ClientList: React.FC = () => {
+    const popup = usePopup();
     const [val, updateVal] = React.useState<string>("");
     const [searchApplied, updateSearchApplied] = React.useState<string | null>(null);
     const [createclient, setCreateclient] = React.useState<boolean>();
-    const [deleteModel, setDeleteModel] = React.useState<boolean>();
     const [data, setData] = React.useState<ManageClientRow[]>([]);
     const [loading, setLoading] = React.useState<boolean>(true);
     const [dataCount, setDataCount] = useState(0);
     const [clientFilter, setClientFilter] = useState<ManageClientRow[]>([]);
-    const [selectedClientId, setSelectedClientId] = React.useState<string>("");
-    const [deletingClient, setDeletingClient] = React.useState<ManageClientRow | null>(null);
     const [isSaving, setIsSaving] = React.useState<boolean>(false);
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
-    const [popupPageName, setPopupPageName] = useState<string | undefined>();
     const [editingClientId, setEditingClientId] = React.useState<string | null>(null);
     const [formErrors, setFormErrors] = React.useState<{ [key: string]: string }>({});
     const { hasGlobalPermission } = usePermissions();
@@ -112,9 +109,6 @@ const ClientList: React.FC = () => {
             status: "Active",
             activation_status: true
         });
-
-        setSelectedClientId("");
-        setDeletingClient(null);
 
         setEditingClientId(null);
 
@@ -323,32 +317,29 @@ const ClientList: React.FC = () => {
     };
 
 
-    const handleDeleteClick = (row: ManageClientRow) => {
-        setSelectedClientId(row.id);
-        setDeletingClient(row);
-        setDeleteModel(true);
-    };
-
-
-
-    const handleConfirmDelete = async () => {
+    const handleDeleteClick = async (row: ManageClientRow) => {
+        const confirmed = await popup.confirm({
+            title: "Delete Client",
+            message: `Are you sure you want to delete ${row?.client_name} Client?`,
+            confirmText: "Delete",
+            danger: true
+        });
+        if (!confirmed) return;
 
         setIsSaving(true);
-
         try {
-            await clientProfileService.deleteClientProfile(selectedClientId);
-
-            setDeleteModel(false);
-            setPopupPageName("DeleteClientProfile");
-            setShowInfoPopup(true);
-
-            fetchClientProfiles();
-        } catch (err) {
+            await clientProfileService.deleteClientProfile(row.id);
+            await fetchClientProfiles();
+            popup.success({
+                title: "Delete Client",
+                message: resultMessage(row.client_name || "Client", "Deleted")
+            });
+        } catch (err: any) {
+            popup.error({ message: err?.message || "Failed to delete client." });
         } finally {
             setIsSaving(false);
         }
     };
-
 
     const handleEditClient = async (row: ManageClientRow) => {
         setEditingClientId(row.id);
@@ -375,6 +366,9 @@ const ClientList: React.FC = () => {
 
         setIsSaving(true);
 
+        const isEdit = !!editingClientId;
+        const clientName = formData.company_name || formData.client_name;
+
         try {
             if (editingClientId) {
                 await clientProfileService.editClientProfile({
@@ -385,7 +379,6 @@ const ClientList: React.FC = () => {
                     companyBillingEmail: formData.company_email?.trim() || undefined,
                     companyBillingSystemURL: formData.billing_url?.trim() || undefined,
                 });
-                setPopupPageName("EditClientProfile");
             } else {
                 await clientProfileService.createClientProfile({
                     wcn: formData.wcn,
@@ -394,18 +387,21 @@ const ClientList: React.FC = () => {
                     companyBillingEmail: formData.company_email,
                     companyBillingSystemURL: formData.billing_url,
                 });
-                setPopupPageName("CreateClientProfile");
             }
 
-            setShowInfoPopup(true);
             setCreateclient(false);
             resetForm();
             await fetchClientProfiles();
-
+            popup.success({
+                title: isEdit ? "Edit Client" : "Create Client",
+                message: resultMessage(clientName || "Client", isEdit ? "Updated" : "Created")
+            });
 
         } catch (err: any) {
             if (err.response?.data?.message === "Duplicate WCN") {
                 setFormErrors({ wcn: "This WCN already exists" });
+            } else {
+                popup.error({ message: err?.message || `Failed to ${isEdit ? 'update' : 'create'} client.` });
             }
         } finally {
             setIsSaving(false);
@@ -780,53 +776,8 @@ const ClientList: React.FC = () => {
                     </div>
                 </Offcanvas.Body>
             </Offcanvas>
-
-
-            <Modal show={deleteModel} size="lg" centered onHide={() => { setDeleteModel(false); resetForm(); }} animation={false} backdrop="static">
-                <Modal.Header closeButton>
-                    <Modal.Title>Delete Client</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <div className="row">
-                        <div className="col-md-12">
-                            <div className="d-flex justify-content-center align-items-center flex-column">
-                                <div className="delete-icon-wrapper mb-4">
-                                    <Icon.Trash size={24} />
-                                </div>
-                                <p className='_500 tx-14'>
-                                    Are you sure you want to delete <b>{deletingClient?.client_name}</b> Client?
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </Modal.Body>
-                <Modal.Footer className='gap-3'>
-                    <Button variant={BUTTONS.SECONDARY} onClick={() => { setDeleteModel(false); resetForm(); }}>
-                        Cancel
-                    </Button>
-                    <Button variant={BUTTONS.PRIMARY} onClick={handleConfirmDelete} disabled={isSaving || !selectedClientId}>
-                        Delete
-                    </Button>
-                </Modal.Footer>
-            </Modal>
-
-            {showInfoPopup && (
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    onClose={() => {
-                        setShowInfoPopup(false);
-                        resetForm();
-                    }}
-                    pageName={popupPageName}
-
-                />
-            )}
-
         </>
-
-
     );
 };
-
 
 export default ClientList;

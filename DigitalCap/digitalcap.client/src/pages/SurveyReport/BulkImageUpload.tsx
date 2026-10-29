@@ -3,7 +3,7 @@ import { SideDialog, Button, BUTTONS, SideDialogManagerContext } from "customer_
 import * as Icon from "react-bootstrap-icons";
 import ImageAttachment from "./ImageAttachment";
 import * as surveyReportService from "../../service/SurveyReportService";
-import InformationPopup from '../../Common/InformationPopup';
+import { usePopup } from '../../Common/PopupProvider';
 
 const BulkImageUpload: React.FC<{
     id: string,
@@ -19,10 +19,9 @@ const BulkImageUpload: React.FC<{
 }> = ({ id, fileNameOptions, descriptionOptions, reportSectionOptions, conditionOptions, projectId, templateId, onUploadSuccess, isNewProject }) => {
 
     const sideDialog = useContext(SideDialogManagerContext) as any;
+    const popup = usePopup();
     const [attachmentList, setAttachmentList] = useState<any[]>([]);
     const [errors, setErrors] = useState<any>({});
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
-    const [popupPageName, setPopupPageName] = useState<string>();
     const [isUploading, setIsUploading] = useState(false);
     const handleClose = () => {
         sideDialog.removeDialog(id);
@@ -194,13 +193,9 @@ const BulkImageUpload: React.FC<{
             }
             await onUploadSuccess();
             sideDialog.removeDialog(id);
-
-            setTimeout(() => {
-                setPopupPageName("UploadFile");
-                setShowInfoPopup(true);
-            }, 300);
-
-        } catch (err) {
+            popup.success("File has been uploaded successfully.", "Upload File");
+        } catch (err: any) {
+            popup.error({ message: err?.message || "Failed to upload images." });
         } finally {
             setIsUploading(false);
         }
@@ -259,19 +254,6 @@ const BulkImageUpload: React.FC<{
                             Cancel
                         </Button>
                     </div>
-
-                    {showInfoPopup && (
-                        <InformationPopup
-                            onShow={showInfoPopup}
-                            pageName={popupPageName}
-                            onClose={() => {
-                                setShowInfoPopup(false);
-                                setPopupPageName(undefined);
-
-                                handleClose();
-                            }}
-                        />
-                    )}
                 </>
             )}
         </SideDialog>

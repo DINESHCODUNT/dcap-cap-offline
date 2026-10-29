@@ -10,7 +10,7 @@ import { Modal } from 'react-bootstrap';
 import { Button, BUTTONS } from 'customer_portal-ui-shared';
 import ChangePassword from '../Common/ChangePassword';
 import AddUser, { type CapUser } from '../pages/Admin/AdminSettings/Users/AddUser';
-import InformationPopup from '../Common/InformationPopup';
+import { usePopup } from '../Common/PopupProvider';
 import * as absUserService from '../service/AbsUserService';
 import { usePermissions } from '../context/PermissionContext';
 import OnlineStatusBadge from '../components/OnlineStatusBadge';
@@ -26,12 +26,11 @@ const Header: React.FC = () => {
         account?.name ||
         account?.username ||
         'User';
+    const popup = usePopup();
     const [showContactModal, setShowContactModal] = React.useState(false);
     const [showMyProfile, setShowMyProfile] = React.useState(false);
     const [myProfileUser, setMyProfileUser] = React.useState<CapUser | null>(null);
     const [loadingMyProfile, setLoadingMyProfile] = React.useState(false);
-    const [showProfilePopup, setShowProfilePopup] = React.useState(false);
-    const [profilePopupMessage, setProfilePopupMessage] = React.useState("");
     const [isDownloadingDB, setIsDownloadingDB] = React.useState(false);
 
     const handleDownloadDB = async () => {
@@ -50,7 +49,7 @@ const Header: React.FC = () => {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
         } catch (error) {
-            alert('Error occurred while backing up database.');
+            popup.error('Error occurred while backing up database.');
             console.error(error);
         } finally {
             setIsDownloadingDB(false);
@@ -65,8 +64,7 @@ const Header: React.FC = () => {
     const handleMyProfile = async () => {
         const email = getCurrentUserEmail();
         if (!email) {
-            setProfilePopupMessage("Unable to identify current user");
-            setShowProfilePopup(true);
+            popup.error("Unable to identify current user");
             return;
         }
 
@@ -87,16 +85,14 @@ const Header: React.FC = () => {
             );
 
             if (!match) {
-                setProfilePopupMessage("Failed to load profile");
-                setShowProfilePopup(true);
+                popup.error("Failed to load profile");
                 return;
             }
 
             setMyProfileUser(match);
             setShowMyProfile(true);
         } catch (error) {
-            setProfilePopupMessage("Failed to load profile");
-            setShowProfilePopup(true);
+            popup.error("Failed to load profile");
         } finally {
             setLoadingMyProfile(false);
         }
@@ -340,27 +336,16 @@ const Header: React.FC = () => {
                 onSaved={async () => {
                     setShowMyProfile(false);
                     setMyProfileUser(null);
-                    setProfilePopupMessage("");
-                    setShowProfilePopup(true);
+                    popup.success("User updated successfully.", "Update User");
                     await reloadPermissions();
                 }}
                 onError={(message) => {
-                    setProfilePopupMessage(message);
-                    setShowProfilePopup(true);
+                    popup.error(message || "Failed to update profile.");
                 }}
                 isClientUsers={false}
                 isMyProfile={true}
                 editUser={myProfileUser}
             />
-
-            {showProfilePopup && (
-                <InformationPopup
-                    onShow={showProfilePopup}
-                    onClose={() => setShowProfilePopup(false)}
-                    pageName={profilePopupMessage ? undefined : "UpdateUser"}
-                    message={profilePopupMessage}
-                />
-            )}
         </>
     );
 };

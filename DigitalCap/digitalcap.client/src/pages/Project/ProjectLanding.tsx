@@ -1,9 +1,10 @@
 import axios from 'axios';
 import React, { useState, useEffect } from 'react';
-import { Spinner, Modal } from "react-bootstrap";
+import { Spinner } from "react-bootstrap";
 import * as Icon from "react-bootstrap-icons";
 import * as projectService from '../../service/ProjectService';
 import type { ProjectLifecycleAction, SynchedOnlineContact } from '../../service/ProjectService';
+import { usePopup } from '../../Common/PopupProvider';
 import moment from 'moment';
 import { getRelativeTime } from '../../utils/dateTime';
 import { TextField, Tab, Button, BUTTONS } from "customer_portal-ui-shared";
@@ -158,11 +159,10 @@ function isElectronShell(): boolean {
 }
 
 const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit, onProjectsChanged, globalPermission, initialTab = 0 }) => {
+    const popup = usePopup();
     const [detail, setDetail] = useState<ProjectDetail | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
     const [activeTab, setActiveTab] = React.useState<number>(initialTab);
-    const [lifecycleModal, setLifecycleModal] = useState<ProjectLifecycleAction | null>(null);
-    const [lifecycleSubmitting, setLifecycleSubmitting] = useState(false);
     const [detailReloadNonce, setDetailReloadNonce] = useState(0);
     const [synchedOnlineContact, setSynchedOnlineContact] = useState<SynchedOnlineContact | null>(null);
     const [showDiscardOfflineWarning, setShowDiscardOfflineWarning] = useState(false);
@@ -381,22 +381,39 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
         }
     }, [project.id, project.isReadOnlyEnabled, (detail as any)?.isReadOnlyEnabled, loading, detailReloadNonce]);
 
-    const runLifecycleAction = async (action: ProjectLifecycleAction) => {
+    const confirmLifecycleAction = async (action: ProjectLifecycleAction) => {
         if (!project.id) return;
-        setLifecycleSubmitting(true);
+        const title = action === "close"
+            ? "Close Project"
+            : action === "cancel"
+                ? "Cancel Project"
+                : "Delete Project";
+        const message = action === "close"
+            ? "Are you sure you want to proceed with closing this project?"
+            : action === "cancel"
+                ? "Are you sure you want to proceed with cancelling this project?"
+                : "Are you sure you want to proceed with deleting this project?";
+
+        const isDelete = action === "delete";
+
+        const confirmed = await popup.confirm({
+            title,
+            message,
+            confirmText: isDelete ? "Delete" : "Yes, Proceed",
+            danger: isDelete
+        });
+        if (!confirmed) return;
+
         try {
             await projectService.postProjectLifecycleAction(action, project.id);
-
-            setLifecycleModal(null);
             onProjectsChanged?.();
             if (action === "delete") {
                 onBack();
             } else {
                 setDetailReloadNonce((n) => n + 1);
             }
-        } catch (e) {
-        } finally {
-            setLifecycleSubmitting(false);
+        } catch (e: any) {
+            popup.error({ message: e?.message || `Failed to ${action} project.` });
         }
     };
 
@@ -490,7 +507,7 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
                                                     {/* Create Reassessment moved to Overview */}
 
                                                     {!isElectron() && isReadyForClosure && globalPermission("AbsProjectLandingPageCloseButton") && (
-                                                        <Button onClick={() => setLifecycleModal("close")}>
+                                                        <Button onClick={() => confirmLifecycleAction("close")}>
                                                             Close Project
                                                         </Button>
                                                     )}
@@ -515,7 +532,7 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
                                                         <Button
                                                             variant={BUTTONS.TABLEDOWNLOAD}
                                                             startIcon={<Icon.Trash />}
-                                                            onClick={() => setLifecycleModal("delete")}
+                                                            onClick={() => confirmLifecycleAction("delete")}
                                                             aria-label="Delete project"
                                                         />
                                                     )}
@@ -601,48 +618,6 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
                     />
                 </div>
             </div>
-
-            <Modal
-                show={lifecycleModal != null}
-                onHide={() => !lifecycleSubmitting && setLifecycleModal(null)}
-                centered
-                backdrop="static"
-            >
-                <Modal.Header closeButton>
-                    <Modal.Title>
-                        {lifecycleModal === "close" && "Close Project"}
-                        {lifecycleModal === "cancel" && "Cancel Project"}
-                        {lifecycleModal === "delete" && "Delete Project"}
-                    </Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    {lifecycleModal === "close" &&
-                        "Are you sure you want to proceed with closing this project?"}
-                    {lifecycleModal === "cancel" &&
-                        "Are you sure you want to proceed with cancelling this project?"}
-                    {lifecycleModal === "delete" &&
-                        "Are you sure you want to proceed with deleting this project?"}
-                </Modal.Body>
-                <Modal.Footer className="gap-2">
-                    <Button
-                        type="button"
-                        variant={BUTTONS.SECONDARY}
-                        disabled={lifecycleSubmitting}
-                        onClick={() => setLifecycleModal(null)}
-                    >
-                        No
-                    </Button>
-                    <Button
-                        type="button"
-                        variant={BUTTONS.PRIMARY}
-                        disabled={lifecycleSubmitting || !lifecycleModal}
-                        onClick={() => lifecycleModal && void runLifecycleAction(lifecycleModal)}
-                    >
-                        {lifecycleSubmitting ? "Please wait…" : "Yes"}
-                    </Button>
-                </Modal.Footer>
-            </Modal>
-
         </>
     );
 };

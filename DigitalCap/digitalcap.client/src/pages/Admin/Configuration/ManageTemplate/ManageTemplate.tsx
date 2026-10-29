@@ -2,12 +2,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BreadcrumbBar, Button, Tab, BUTTONS, Input, CheckboxInput, Label, AbsSelect, } from "customer_portal-ui-shared";
 import * as Icon from 'react-bootstrap-icons'
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";;
-import { Modal } from 'react-bootstrap';
 import GeneralSection from './GeneralSection';
 import TankSection from './TankSection';
 import * as reportConfigService from '../../../../service/ReportConfigService';
 import * as gradingService from '../../../../service/GradingService';
-import InformationPopup from '../../../../Common/InformationPopup';
+import { usePopup } from '../../../../Common/PopupProvider';
+import { resultMessage } from '../../../../Common/UtilityMessage';
 import DropdownWithSearch from '../../../../Common/DropdownWithSearch';
 
 type FormData = {
@@ -51,6 +51,7 @@ function sortPartsBySequence(partsList: any[]): any[] {
 }
 
 const ManageTemplate: React.FC = () => {
+    const popup = usePopup();
     const addNewSectionRef = useRef<(() => void) | null>(null);
     const tbodyRef = useRef<HTMLTableSectionElement | null>(null);
     const [formData, setFormData] = useState<FormData>({
@@ -65,15 +66,12 @@ const ManageTemplate: React.FC = () => {
     const [normalSections, setNormalSections] = useState<any[]>([]);
     const [tankSections, setTankSections] = useState<any[]>([]);
     const [partOptions, setPartOptions] = useState<SelectOption[]>([]);
-    const [deletepart, setDeletepartModel] = React.useState<boolean>();
     const [activeTab, setActiveTab] = React.useState<number>(0);
     const [vesselOptions, setVesselOptions] = useState<SelectOption[]>([]);
     const [showAddRow, setShowAddRow] = useState(false);
     const [editPartId, setEditPartId] = useState<number | null>(null);
     const [editPart, setEditPart] = useState<any>(null);
     const [selectedPartName, setSelectedPartName] = useState<string>("");
-    const [deletePartData, setDeletePartData] = useState<any>(null);
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
     const [newPart, setNewPart] = useState({
         sequenceNo: "",
         partName: "",
@@ -82,10 +80,6 @@ const ManageTemplate: React.FC = () => {
     const [error, setError] = React.useState<boolean>(false);
     const [partNameError, setPartNameError] = useState<string>("");
     const [partIdError, setPartIdError] = useState<string>("");
-    const [popupPageName, setPopupPageName] = useState<string | undefined>();
-    const [popupPageName_Save, setPopupPageName_Save] = useState<string | undefined>();
-    const [popupMessage_Save, setPopupMessage_Save] = useState<string | undefined>();
-    const [showInfoPopup_Save, setShowInfoPopup_Save] = useState(false);
 
     const handleTabClick = (tabIndex: number) => {
         setActiveTab(tabIndex);
@@ -161,18 +155,24 @@ const ManageTemplate: React.FC = () => {
             }]
         };
 
-        await reportConfigService.saveReportTemplateConfig(
-            Number(formData.vesselTypeId),
-            payload as any
-        );
+        const savedPartName = newPart.partName;
+        try {
+            await reportConfigService.saveReportTemplateConfig(
+                Number(formData.vesselTypeId),
+                payload as any
+            );
 
-        setShowAddRow(false);
-        setPopupPageName_Save("SavePart");
-        setPopupMessage_Save(`${newPart.partName} added successfully`);
-        setShowInfoPopup_Save(true);
-        setNewPart({ sequenceNo: "", partName: "", isActive: true });
-        setPartNameError("");
-        onVesselTypeChange(Number(formData.vesselTypeId), true);
+            setShowAddRow(false);
+            setNewPart({ sequenceNo: "", partName: "", isActive: true });
+            setPartNameError("");
+            onVesselTypeChange(Number(formData.vesselTypeId), true);
+            popup.success({
+                title: "Create Part",
+                message: resultMessage(savedPartName || "Part", "Created")
+            });
+        } catch (err: any) {
+            popup.error({ message: err?.message || "Failed to create part." });
+        }
     };
 
     const updatePart = async () => {
@@ -214,22 +214,37 @@ const ManageTemplate: React.FC = () => {
             }]
         };
 
-        await reportConfigService.saveReportTemplateConfig(
-            Number(formData.vesselTypeId),
-            payload
-        );
+        const updatedPartName = editPart.partName;
+        try {
+            await reportConfigService.saveReportTemplateConfig(
+                Number(formData.vesselTypeId),
+                payload
+            );
 
-        setEditPartId(null);
-        setPopupPageName_Save("UpdatePart");
-        setPopupMessage_Save(`${editPart.partName} updated successfully`);
-        setShowInfoPopup_Save(true);
-        setPartNameError("");
-        onVesselTypeChange(Number(formData.vesselTypeId), true);
+            setEditPartId(null);
+            setPartNameError("");
+            onVesselTypeChange(Number(formData.vesselTypeId), true);
+            popup.success({
+                title: "Edit Part",
+                message: resultMessage(updatedPartName || "Part", "Updated")
+            });
+        } catch (err: any) {
+            popup.error({ message: err?.message || "Failed to update part." });
+        }
     };
-    const deletePart = async () => {
-        if (!deletePartData || !formData.vesselTypeId) return;
 
-        const deletedId = deletePartData.vesselTypePartMappingId;
+    const handleDeletePart = async (part: any) => {
+        if (!part || !formData.vesselTypeId) return;
+
+        const confirmed = await popup.confirm({
+            title: "Delete Part",
+            message: `Are you sure you want to delete ${part?.partName} ?`,
+            confirmText: "Delete",
+            danger: true
+        });
+        if (!confirmed) return;
+
+        const deletedId = part.partId;
         const remaining = orderedParts.filter((p) => p.partId !== deletedId);
 
         const reportParts = remaining.map((p: any, index: number) => ({
@@ -244,9 +259,9 @@ const ManageTemplate: React.FC = () => {
         reportParts.push({
             vesselTypePartMappingId: deletedId,
             vesselTypeId: Number(formData.vesselTypeId),
-            partName: deletePartData.partName,
-            sequenceNo: Number(deletePartData.sequenceNo),
-            isActive: deletePartData.isActive,
+            partName: part.partName,
+            sequenceNo: Number(part.sequenceNo),
+            isActive: part.isActive,
             isDeleted: true
         });
 
@@ -258,14 +273,13 @@ const ManageTemplate: React.FC = () => {
                 payload
             );
 
-            setDeletepartModel(false);
-            setPopupPageName("DeletePart");
-            setShowInfoPopup(true);
-
-
-            setDeletePartData(null);
             onVesselTypeChange(Number(formData.vesselTypeId), true);
-        } catch (err) {
+            popup.success({
+                title: "Delete Part",
+                message: resultMessage(part.partName || "Part", "Deleted")
+            });
+        } catch (err: any) {
+            popup.error({ message: err?.message || "Failed to delete part." });
         }
     };
 
@@ -597,17 +611,7 @@ const ManageTemplate: React.FC = () => {
                                                                                     <Button
                                                                                         variant={BUTTONS.TABLEDOWNLOAD}
                                                                                         startIcon={<Icon.TrashFill />}
-                                                                                        onClick={() => {
-                                                                                            setDeletePartData({
-                                                                                                vesselTypePartMappingId: part.partId,
-                                                                                                vesselTypeId: formData.vesselTypeId,
-                                                                                                partName: part.partName,
-                                                                                                sequenceNo: part.sequenceNo,
-                                                                                                isActive: part.isActive,
-                                                                                                isDeleted: true
-                                                                                            });
-                                                                                            setDeletepartModel(true);
-                                                                                        }}
+                                                                                        onClick={() => handleDeletePart(part)}
                                                                                     />
                                                                                 </td>
                                                                             </tr>
@@ -731,54 +735,7 @@ const ManageTemplate: React.FC = () => {
                     </div>
 
                 </div>
-            </div >
-
-            <Modal show={deletepart} size="lg" centered onHide={() => setDeletepartModel(false)} animation={false} backdrop="static">
-                <Modal.Header closeButton>
-                    <Modal.Title>Delete Part</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <div className="row">
-                        <div className="col-md-12">
-                            <div>
-                                <p className='_500 tx-14'>
-                                    Are you sure you want to delete {deletePartData?.partName} ?
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </Modal.Body>
-                <Modal.Footer className='gap-3'>
-                    <Button variant={BUTTONS.SECONDARY} onClick={() => setDeletepartModel(false)}>
-                        Cancel
-                    </Button>
-                    <Button variant={BUTTONS.PRIMARY} onClick={deletePart} >
-                        Delete
-                    </Button>
-
-
-                </Modal.Footer>
-            </Modal>
-            {showInfoPopup && (
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    onClose={() => {
-                        setShowInfoPopup(false);
-                    }}
-                    pageName={popupPageName}
-                />
-            )}
-            {showInfoPopup_Save && (
-                <InformationPopup
-                    show={showInfoPopup_Save}
-                    pageName={popupPageName_Save}
-                    message={popupMessage_Save}
-                    onClose={() => {
-                        setShowInfoPopup_Save(false);
-                        setPopupPageName_Save(undefined);
-                        setPopupMessage_Save(undefined);
-                    }}
-                />)}
+            </div>
         </>
     );
 };

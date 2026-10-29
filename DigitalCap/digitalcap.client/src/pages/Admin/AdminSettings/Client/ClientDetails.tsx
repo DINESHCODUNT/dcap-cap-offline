@@ -6,7 +6,8 @@ import { MemoryRouter } from 'react-router-dom';
 import * as clientProfileService from '../../../../service/ClientProfileService';
 import AddUser from '../Users/AddUser';
 import { ROLES } from '../../../File/appConstants';
-import InformationPopup from '../../../../Common/InformationPopup';
+import { usePopup } from '../../../../Common/PopupProvider';
+import { resultMessage } from '../../../../Common/UtilityMessage';
 import { usePermissions } from '../../../../context/PermissionContext';
 import { PERMISSIONS } from '../../../../constants/permissions';
 
@@ -79,6 +80,7 @@ const applyProjectColumnFilters = (data: any[], activeFilters: Record<string, un
 };
 
 const ClientDetails: React.FC<ClientDetailsProps> = ({ id, clientId }) => {
+    const popup = usePopup();
     const sideDialog = useContext(SideDialogManagerContext);
     const [clientDetails, setClientDetails] = useState<any>(null);
     const [projectHistory, setProjectHistory] = useState<any[]>([]);
@@ -90,9 +92,6 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ id, clientId }) => {
     const [detailsLoading, setDetailsLoading] = useState(false);
     const [showAddUser, setShowAddUser] = useState(false);
     const [addUserContext, setAddUserContext] = useState<{ company: string; clientId: string } | null>(null);
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
-    const [popupPageName, setPopupPageName] = useState<string | undefined>();
-    const [responseMsg, setResponseMsg] = useState<string>("");
     const { hasGlobalPermission } = usePermissions();
     const hasManageClientAdminsPermission = hasGlobalPermission(PERMISSIONS.MANAGE_CLIENT_ADMINS);
 
@@ -227,15 +226,16 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ id, clientId }) => {
     };
 
     const handleAddUserSaved = (action: "CreateUser" | "UpdateUser") => {
-        setPopupPageName(action);
-        setShowInfoPopup(true);
         setShowAddUser(false);
         setAddUserContext(null);
+        popup.success({
+            title: action === "CreateUser" ? "Create User" : "Edit User",
+            message: resultMessage("User", action === "CreateUser" ? "Created" : "Updated")
+        });
     };
 
     const handleAddUserError = (message: string) => {
-        setResponseMsg(message);
-        setShowInfoPopup(true);
+        popup.error({ message });
     };
 
     const handleAddUserHide = () => {
@@ -419,17 +419,6 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ id, clientId }) => {
                         backdropClassName="add-client-admin-offcanvas-backdrop"
                     />
                 </MemoryRouter>
-            )}
-
-            {showInfoPopup && (
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    onClose={() => {
-                        setShowInfoPopup(false);
-                    }}
-                    pageName={popupPageName}
-                    message={responseMsg}
-                />
             )}
         </>
     );

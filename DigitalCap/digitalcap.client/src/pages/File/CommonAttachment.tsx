@@ -2,13 +2,14 @@ import React, { useCallback, useEffect, useImperativeHandle, useMemo, useState, 
 import Dropzone from "react-dropzone";
 import { AbsReactTable, TABLE, Button, AbsSelect, BUTTONS } from "customer_portal-ui-shared";
 import * as Icon from "react-bootstrap-icons";
-import { Modal, Spinner } from "react-bootstrap";
+import { Spinner } from "react-bootstrap";
 import styled from "styled-components";
 import _uniqueId from "lodash/uniqueId";
 import { DROP_CLICK_LABEL, SUPPORT_TYPE_LABEL, dropZoneStyle, mimiTypesAccepted } from "./constants";
 import * as fileService from "../../service/FileService";
 import { FileDataType, isClientDeliverablesType } from "../../constants/fileDataTypes";
-import InformationPopup from "../../Common/InformationPopup";
+import { usePopup } from "../../Common/PopupProvider";
+import { resultMessage } from "../../Common/UtilityMessage";
 import { isElectron } from "../../utils/runtime";
 
 const MAX_FILE_BYTES = 300 * 1024 * 1024;
@@ -149,13 +150,8 @@ const CommonAttachment = forwardRef<CommonAttachmentHandle, CommonAttachmentProp
         dataType: number | null;
         availableForClient: boolean;
     } | null>(null);
+    const popup = usePopup();
     const [savingMeta, setSavingMeta] = useState(false);
-    const [showUploadSuccessPopup, setShowUploadSuccessPopup] = useState(false);
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
-    const [popupPageName, setPopupPageName] = useState<string | undefined>();
-    const [deleteModel, setDeleteModel] = useState(false);
-    const [deletingRow, setDeletingRow] = useState<ServerRow | null>(null);
-    const [deleting, setDeleting] = useState(false);
     const [tableKey, setTableKey] = useState(0);
 
     const initialFilterState = useMemo(
@@ -393,7 +389,10 @@ const CommonAttachment = forwardRef<CommonAttachmentHandle, CommonAttachmentProp
             removePending(row.tempKey);
             await loadServerRows();
             if (!suppressSuccessPopup) {
-                setShowUploadSuccessPopup(true);
+                popup.success({
+                    title: "Upload File",
+                    message: resultMessage(row.fileName || "File", "Uploaded")
+                });
             }
             return true;
         } catch (e) {
@@ -445,25 +444,25 @@ const CommonAttachment = forwardRef<CommonAttachmentHandle, CommonAttachmentProp
         }
     };
 
-    const handleDeleteClick = (row: ServerRow) => {
-        setDeletingRow(row);
-        setDeleteModel(true);
-    };
+    const handleDeleteClick = async (row: ServerRow) => {
+        const confirmed = await popup.confirm({
+            title: "Delete File",
+            message: `Are you sure you want to delete ${row.fileName}?`,
+            confirmText: "Delete",
+            danger: true
+        });
+        if (!confirmed) return;
 
-    const handleConfirmDelete = async () => {
-        if (!deletingRow) return;
-        setDeleting(true);
         try {
-            await fileService.deleteProjectFile(deletingRow.id);
-            setDeleteModel(false);
-            setDeletingRow(null);
+            await fileService.deleteProjectFile(row.id);
             await loadServerRows();
-            setPopupPageName("DeleteFile");
-            setShowInfoPopup(true);
-        } catch (e) {
+            popup.success({
+                title: "Delete File",
+                message: resultMessage(row.fileName || "File", "Deleted")
+            });
+        } catch (e: any) {
             setDropErrors(["Could not delete file. Try again."]);
-        } finally {
-            setDeleting(false);
+            popup.error({ message: e?.message || "Could not delete file. Try again." });
         }
     };
 
@@ -959,75 +958,6 @@ const CommonAttachment = forwardRef<CommonAttachmentHandle, CommonAttachmentProp
                     </div>
                 )}
             </StyledTable>
-            <Modal
-                show={deleteModel}
-                size="lg"
-                centered
-                onHide={() => {
-                    if (deleting) return;
-                    setDeleteModel(false);
-                    setDeletingRow(null);
-                }}
-                animation={false}
-                backdrop="static"
-                className="information-popup-modal"
-                backdropClassName="information-popup-backdrop"
-            >
-                <Modal.Header closeButton={!deleting}>
-                    <Modal.Title>Delete File</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <div className="row">
-                        <div className="col-md-12">
-                            <div className="d-flex justify-content-center align-items-center flex-column">
-                                <div className="delete-icon-wrapper mb-4">
-                                    <Icon.Trash size={24} />
-                                </div>
-                                <p className="_500 tx-14">
-                                    Are you sure you want to delete{" "}
-                                    <b>{deletingRow?.fileName ?? "this file"}</b>?
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </Modal.Body>
-                <Modal.Footer className="gap-3">
-                    <Button
-                        variant={BUTTONS.SECONDARY}
-                        disabled={deleting}
-                        onClick={() => {
-                            setDeleteModel(false);
-                            setDeletingRow(null);
-                        }}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        variant={BUTTONS.PRIMARY}
-                        disabled={deleting}
-                        onClick={() => void handleConfirmDelete()}
-                    >
-                        Delete
-                    </Button>
-                </Modal.Footer>
-            </Modal>
-            {showUploadSuccessPopup && (
-                <InformationPopup
-                    onShow={showUploadSuccessPopup}
-                    onClose={() => setShowUploadSuccessPopup(false)}
-                    pageName="UploadFile"
-                />
-            )}
-            {showInfoPopup && (
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    onClose={() => {
-                        setShowInfoPopup(false);
-                        setPopupPageName(undefined);
-                    }}
-                    pageName={popupPageName}
-                />
-            )}
         </>
     );
 });

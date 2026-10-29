@@ -1,117 +1,87 @@
-import React from "react";
+import React from 'react';
 import Modal from 'react-bootstrap/Modal';
+import Spinner from 'react-bootstrap/Spinner';
 import { Button, BUTTONS } from 'customer_portal-ui-shared';
 
-interface ConfirmationPopupProps {
-
-    onShow: boolean;
-
+export interface ConfirmationPopupProps {
+    show?: boolean;
+    onShow?: boolean;
     title?: string;
-
-    message?: string;
-
+    message?: string | React.ReactNode;
     confirmText?: string;
-
     cancelText?: string;
-
+    danger?: boolean;
     loading?: boolean;
-
     onConfirm: () => void;
-
     onClose: () => void;
 }
 
 const ConfirmationPopup: React.FC<ConfirmationPopupProps> = ({
-
+    show,
     onShow,
-
-    title = "Confirmation",
-
+    title = "Confirm",
     message = "Are you sure you want to continue?",
-
-    confirmText = "Confirm",
-
+    confirmText = "Yes, Proceed",
     cancelText = "Cancel",
-
+    danger = false,
     loading = false,
-
     onConfirm,
-
     onClose
-
 }) => {
+    const isVisible = show ?? onShow ?? false;
 
     return (
-
         <Modal
-            size="lg"
-            show={onShow}
+            show={isVisible}
             onHide={onClose}
             centered
-            aria-labelledby="confirmation-popup"
+            backdrop="static"
+            dialogClassName="app-popup"
         >
-
-            {/* HEADER */}
-
             <Modal.Header closeButton>
-
                 <Modal.Title>
-                    {title}
+                    <span>{title}</span>
                 </Modal.Title>
-
             </Modal.Header>
-
-            {/* BODY */}
-
             <Modal.Body>
-
-                <div className="row form-element">
-
-                    <div className="col-md-12">
-
-                        <div className="sub-title">
-
-                            <h5>
-                                {message}
-                            </h5>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
+                {typeof message === 'string' ? (
+                    <p className="app-popup-message">{message}</p>
+                ) : (
+                    message
+                )}
             </Modal.Body>
-
-            {/* FOOTER */}
-
             <Modal.Footer>
-
-                <div className="d-flex justify-content-end fixed-action-btns gap-2">
-
-                    <Button
-                        onClick={onClose}
-                        disabled={loading}
-                        variant={BUTTONS.SECONDARY}
-                    >
-                        {cancelText}
-                    </Button>
-
-                    <Button
-                        disabled={loading}
-                        onClick={onConfirm}
-                    >
-                        {loading
-                            ? "Please wait..."
-                            : confirmText}
-                    </Button>
-
-                </div>
-
+                <Button
+                    variant={BUTTONS.SECONDARY}
+                    onClick={onClose}
+                    disabled={loading}
+                >
+                    {cancelText}
+                </Button>
+                <Button
+                    variant={danger ? "danger" : BUTTONS.PRIMARY}
+                    className={danger ? "btn-danger" : ""}
+                    onClick={onConfirm}
+                    disabled={loading}
+                >
+                    {loading ? (
+                        <>
+                            <Spinner
+                                as="span"
+                                animation="border"
+                                size="sm"
+                                role="status"
+                                aria-hidden="true"
+                                className="me-2"
+                            />
+                            Please wait...
+                        </>
+                    ) : (
+                        confirmText
+                    )}
+                </Button>
             </Modal.Footer>
-
         </Modal>
-
     );
 };
 

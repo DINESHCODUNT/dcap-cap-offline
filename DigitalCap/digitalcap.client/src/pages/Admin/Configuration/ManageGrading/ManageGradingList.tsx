@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { BreadcrumbBar, Button, AbsReactTable, BUTTONS, Divider, Input, AbsSelect, AbsSearch, CheckboxInput, RadioInput, Label } from "customer_portal-ui-shared";
 import * as Icon from 'react-bootstrap-icons';
 import ManageGradingTemplateList from './ManageGradingTemplateList';
-import InformationPopup from '../../../../Common/InformationPopup';
-import { Modal, Offcanvas, Spinner } from 'react-bootstrap';
+import { usePopup } from '../../../../Common/PopupProvider';
+import { resultMessage } from '../../../../Common/UtilityMessage';
+import { Offcanvas, Spinner } from 'react-bootstrap';
 import * as gradingService from '../../../../service/GradingService';
 
 interface ManageGradingRow {
@@ -51,9 +52,9 @@ const ManageGradingList: React.FC = () => {
     }>({});
     const [error, setError] = React.useState<boolean>();
     const [open, setOpen] = React.useState<boolean>();
-    const [deleteModel, setDeleteModel] = React.useState<boolean>();
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
-    const [popupPageName, setPopupPageName] = useState<string | undefined>();
+    const popup = usePopup();
+
+
     const [isSaving, setIsSaving] = useState(false);
     const [responseMsg, setResponseMsg] = React.useState<boolean>();
     const [formErrors, setFormErrors] = React.useState<{ [key: string]: string }>({});
@@ -105,9 +106,9 @@ const ManageGradingList: React.FC = () => {
     const [GradingName, setGradingName] = useState("");
     const [activationStatus, setActivationStatus] = useState<boolean | null>(true);
     const [reportStatus, setReportStatus] = useState<boolean | null>(true);
-    const [deleteGradingId, setDeleteGradingId] = useState<number | null>(null);
-    const [deleteTanktypeId, setDeleteTanktypeId] = useState<number | null>(null);
-    const [deletingGrading, setDeletingGrading] = useState<ManageGradingRow | null>(null);
+
+
+
     useEffect(() => {
         loadGradings();
         restoreFilters();
@@ -294,7 +295,11 @@ const ManageGradingList: React.FC = () => {
 
                 await gradingService.updateGrading(formdata);
 
-                setPopupPageName("UpdateGrading");
+                handleCloseOffcanvas();
+                await popup.success({
+                    title: "Edit Grading",
+                    message: resultMessage(GradingName || "Grading", "Updated")
+                });
             } else {
                 const formdata = {
                     vesselType: formData.vesselText,
@@ -308,10 +313,14 @@ const ManageGradingList: React.FC = () => {
 
                 await gradingService.createGrading(formdata);
 
-                setPopupPageName("CreateGrading");
+                handleCloseOffcanvas();
+                await popup.success({
+                    title: "Create Grading",
+                    message: resultMessage(GradingName || "Grading", "Created")
+                });
             }
 
-            setShowInfoPopup(true);
+
             loadGradings();
         } catch (err) {
         } finally {
@@ -819,27 +828,26 @@ const ManageGradingList: React.FC = () => {
         searchVessels({ filters: {} }, 0, pageSize, undefined, filters);
     }, [appliedFilters.pageSize, searchVessels]);
 
-    const handleDeleteClick = (row: ManageGradingRow) => {
-        setDeleteGradingId(row.gradingId);
-        setDeleteTanktypeId(row.tanktypeId);
-        setDeletingGrading(row);
-        setDeleteModel(true);
-    };
+    const handleDeleteClick = async (row: ManageGradingRow) => {
+        const confirmed = await popup.confirm({
+            title: "Delete Grading",
+            message: `Are you sure you want to delete ${row.gradingName} Grading?`,
+            confirmText: "Delete",
+            danger: true
+        });
 
-
-    const handleConfirmDelete = async () => {
+        if (!confirmed) return;
 
         setIsSaving(true);
-
         try {
-            await gradingService.deleteGrading(deleteGradingId ?? 0, deleteTanktypeId ?? 0);
-
-            setDeleteModel(false);
-            setPopupPageName("DeleteGrading");
-            setShowInfoPopup(true);
-
+            await gradingService.deleteGrading(row.gradingId ?? 0, row.tanktypeId ?? 0);
+            await popup.success({
+                title: "Delete Grading",
+                message: resultMessage(row.gradingName || "Grading", "Deleted")
+            });
             loadGradings();
-        } catch (err) {
+        } catch (err: any) {
+            popup.error({ message: err?.message || "Failed to delete grading" });
         } finally {
             setIsSaving(false);
         }
@@ -1231,44 +1239,7 @@ const ManageGradingList: React.FC = () => {
                     </div>
                 </Offcanvas.Body>
             </Offcanvas>
-            <Modal show={deleteModel} size="lg" centered onHide={() => setDeleteModel(false)} animation={false} backdrop="static">
-                <Modal.Header closeButton>
-                    <Modal.Title>Delete Grading</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <div className="row">
-                        <div className="col-md-12">
-                            <div className="d-flex justify-content-center align-items-center flex-column">
-                                <div className="delete-icon-wrapper mb-4">
-                                    <Icon.Trash size={24} />
-                                </div>
-                                <p className='_500 tx-14'>
-                                    Are you sure you want to delete <b> {deletingGrading?.gradingName}</b> Grading?
 
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </Modal.Body>                <Modal.Footer className='gap-3'>
-                    <Button variant={BUTTONS.SECONDARY} onClick={() => setDeleteModel(false)}>
-                        Cancel
-                    </Button>
-                    <Button variant={BUTTONS.PRIMARY} onClick={handleConfirmDelete}>
-                        Delete
-                    </Button>
-
-                </Modal.Footer>
-            </Modal>
-            {showInfoPopup && (
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    onClose={() => {
-                        setShowInfoPopup(false);
-                        handleCloseOffcanvas();
-                    }}
-                    pageName={popupPageName}
-                />
-            )}
 
         </>
     );

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { BreadcrumbBar, Button, AbsReactTable, BUTTONS, Divider, Input, AbsSelect, AbsSearch, RadioInput, Label } from "customer_portal-ui-shared";
 import * as Icon from 'react-bootstrap-icons';
 import ManageDescriptionTemplateList from './ManageDescTemplateList';
-import InformationPopup from '../../../../Common/InformationPopup';
+import { usePopup } from '../../../../Common/PopupProvider';
+import { resultMessage } from '../../../../Common/UtilityMessage';
 import { Offcanvas, Spinner } from 'react-bootstrap';
 import * as descriptionService from '../../../../service/DescriptionService';
 import * as gradingService from '../../../../service/GradingService';
@@ -39,6 +40,7 @@ type SelectOption = {
     value: number | string;
 };
 const ManageDescriptionList: React.FC = () => {
+    const popup = usePopup();
     const [showMobileSidebar, setShowMobileSidebar] = useState(false);
     const [val, updateVal] = React.useState<string>("");
     const [searchApplied, updateSearchApplied] = React.useState<string | null>(null);
@@ -54,8 +56,6 @@ const ManageDescriptionList: React.FC = () => {
     }>({});
     const [error, setError] = React.useState<boolean>();
     const [open, setOpen] = React.useState<boolean>();
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
-    const [popupPageName, setPopupPageName] = useState<string | undefined>();
     const [formData, setFormData] = useState<FormData>({
         vesselValue: null,
         vesselText: "",
@@ -176,6 +176,7 @@ const ManageDescriptionList: React.FC = () => {
             isActive: activationStatus === true,
         };
 
+        const descName = DescriptionName;
         try {
             if (editingDescriptionId) {
                 await descriptionService.getEditDescriptionById({
@@ -184,17 +185,17 @@ const ManageDescriptionList: React.FC = () => {
                 } as any);
             } else {
                 await descriptionService.addNewDescription(payload as any);
-
-                setPopupPageName("CreateDescription");
-
             }
-            setShowInfoPopup(true);
             await reloadAllData();
 
             resetForm();
             setOpen(false);
-
-        } catch (err) {
+            popup.success({
+                title: "Create Description",
+                message: resultMessage(descName || "Description", "Created")
+            });
+        } catch (err: any) {
+            popup.error({ message: err?.message || "Failed to create description." });
         }
     };
 
@@ -209,18 +210,20 @@ const ManageDescriptionList: React.FC = () => {
             isActive: activationStatus ?? false
         };
 
+        const descName = DescriptionName;
         try {
             await descriptionService.updateDescription(payload as any);
 
-            setPopupPageName("EditDescription");
             setOpen(false);
-
             setEditingDescriptionId(null);
-
-            setShowInfoPopup(true);
             await reloadAllData();
-
-        } catch (err) {
+            resetForm();
+            popup.success({
+                title: "Edit Description",
+                message: resultMessage(descName || "Description", "Updated")
+            });
+        } catch (err: any) {
+            popup.error({ message: err?.message || "Failed to update description." });
         }
     };
 
@@ -1017,19 +1020,6 @@ const ManageDescriptionList: React.FC = () => {
                     </div>
                 </Offcanvas.Body>
             </Offcanvas>
-
-            {showInfoPopup && (
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    onClose={() => {
-                        setShowInfoPopup(false);
-                        setOpen(false);
-                        resetForm();
-                    }}
-                    pageName={popupPageName}
-                />
-            )}
-
         </>
     );
 };

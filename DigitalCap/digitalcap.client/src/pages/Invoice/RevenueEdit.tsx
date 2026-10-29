@@ -15,7 +15,8 @@ import { getStatuses, saveTask } from "../../service/TaskService";
 import { resolveProjectTaskRowId, type SingleTask } from "../../Interface/Workflow";
 import DocumentList, { type CommonAttachmentHandle } from "../File/DocumentList";
 import Comments, { type CommentsHandle } from "../Activity/Comments";
-import InformationPopup from "../../Common/InformationPopup";
+import { usePopup } from "../../Common/PopupProvider";
+import { resultMessage } from "../../Common/UtilityMessage";
 
 type SelectOption = {
     text: string;
@@ -52,11 +53,9 @@ const RevenueEdit: React.FC<RevenueEditProps> = ({
     };
     const [taskDetails, setTaskDetails] = useState<SingleTask | null>(taskData ?? null);
 
+    const popup = usePopup();
     const [statusOptions, setStatusOptions] = useState<SelectOption[]>([]);
     const [saving, setSaving] = useState(false);
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
-    const [popupPageName, setPopupPageName] = useState<string | undefined>();
-    const closePanelAfterInfoPopup = useRef(false);
     const commentsRef = useRef<CommentsHandle>(null);
     const attachmentsRef = useRef<CommonAttachmentHandle>(null);
     const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -194,9 +193,9 @@ const RevenueEdit: React.FC<RevenueEditProps> = ({
                     ? true
                     : await commentsRef.current.saveIfNeeded({ suppressSuccessPopup: true });
             if (!commentsOk) {
-                setOrchestrationError(
-                    "Task details were saved, but the comment could not be saved. Fix the issue and try Save again."
-                );
+                const msg = "Task details were saved, but the comment could not be saved. Fix the issue and try Save again.";
+                setOrchestrationError(msg);
+                popup.error({ message: msg });
                 return;
             }
 
@@ -205,31 +204,23 @@ const RevenueEdit: React.FC<RevenueEditProps> = ({
                     ? { ok: true as const }
                     : await attachmentsRef.current.flushAttachments({ suppressSuccessPopup: true });
             if (!attachRes.ok) {
-                setOrchestrationError(
-                    attachRes.message ??
-                    "Task details were saved, but one or more file changes could not be completed."
-                );
+                const msg = attachRes.message ?? "Task details were saved, but one or more file changes could not be completed.";
+                setOrchestrationError(msg);
+                popup.error({ message: msg });
                 return;
             }
 
             onSaveSuccess?.();
             window.dispatchEvent(new Event("refreshProjectList"));
-            closePanelAfterInfoPopup.current = true;
-            setPopupPageName("SaveTaskDetailsSuccess");
-            setShowInfoPopup(true);
-        } catch (e) {
+            handleClose();
+            popup.success({
+                title: "Task Details",
+                message: resultMessage("Task details", "Saved")
+            });
+        } catch (e: any) {
+            popup.error({ message: e?.message || "Failed to save task details." });
         } finally {
             setSaving(false);
-        }
-    };
-
-    const handleInformationPopupClose = () => {
-        const alsoClosePanel = closePanelAfterInfoPopup.current;
-        closePanelAfterInfoPopup.current = false;
-        setShowInfoPopup(false);
-        setPopupPageName(undefined);
-        if (alsoClosePanel) {
-            handleClose();
         }
     };
 
@@ -437,13 +428,6 @@ const RevenueEdit: React.FC<RevenueEditProps> = ({
                     </>
                 )}
             </SideDialog>
-            {showInfoPopup && (
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    onClose={handleInformationPopupClose}
-                    pageName={popupPageName}
-                />
-            )}
         </>
     );
 };

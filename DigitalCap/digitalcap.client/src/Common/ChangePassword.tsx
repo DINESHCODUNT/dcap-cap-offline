@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Offcanvas, Spinner } from "react-bootstrap";
 import { Button, BUTTONS, Input, Label } from "customer_portal-ui-shared";
 import * as loginService from "../service/LoginService";
+import { usePopup } from "./PopupProvider";
 
 interface ChangePasswordProps {
     show: boolean;
@@ -24,18 +25,17 @@ const initialFormData: FormData = {
 };
 
 const ChangePassword: React.FC<ChangePasswordProps> = ({ show, onHide, userEmail = "" }) => {
+    const popup = usePopup();
     const [formData, setFormData] = useState<FormData>(initialFormData);
     const [formErrors, setFormErrors] = useState<FormErrors>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState("");
-    const [submitSuccess, setSubmitSuccess] = useState("");
 
     useEffect(() => {
         if (!show) {
             setFormData(initialFormData);
             setFormErrors({});
             setSubmitError("");
-            setSubmitSuccess("");
             setIsSubmitting(false);
         }
     }, [show]);
@@ -66,7 +66,6 @@ const ChangePassword: React.FC<ChangePasswordProps> = ({ show, onHide, userEmail
     const handleFieldChange = (field: keyof FormData, value: string) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
         setSubmitError("");
-        setSubmitSuccess("");
 
         if (formErrors[field]) {
             setFormErrors((prev) => {
@@ -84,7 +83,6 @@ const ChangePassword: React.FC<ChangePasswordProps> = ({ show, onHide, userEmail
 
         setIsSubmitting(true);
         setSubmitError("");
-        setSubmitSuccess("");
 
         try {
             const response = await loginService.changePassword({
@@ -93,20 +91,23 @@ const ChangePassword: React.FC<ChangePasswordProps> = ({ show, onHide, userEmail
                 confirmPassword: formData.confirmPassword,
             });
 
-            setSubmitSuccess(response.data?.message || "Password changed successfully.");
+            const msg = response.data?.message || "Password changed successfully.";
             setFormData(initialFormData);
+            onHide();
+            popup.success(msg, "Change Password");
         } catch (error: any) {
             const responseData = error?.response?.data;
+            let errMsg = "Unable to change password. Please try again.";
 
             if (responseData?.errors?.length) {
-                setSubmitError(responseData.errors.join(" "));
+                errMsg = responseData.errors.join(" ");
             } else if (typeof responseData === "string") {
-                setSubmitError(responseData);
+                errMsg = responseData;
             } else if (responseData?.message) {
-                setSubmitError(responseData.message);
-            } else {
-                setSubmitError("Unable to change password. Please try again.");
+                errMsg = responseData.message;
             }
+            setSubmitError(errMsg);
+            popup.error(errMsg, "Change Password");
         } finally {
             setIsSubmitting(false);
         }
@@ -177,12 +178,6 @@ const ChangePassword: React.FC<ChangePasswordProps> = ({ show, onHide, userEmail
                     {submitError && (
                         <div className="col-md-12">
                             <div className="text-danger small">{submitError}</div>
-                        </div>
-                    )}
-
-                    {submitSuccess && (
-                        <div className="col-md-12">
-                            <div className="text-success small">{submitSuccess}</div>
                         </div>
                     )}
 

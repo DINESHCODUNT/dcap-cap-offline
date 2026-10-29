@@ -3,7 +3,8 @@ import { BreadcrumbBar, Button, Divider, BUTTONS, CheckboxInput, Label, AbsSelec
 import * as Icon from "react-bootstrap-icons";
 import * as exportService from '../../../../service/ExportService';
 import * as gradingService from '../../../../service/GradingService';
-import InformationPopup from '../../../../Common/InformationPopup';
+import { usePopup } from '../../../../Common/PopupProvider';
+import { resultMessage } from '../../../../Common/UtilityMessage';
 
 export interface VesselType {
     id: string;
@@ -41,12 +42,12 @@ export interface TankTypeSection {
 }
 
 const ManageExport: React.FC = () => {
+    const popup = usePopup();
     const [vesselTypes, setVesselTypes] = useState<VesselType[]>([]);
     const [selectedVesselType, setSelectedVesselType] = useState<string>("");
     const [exportParts, setExportParts] = useState<ExportPart[]>([]);
     const [loading, setLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
     const [validationError, setValidationError] = useState<string>("");
 
     useEffect(() => {
@@ -285,7 +286,6 @@ const ManageExport: React.FC = () => {
         setSelectedVesselType("");
         setExportParts([]);
         setValidationError("");
-        setShowInfoPopup(false);
     };
 
     const handleSave = async () => {
@@ -343,12 +343,21 @@ const ManageExport: React.FC = () => {
             const isSuccess = res.data === true || res.data?.isSuccess !== false;
 
             if (isSuccess) {
-                setShowInfoPopup(true);
+                setSelectedVesselType("");
+                setExportParts([]);
+                setValidationError("");
+                popup.success({
+                    title: "Save Export Settings",
+                    message: resultMessage("Settings", "Saved")
+                });
             } else {
                 setValidationError("Failed to save export settings. Please try again.");
+                popup.error({ message: "Failed to save export settings. Please try again." });
             }
         } catch (err: any) {
-            setValidationError(err.response?.data?.message || "An error occurred while saving settings.");
+            const errorMsg = err.response?.data?.message || err?.message || "An error occurred while saving settings.";
+            setValidationError(errorMsg);
+            popup.error({ message: errorMsg });
         } finally {
             setIsSaving(false);
         }
@@ -491,17 +500,6 @@ const ManageExport: React.FC = () => {
                 </div>
             </div>
 
-            {/* Success Popup */}
-            <InformationPopup
-                onShow={showInfoPopup}
-                onClose={() => {
-                    setShowInfoPopup(false);
-                    setSelectedVesselType("");
-                    setExportParts([]);
-                    setValidationError("");
-                }}
-                pageName="SaveExportSettings"
-            />
         </>
     );
 };

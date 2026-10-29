@@ -17,8 +17,7 @@ import { applySurveyStatusFieldUpdate } from '../../utils/surveyStatusFieldSync'
 import * as projectService from '../../service/ProjectService';
 import { usePermissions } from '../../context/PermissionContext';
 import { ROLES } from '../../constants/roles';
-import InformationPopup from '../../Common/InformationPopup';
-import ConfirmationPopup from '../../Common/ConfirmationPopup';
+import { usePopup } from '../../Common/PopupProvider';
 import { isElectron } from '../../utils/runtime';
 import SyncConfirmModal from '../Project/SyncConfirmModal';
 import { ExportConfigurationModal } from './ExportConfigurationModal';
@@ -114,13 +113,13 @@ const ReportOverview: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<any | null>(null);
 
+    const popup = usePopup();
+
     // In desktop app for local copy, project is never read-only (unless discarded by admin).
     // Read-only alert only applies on the website when synchedOnline != null.
     const isOfflineProject = !isDesktop && (isOfflineProjectStatus || data?.synchedOnline != null);
 
     const [showDiscardOfflineWarning, setShowDiscardOfflineWarning] = useState(false);
-    const [showReleaseOfflinePopup, setShowReleaseOfflinePopup] = useState(false);
-    const [isReleasingOffline, setIsReleasingOffline] = useState(false);
     const [showSyncModal, setShowSyncModal] = useState(false);
 
     const [activeView, setActiveView] = useState<{
@@ -134,9 +133,6 @@ const ReportOverview: React.FC = () => {
     const [reportIndex, setReportIndex] = useState<any>(null);
     const [reportData, setReportData] = useState<any>(null);
 
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
-    const [popupPageName, setPopupPageName] = useState<string>();
-
     const [hiReportData, setHiReportData] = useState<any>(null);
 
     const [isExporting, setIsExporting] = useState(false);
@@ -148,8 +144,6 @@ const ReportOverview: React.FC = () => {
     const [exportTemplate, setExportTemplate] = useState<{ id: number, name: string } | null>(null);
     const [validateTemplate, setValidateTemplate] = useState<{ id: number, name: string } | null>(null);
     const [isNewProject, setIsNewProject] = useState(false);
-    const [showResetPopup, setShowResetPopup] = useState(false);
-    const [isResetting, setIsResetting] = useState(false);
     const [validateVisible, setValidateVisible] = useState(false);
     const [allValidateVisible, setAllValidateVisible] = useState(false);
     const [isWarningHovered, setIsWarningHovered] = useState(false);
@@ -163,7 +157,7 @@ const ReportOverview: React.FC = () => {
     const [isValidatingAll, setIsValidatingAll] = useState(false);
     const navigate = useNavigate();
 
-    const isButtonloading = isExporting || isExportingAll || isResetting || isValidating || isValidatingAll;
+    const isButtonloading = isExporting || isExportingAll || isValidating || isValidatingAll;
 
     useEffect(() => {
         if (validateVisible || allValidateVisible) {
@@ -770,41 +764,45 @@ useEffect(() => {
     };
 
     const handleResetTemplate = async () => {
+        if (!reportIndex?.reportPartGrid) return;
+
+        const partName = activeView.part === "VMD"
+            ? "Vessel Main Data"
+            : activeView.part === "HI"
+                ? "Part H & I"
+                : `Part ${activeView.part}`;
+
+        const confirmed = await popup.confirm({
+            title: "Reset Template",
+            message: `Are you sure you want to reset the template ${partName}?`,
+            confirmText: "Yes, Reset",
+            cancelText: "Cancel",
+            danger: true
+        });
+        if (!confirmed) return;
 
         try {
-
-            if (!reportIndex?.reportPartGrid)
-                return;
-
             let template: any = null;
 
             if (activeView.part === "VMD") {
-
                 template = reportIndex.reportPartGrid.find(
                     (x: any) =>
                         x.name === "Vessel Main Data" ||
                         x.templateId === 0
                 );
-
             } else if (activeView.part === "HI") {
-
                 template = reportIndex.reportPartGrid.find(
                     (x: any) =>
                         (x.name === "Part H & I" || x.name === "Part H&I")
                 );
-
             } else {
-
                 template = reportIndex.reportPartGrid.find(
                     (x: any) =>
                         x.name === `Part ${activeView.part}`
                 );
             }
 
-            if (!template)
-                return;
-
-            setIsResetting(true);
+            if (!template) return;
 
             await surveyReportService.deleteReport(
                 projectId,
@@ -825,18 +823,9 @@ useEffect(() => {
                 response.data?.data || response.data;
 
             setReportData(result);
-
-            setPopupPageName("ResetSuccess");
-            setShowInfoPopup(true);
-
-        } catch (err) {
-            setPopupPageName("ResetError");
-            setShowInfoPopup(true);
-
-        } finally {
-
-            setIsResetting(false);
-            setShowResetPopup(false);
+            popup.success("Template has been reset successfully.", "Reset Template");
+        } catch (err: any) {
+            popup.error({ message: err?.message || "Failed to reset template. Please try again.", title: "Reset Template" });
         }
     };
 
@@ -1161,15 +1150,21 @@ useEffect(() => {
     }, [activeView.section, reportData, projectId, reportIndex, refreshCurrentReport]);
 
     const handleReleaseOffline = async () => {
+        const confirmed = await popup.confirm({
+            title: "Confirm",
+            message: "Do you want to cancel the offline download and make the project available online? Any offline data will be lost.",
+            confirmText: "Yes, Proceed",
+            cancelText: "No",
+            danger: true
+        });
+        if (!confirmed) return;
+
         try {
-            setIsReleasingOffline(true);
             await projectService.releaseOfflineDownload(projectId);
-            setShowReleaseOfflinePopup(false);
             navigate(".", { replace: true, state: { ...location.state, projectStatus: "online" } });
             window.location.reload();
-        } catch (error) {
-        } finally {
-            setIsReleasingOffline(false);
+        } catch (error: any) {
+            popup.error({ message: error?.message || "Failed to cancel offline download." });
         }
     };
 
@@ -1242,11 +1237,10 @@ useEffect(() => {
                         {data?.synchedOnline != null && hasRole(ROLES.ADMIN_CAP_HQ) && (
                             <Button
                                 variant={BUTTONS.SECONDARY}
-                                onClick={() => setShowReleaseOfflinePopup(true)}
-                                disabled={isReleasingOffline}
+                                onClick={handleReleaseOffline}
                                 style={{ marginLeft: "8px" }}
                             >
-                                {isReleasingOffline ? "Canceling..." : "Cancel Offline Download"}
+                                Cancel Offline Download
                             </Button>
                         )}
                         {isDesktop && navigator.onLine && (
@@ -1261,10 +1255,10 @@ useEffect(() => {
                         {reportIndex?.resetTemplate === true && activeView.part !== "VMD" && (
                             <Button
                                 variant={BUTTONS.SECONDARY}
-                                onClick={() => setShowResetPopup(true)}
+                                onClick={handleResetTemplate}
                                 disabled={isButtonloading || isOfflineProject || loading}
                             >
-                                {isResetting ? "Resetting..." : "Reset Template"}
+                                Reset Template
                             </Button>
                         )}
                     </div>
@@ -1409,31 +1403,6 @@ useEffect(() => {
 
             </div>
 
-            {/* PDF EXPORT */}
-            {showResetPopup && (
-
-                <ConfirmationPopup
-                    onShow={showResetPopup}
-                    title="Reset Template"
-                    message={`Are you sure you want to reset the template ${activeView.part === "VMD"
-                        ? "Vessel Main Data"
-                        : activeView.part === "HI"
-                            ? "Part H & I"
-                            : `Part ${activeView.part}`
-                        }?`}
-                    confirmText="Yes, Reset"
-                    cancelText="Cancel"
-                    loading={isResetting}
-                    onClose={() => setShowResetPopup(false)}
-                    onConfirm={async () => {
-
-                        await handleResetTemplate();
-
-                    }}
-                />
-
-            )}
-
             {isDesktop && (
                 <SyncConfirmModal
                     project={showSyncModal ? { id: projectId, name: data?.projectName || 'Project' } : null}
@@ -1446,34 +1415,6 @@ useEffect(() => {
                         }
                     }}
                 />
-            )}
-
-            {showReleaseOfflinePopup && (
-                <ConfirmationPopup
-                    onShow={showReleaseOfflinePopup}
-                    title="Confirm"
-                    message="Do you want to cancel the offline download and make the project available online? Any offline data will be lost."
-                    confirmText="Yes, Proceed"
-                    cancelText="No"
-                    loading={isReleasingOffline}
-                    onClose={() => setShowReleaseOfflinePopup(false)}
-                    onConfirm={handleReleaseOffline}
-                />
-            )}
-
-            {showInfoPopup && (
-
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    pageName={popupPageName}
-                    onClose={() => {
-
-                        setShowInfoPopup(false);
-                        setPopupPageName(undefined);
-
-                    }}
-                />
-
             )}
             <NotificationContainer position="bottom-right" />
 
