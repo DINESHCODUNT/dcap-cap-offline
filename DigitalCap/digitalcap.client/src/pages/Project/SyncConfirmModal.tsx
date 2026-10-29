@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import Modal from 'react-bootstrap/Modal';
 import { Button, BUTTONS } from "customer_portal-ui-shared";
 import * as Icon from 'react-bootstrap-icons';
 import * as projectService from '../../service/ProjectService';
+import { usePopup } from '../../Common/PopupProvider';
+import { measureConnectionSpeed, isNetworkConnectionError } from '../../utils/connectionSpeed';
 
 export interface SyncConfirmModalProps {
     project: { id: number; name: string } | null;
@@ -18,6 +21,7 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
     onClose,
     onSuccess
 }) => {
+    const popup = usePopup();
     const [isCheckingLock, setIsCheckingLock] = useState<boolean>(false);
     const [isCancelled, setIsCancelled] = useState<boolean>(false);
     const [syncOption, setSyncOption] = useState<SyncOption>('keep');
@@ -27,6 +31,9 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
     const [isSyncing, setIsSyncing] = useState<boolean>(false);
     const [isDownloading, setIsDownloading] = useState<boolean>(false);
     const [isReleasing, setIsReleasing] = useState<boolean>(false);
+
+    const [isSyncInBackground, setIsSyncInBackground] = useState<boolean>(false);
+    const [syncAbortController, setSyncAbortController] = useState<AbortController | null>(null);
 
     const [syncSuccessModal, setSyncSuccessModal] = useState<boolean>(false);
     const [syncReleased, setSyncReleased] = useState<boolean>(false);
@@ -51,21 +58,53 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
         setCancelledOption('redownload');
         setShowDiscardConfirm(false);
 
-        projectService.getDownloadedDataExists(project.id)
-            .then((res) => {
+        measureConnectionSpeed()
+            .then(async (mbps) => {
                 if (!isMounted) return;
-                // When the online lock is gone, the endpoint returns null / false
-                const lockExists = Boolean(res.data);
-                setIsCancelled(!lockExists);
-            })
-            .catch((err) => {
-                if (!isMounted) return;
-                setTransferError(projectService.getTransferErrorMessage(err, "Unable to check online project status."));
-            })
-            .finally(() => {
-                if (isMounted) {
+                if (mbps === null || mbps < 10) {
                     setIsCheckingLock(false);
+                    onClose();
+                    await popup.info(
+                        "Unable to Sync/Download due to a very low internet connection. Please proceed when your internet connection is having at least 10 mbps download and upload speed.",
+                        "Confirm"
+                    );
+                    return;
                 }
+
+                projectService.getDownloadedDataExists(project.id)
+                    .then((res) => {
+                        if (!isMounted) return;
+                        // When the online lock is gone, the endpoint returns null / false
+                        const lockExists = Boolean(res.data);
+                        setIsCancelled(!lockExists);
+                    })
+                    .catch((err) => {
+                        if (!isMounted) return;
+                        if (isNetworkConnectionError(err)) {
+                            onClose();
+                            popup.info({
+                                title: "Connection Error",
+                                message: "The sync process has been interrupted due to a loss of network connection. Please check your internet connection and try again.",
+                                okText: "Close"
+                            });
+                            return;
+                        }
+                        setTransferError(projectService.getTransferErrorMessage(err, "Unable to check online project status."));
+                    })
+                    .finally(() => {
+                        if (isMounted) {
+                            setIsCheckingLock(false);
+                        }
+                    });
+            })
+            .catch(async () => {
+                if (!isMounted) return;
+                setIsCheckingLock(false);
+                onClose();
+                await popup.info(
+                    "Unable to Sync/Download due to a very low internet connection. Please proceed when your internet connection is having at least 10 mbps download and upload speed.",
+                    "Confirm"
+                );
             });
 
         return () => {
@@ -87,18 +126,49 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
 
         const release = syncOption === 'remove';
         setIsSyncing(true);
+        setIsSyncInBackground(false);
+        const controller = new AbortController();
+        setSyncAbortController(controller);
+
         try {
-            const response = await projectService.syncProjectOnline(project.id, release);
+            const response = await projectService.syncProjectOnline(project.id, release, controller.signal);
             if (!response.data?.success) {
                 throw { response };
             }
             setSyncReleased(Boolean(response.data.released));
             setSyncSuccessModal(true);
         } catch (err: any) {
+            if (axios.isCancel(err) || err?.name === 'CanceledError' || err?.name === 'AbortError') {
+                return;
+            }
+            if (isNetworkConnectionError(err)) {
+                setIsSyncing(false);
+                setIsSyncInBackground(false);
+                setSyncAbortController(null);
+                onClose();
+                await popup.info({
+                    title: "Connection Error",
+                    message: "The sync process has been interrupted due to a loss of network connection. Please check your internet connection and try again.",
+                    okText: "Close"
+                });
+                return;
+            }
             setTransferError(projectService.getTransferErrorMessage(err, "Unable to Sync/Download due to a very low internet connection. Please proceed when your internet connection is having at least 10 mbps download and upload speed."));
         } finally {
             setIsSyncing(false);
+            setSyncAbortController(null);
         }
+    };
+
+    const handleStopSync = () => {
+        if (syncAbortController) {
+            syncAbortController.abort();
+        }
+        setIsSyncing(false);
+        setIsSyncInBackground(false);
+        setSyncAbortController(null);
+        popup.error("Sync Failed", "Error");
+        onClose();
     };
 
     const handleConfirmCancelledAction = async () => {
@@ -114,6 +184,16 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
                 onSuccess?.(false);
                 onClose();
             } catch (err: any) {
+                if (isNetworkConnectionError(err)) {
+                    setIsDownloading(false);
+                    onClose();
+                    await popup.info({
+                        title: "Connection Error",
+                        message: "The download/upload process has been interrupted due to a loss of network connection. Please check your internet connection and try again.",
+                        okText: "Close"
+                    });
+                    return;
+                }
                 setTransferError(projectService.getTransferErrorMessage(err, "Unable to download project."));
             } finally {
                 setIsDownloading(false);
@@ -168,7 +248,7 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
         <>
             {/* Sync / Cancelled Modal */}
             <Modal
-                show={Boolean(project) && !syncSuccessModal && !transferError && !showDiscardConfirm}
+                show={Boolean(project) && !syncSuccessModal && !transferError && !showDiscardConfirm && !isSyncing}
                 onHide={() => !isBusy && !isCheckingLock && onClose()}
                 centered
                 backdrop="static"
@@ -402,6 +482,72 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
                 </Modal.Footer>
             </Modal>
 
+            {/* Sync In Progress Modal */}
+            <Modal
+                show={isSyncing && !isSyncInBackground}
+                onHide={handleStopSync}
+                centered
+                backdrop="static"
+            >
+                <Modal.Header closeButton>
+                </Modal.Header>
+                <Modal.Body>
+                    <div className="d-flex align-items-center gap-3 mb-3">
+                        <div className="img-wrapper">
+                            <Icon.ArrowRepeat className="text-primary" size={24} />
+                        </div>
+                        <div className="alert-content flex-grow-1">
+                            <h5 className="mb-0">Synchronizing Offline data to Online mode</h5>
+                        </div>
+                    </div>
+                    <div className="progress" style={{ height: '10px' }}>
+                        <div
+                            className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                            role="progressbar"
+                            style={{ width: "100%" }}
+                        />
+                    </div>
+                </Modal.Body>
+                <Modal.Footer className="d-flex justify-content-end gap-2">
+                    <Button variant={BUTTONS.SECONDARY} onClick={handleStopSync}>
+                        No, Cancel
+                    </Button>
+                    <Button variant={BUTTONS.SECONDARY} onClick={() => setIsSyncInBackground(true)}>
+                        Yes, Sync in Background
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
+            {isSyncInBackground && isSyncing && (
+                <div className="minimize-section" style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1050 }}>
+                    <div className="minimize-card card shadow" style={{ minWidth: '320px', backgroundColor: '#fff', border: '1px solid #dee2e6', borderRadius: '8px' }}>
+                        <div className="card-body p-3">
+                            <div className="d-flex align-items-center gap-3">
+                                <div className="img-wrapper">
+                                    <Icon.ArrowRepeat className="text-primary" size={20} />
+                                </div>
+                                <div className="alert-content flex-grow-1">
+                                    <h6 className="mb-1" style={{ fontSize: '14px', fontWeight: 600 }}>Just give us a moment to sync the project</h6>
+                                    <div className="progress" style={{ height: '6px' }}>
+                                        <div
+                                            className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                                            role="progressbar"
+                                            style={{ width: "100%" }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="actions d-flex justify-content-end gap-2 mt-2" style={{ gap: '8px' }}>
+                                <button type="button" className="btn btn-sm btn-light" onClick={handleStopSync}> No, Cancel </button>
+                                <button type="button" className="btn btn-sm btn-light" onClick={() => setIsSyncInBackground(false)}>
+                                    <Icon.ArrowsAngleExpand />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Sync Success Modal */}
             <Modal
                 show={syncSuccessModal}
@@ -410,15 +556,12 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
             >
                 <Modal.Header closeButton>
                     <Modal.Title>
-                        Sync Successful
+                        Success
                     </Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
                     <p className="mb-0">
-                        Offline records and survey ratings have been synchronized to the cloud database.
-                        {syncReleased
-                            ? " The project has been released and removed from this computer."
-                            : " The project stays on this computer for further offline work."}
+                        Syncing of the {project?.name} Offline Project with the Online Application has been successfully completed
                     </p>
                 </Modal.Body>
                 <Modal.Footer>

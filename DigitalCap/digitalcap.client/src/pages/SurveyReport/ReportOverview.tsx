@@ -1168,10 +1168,11 @@ useEffect(() => {
 
         try {
             await projectService.releaseOfflineDownload(projectId);
+            await popup.success("Offline download cancelled", "Success");
             navigate(".", { replace: true, state: { ...location.state, projectStatus: "online" } });
             window.location.reload();
         } catch (error: any) {
-            popup.error({ message: error?.message || "Failed to cancel offline download." });
+            popup.error("Offline download cancelled falied", "Error");
         }
     };
 

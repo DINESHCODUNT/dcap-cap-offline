@@ -11,6 +11,7 @@ import moment from 'moment';
 import EmptyProjectView from './EmptyProjectView';
 import SyncConfirmModal from './SyncConfirmModal';
 import { isElectron, isAppOnline } from '../../utils/runtime';
+import { measureConnectionSpeed, isNetworkConnectionError } from '../../utils/connectionSpeed';
 
 export interface SidebarProjectRow {
     name: string;
@@ -106,6 +107,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const [isDownloadInBackground, setIsDownloadInBackground] = useState<boolean>(false);
     const [downloadAbortController, setDownloadAbortController] = useState<AbortController | null>(null);
     const [transferError, setTransferError] = useState<string | null>(null);
+    const [isCheckingSpeed, setIsCheckingSpeed] = useState<boolean>(false);
     const isDesktop = isElectron();
     const [availableOnlineProjects, setAvailableOnlineProjects] = useState<projectService.DropdownProject[]>([]);
     const [loadingOnlineProjects, setLoadingOnlineProjects] = useState<boolean>(false);
@@ -322,6 +324,20 @@ const ProjectList: React.FC<ProjectListProps> = ({
         const match = availableOnlineProjects.find(p => p.projectId === selectedOnlineProjectId);
         if (!match) return;
 
+        setIsCheckingSpeed(true);
+        try {
+            const mbps = await measureConnectionSpeed();
+            if (mbps === null || mbps <= 4) {
+                await popup.info(
+                    "Unable to Sync/Download due to a very low internet connection. Please proceed when your internet connection is having at least 10 mbps download and upload speed.",
+                    "Confirm"
+                );
+                return;
+            }
+        } finally {
+            setIsCheckingSpeed(false);
+        }
+
         try {
             const checkRes = await projectService.getDownloadedDataExists(selectedOnlineProjectId);
             if (checkRes.data == null || !checkRes.data) {
@@ -355,6 +371,14 @@ const ProjectList: React.FC<ProjectListProps> = ({
             }
         } catch (err: any) {
             if (axios.isCancel(err) || err?.name === 'CanceledError') {
+                return;
+            }
+            if (isNetworkConnectionError(err)) {
+                await popup.info({
+                    title: "Connection Error",
+                    message: "The download/upload process has been interrupted due to a loss of network connection. Please check your internet connection and try again.",
+                    okText: "Close"
+                });
                 return;
             }
             setTransferError(projectService.getTransferErrorMessage(err, "Unable to Sync/Download due to a very low internet connection. Please proceed when your internet connection is having at least 10 mbps download and upload speed."));
@@ -1014,7 +1038,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 variant={BUTTONS.PRIMARY}
                                 className="text-nowrap"
                                 onClick={handleTriggerDownloadFromDropdown}
-                                disabled={!selectedOnlineProjectId || isDownloading}
+                                disabled={!selectedOnlineProjectId || isDownloading || isCheckingSpeed}
                             >
                                 Download Offline
                             </Button>
@@ -1320,6 +1344,15 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     await loadProjects();
                 }}
             />
+
+            {/* Speed Checking Spinner Modal */}
+            <Modal show={isCheckingSpeed} centered backdrop="static">
+                <Modal.Body className="text-center py-4">
+                    <div className="spinner-border text-primary" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                </Modal.Body>
+            </Modal>
 
             {/* Download Success Modal */}
             <Modal
