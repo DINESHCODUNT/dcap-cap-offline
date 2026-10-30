@@ -5,8 +5,10 @@ import * as tankService from '../../service/TankService';
 import * as projectService from '../../service/ProjectService';
 import * as classService from '../../service/ClassService';
 import * as portService from '../../service/PortService';
-import InformationPopup from '../../Common/InformationPopup';
+import { usePopup } from '../../Common/PopupProvider';
+import { resultMessage } from '../../Common/UtilityMessage';
 import DropdownWithSearch, { type DropdownWithSearchOption } from '../../Common/DropdownWithSearch';
+import { isEmptyDate } from '../../utils/dateTime';
 
 type FormData = {
     project_name: string;
@@ -216,11 +218,10 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
     const [agreementOwnerOptions, setAgreementOwnerOptions] = useState<SelectOption[]>([]);
     const [capRegionOptions, setCapRegionOptions] = useState<SelectOption[]>([]);
     const [capTypeOptions, setCapTypeOptions] = useState<SelectOption[]>([]);
+    const popup = usePopup();
     const [capScopeOptions, setCapScopeOptions] = useState<SelectOption[]>([]);
     const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
     const [isSaving, setIsSaving] = useState<boolean>(false);
-    const [showInfoPopup, setShowInfoPopup] = useState<boolean>(false);
-    const [popupPageName, setPopupPageName] = useState<string | undefined>();
     const sideDialog = useContext(SideDialogManagerContext);
     const [showDuplicateWarning, setShowDuplicateWarning] = useState<string | undefined>();
     const [formData, setFormData] = React.useState<FormData>({ ...INITIAL_FORM_DATA });
@@ -621,7 +622,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                             sis_imo_number: projectData.sisterVesselImoNumber || '',
                             sis_vessel_name: projectData.sisterVesselName || '',
                             planned_drydock_location: projectData.drydockLocation ? String(projectData.drydockLocation) : '',
-                            potential_drydock_date: projectData.potentialDrydockDate || '',
+                            potential_drydock_date: !isEmptyDate(projectData.potentialDrydockDate) ? projectData.potentialDrydockDate : '',
                             conjunction_with_ssh_or_ihs: projectData.specialHull || false,
                             start_date: projectData.drydockStart || '',
                             end_date: projectData.drydockEnd || '',
@@ -658,7 +659,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
 
                         setFormData(mappedFormData);
 
-                        if (projectData.potentialDrydockDate) setDryDockDate(new Date(projectData.potentialDrydockDate));
+                        if (!isEmptyDate(projectData.potentialDrydockDate)) setDryDockDate(new Date(projectData.potentialDrydockDate));
                         if (projectData.drydockStart) setGaugingStartDate(new Date(projectData.drydockStart));
                         if (projectData.drydockEnd) setGaugingEndDate(new Date(projectData.drydockEnd));
                         if (projectData.surveyFirstVisit) setSurveyStartDate(new Date(projectData.surveyFirstVisit));
@@ -1024,13 +1025,30 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                 ? await projectService.updateProject(payload)
                 : await projectService.createProject(payload);
             clearTimeout(timeoutId);
+
+            const isEdit = !!projectId;
+            const projectName = formData.project_name || formData.vessel_name || "Project";
+
             if (response.data) {
-                setPopupPageName(projectId ? "UpdateProject" : "CreateProject");
-                setShowInfoPopup(true);
                 window.dispatchEvent(new Event('refreshProjectList'));
                 onSuccess?.();
+                if (sideDialog && typeof sideDialog === 'object' && 'removeDialog' in sideDialog) {
+                    (sideDialog as any).removeDialog(id);
+                }
+                setConjection(1);
+                setFatigue(1);
+                setFormData({ ...INITIAL_FORM_DATA });
+                setSelected(2);
+                setTankSelected(1);
+                setFormErrors({});
+                popup.success({
+                    title: isEdit ? "Edit Project" : "Create Project",
+                    message: resultMessage(projectName, isEdit ? "Updated" : "Created")
+                });
             } else {
-                setFormErrors({ submit: projectId ? "Failed to update project. Please try again." : "Failed to create project. Please try again." });
+                const submitErr = isEdit ? "Failed to update project. Please try again." : "Failed to create project. Please try again.";
+                setFormErrors({ submit: submitErr });
+                popup.error({ message: submitErr });
             }
         } catch (error: any) {
             clearTimeout(timeoutId);
@@ -1041,6 +1059,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                 error?.message ||
                 "An error occurred while saving the project.";
             setFormErrors({ submit: errorMessage });
+            popup.error({ message: errorMessage });
         } finally {
             setIsSaving(false);
         }
@@ -1050,19 +1069,6 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
         if (sideDialog && typeof sideDialog === 'object' && 'removeDialog' in sideDialog) {
             (sideDialog as any).removeDialog(id);
         }
-    };
-
-    const handlePopupClose = () => {
-        setShowInfoPopup(false);
-        if (sideDialog && typeof sideDialog === 'object' && 'removeDialog' in sideDialog) {
-            (sideDialog as any).removeDialog(id);
-        }
-        setConjection(1);
-        setFatigue(1);
-        setFormData({ ...INITIAL_FORM_DATA });
-        setSelected(2);
-        setTankSelected(1);
-        setFormErrors({});
     };
 
     const handleImoLookup = async (imo: string) => {
@@ -2024,12 +2030,6 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                     </>
                 )}
             </SideDialog>
-
-            <InformationPopup
-                onShow={showInfoPopup}
-                onClose={handlePopupClose}
-                pageName={popupPageName}
-            />
         </>
     );
 };

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Button, BUTTONS, Input } from "customer_portal-ui-shared";
 import * as Icon from "react-bootstrap-icons";
-import { Modal } from "react-bootstrap";
 import * as reportConfigService from "../../../../service/ReportConfigService";
-import InformationPopup from '../../../../Common/InformationPopup';
+import { usePopup } from '../../../../Common/PopupProvider';
+import { resultMessage } from '../../../../Common/UtilityMessage';
 
 type Section = {
     id: number;
@@ -50,16 +50,12 @@ const GeneralSection: React.FC<Props> = ({
     onPartIdError,
     setError
 }) => {
+    const popup = usePopup();
     const [sections, setSections] = useState<Section[]>([]);
     const [editId, setEditId] = useState<number | null>(null);
     const [formData, setFormData] = useState<Section>(EMPTY_FORM);
-    const [showDelete, setShowDelete] = useState(false);
-    const [deleteId, setDeleteId] = useState<number | null>(null);
     const [sectionNameError, setSectionNameError] = useState<string>("");
     const [currentCountError, setCurrentCountError] = useState<string>("");
-    const [popupPageName, setPopupPageName] = useState<string | undefined>();
-    const [popupMessage, setPopupMessage] = useState<string | undefined>();
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
 
     const [pageSize, setPageSize] = useState(5);
     const [currentPage, setCurrentPage] = useState(1);
@@ -69,7 +65,6 @@ const GeneralSection: React.FC<Props> = ({
         (currentPage - 1) * pageSize,
         currentPage * pageSize
     );
-    const [deleteSectionName, setDeleteSectionName] = useState("");
     useEffect(() => {
         setSections(generalSections);
         setEditId(null);
@@ -163,24 +158,27 @@ const GeneralSection: React.FC<Props> = ({
             ]
         };
 
-        await reportConfigService.saveReportTemplateConfig(
-            Number(vesselTypeId),
-            payload as any
-        );
+        const savedName = formData.section_name;
+        const isCreate = editId === 0;
 
-        if (editId === 0) {
-            setPopupPageName("CreateSection");
-            setPopupMessage(`${formData.section_name} - Section Created Successfully`);
-        } else {
-            setPopupPageName("UpdateSection");
-            setPopupMessage(`${formData.section_name} - Section Updated Successfully`);
+        try {
+            await reportConfigService.saveReportTemplateConfig(
+                Number(vesselTypeId),
+                payload as any
+            );
+
+            setEditId(null);
+            setFormData(EMPTY_FORM);
+            setSectionNameError("");
+            setCurrentCountError("");
+            onRefresh();
+            popup.success({
+                title: isCreate ? "Create Section" : "Edit Section",
+                message: resultMessage(savedName || "Section", isCreate ? "Created" : "Updated")
+            });
+        } catch (err: any) {
+            popup.error({ message: err?.message || `Failed to ${isCreate ? 'create' : 'update'} section.` });
         }
-        setShowInfoPopup(true);
-        setEditId(null);
-        setFormData(EMPTY_FORM);
-        setSectionNameError("");
-        setCurrentCountError("");
-        onRefresh();
     };
 
     const onEdit = (sec: Section) => {
@@ -200,12 +198,16 @@ const GeneralSection: React.FC<Props> = ({
         setCurrentCountError("");
     };
 
+    const handleDeleteSection = async (sec: Section) => {
+        if (!sec || !vesselTypeId || !partId) return;
 
-    const deleteSection = async () => {
-        if (!deleteId || !vesselTypeId || !partId) return;
-
-        const sec = sections.find(s => s.id === deleteId);
-        if (!sec) return;
+        const confirmed = await popup.confirm({
+            title: "Delete Section",
+            message: `Are you sure you want to delete section ${sec.section_name}?`,
+            confirmText: "Delete",
+            danger: true
+        });
+        if (!confirmed) return;
 
         const payload = {
             reportParts: [],
@@ -236,16 +238,19 @@ const GeneralSection: React.FC<Props> = ({
             ]
         };
 
-        await reportConfigService.saveReportTemplateConfig(
-            Number(vesselTypeId),
-            payload as any
-        );
-        setPopupPageName("DeleteSection");
-        setPopupMessage(`${sec.section_name} - Section Deleted Successfully`);
-        setShowInfoPopup(true);
-        setShowDelete(false);
-        setDeleteId(null);
-        onRefresh();
+        try {
+            await reportConfigService.saveReportTemplateConfig(
+                Number(vesselTypeId),
+                payload as any
+            );
+            onRefresh();
+            popup.success({
+                title: "Delete Section",
+                message: resultMessage(sec.section_name || "Section", "Deleted")
+            });
+        } catch (err: any) {
+            popup.error({ message: err?.message || "Failed to delete section." });
+        }
     };
 
 
@@ -494,11 +499,7 @@ const GeneralSection: React.FC<Props> = ({
                                             startIcon={
                                                 <Icon.TrashFill />
                                             }
-                                            onClick={() => {
-                                                setDeleteId(sec.id);
-                                                setDeleteSectionName(sec.section_name);
-                                                setShowDelete(true);
-                                            }}
+                                            onClick={() => handleDeleteSection(sec)}
                                         />
                                     </td>
                                 </tr>
@@ -557,44 +558,6 @@ const GeneralSection: React.FC<Props> = ({
                         />
                     </div>
                 </div>
-            )}
-
-            <Modal show={showDelete} size="lg" centered onHide={() => setShowDelete(false)} animation={false} backdrop="static">
-                <Modal.Header closeButton>
-                    <Modal.Title>Delete Section</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <div className="row">
-                        <div className="col-md-12">
-                            <div>
-                                <p className="_500 tx-14">
-                                    Are you sure you want to delete section <strong>{deleteSectionName}</strong>?
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </Modal.Body>
-                <Modal.Footer className='gap-3'>
-                    <Button variant={BUTTONS.SECONDARY} onClick={() => setShowDelete(false)}>
-                        Cancel
-                    </Button>
-                    <Button variant={BUTTONS.PRIMARY} onClick={deleteSection}>
-                        Delete
-                    </Button>
-
-                </Modal.Footer>
-            </Modal>
-
-            {showInfoPopup && (
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    onClose={() => {
-                        setShowInfoPopup(false);
-                        setPopupMessage(undefined);
-                    }}
-                    pageName={popupPageName}
-                    message={popupMessage}
-                />
             )}
         </>
     );

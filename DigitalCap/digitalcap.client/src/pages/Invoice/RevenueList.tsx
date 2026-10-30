@@ -188,8 +188,8 @@ const RevenueList: React.FC<RevenueListProps> = ({ projectId }) => {
     return (
         <>
             <div className="section-title d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between mb-3">
-                <h5 className="mb-2 mb-md-0">Revenue Tracker</h5>
-                <div className="d-flex flex-column flex-md-row justify-content-md-end align-items-start align-items-md-center gap-2 gap-md-3 w-100 w-md-auto mt-2 mt-md-0">
+                <h5 className="text-nowrap flex-shrink-0 mb-2 mb-md-0 me-3">Revenue Tracker</h5>
+                <div className="d-flex flex-column flex-md-row justify-content-md-end align-items-start align-items-md-center gap-2 gap-md-3 ms-md-auto mt-2 mt-md-0">
                     <div className="d-flex align-items-center">
                         <TextField label="CAP Contract Value" inline >
                             {capDisplay}

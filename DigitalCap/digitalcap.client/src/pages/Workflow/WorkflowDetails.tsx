@@ -5,6 +5,7 @@ import WorkflowList from "./WorkflowList";
 import * as workflowService from "../../service/WorkflowService";
 import type { WorkflowViewModel } from "../../Interface/Workflow";
 import { ProgressState } from "../../Interface/Workflow";
+import { isElectron } from "../../utils/runtime";
 
 interface WorkflowDetailsProps {
     projectId?: number;
@@ -206,14 +207,14 @@ const WorkflowDetails: React.FC<WorkflowDetailsProps> = ({ projectId }) => {
                     </div>
                 </div>
                 <div className="section-title d-flex flex-column flex-md-row align-items-md-center">
-                    <div className="d-flex flex-column flex-grow-1 mb-3 mb-md-0">
+                    <div className="workflow-summary-column d-flex flex-column flex-grow-1 mb-3 mb-md-0">
                         <h5>Step {stepInfo.stepNumber} of {stepInfo.totalSteps} — {stepInfo.stepName} {stepInfo.status}</h5>
                         <span className="project-tagline">
                             Milestone tasks are marked with a star. <Icon.StarFill size={12} className="text-warning" /> Updating milestone tasks will update the workflow status.
                         </span>
                     </div>
                     
-                    <div className="section-actions flex-shrink-0 w-100 w-md-25 ms-md-4">
+                    <div className="workflow-progress-action flex-shrink-0 ms-md-4">
                         <div className="grade-wrapper">
                             <div className="d-flex justify-content-between mb-1">
                                 <span className="grade-label final">Progress</span>
@@ -233,13 +234,15 @@ const WorkflowDetails: React.FC<WorkflowDetailsProps> = ({ projectId }) => {
 
                 </div>
             </div>
-            <div className="workflow-list">
-                <WorkflowList
-                    projectId={projectId}
-                    tasksViewModel={workflowData?.tasksViewModel}
-                    onWorkflowSaved={loadWorkflowData}
-                />
-            </div>
+            {!isElectron() && (
+                <div className="workflow-list">
+                    <WorkflowList
+                        projectId={projectId}
+                        tasksViewModel={workflowData?.tasksViewModel}
+                        onWorkflowSaved={loadWorkflowData}
+                    />
+                </div>
+            )}
         </>
     );
 }

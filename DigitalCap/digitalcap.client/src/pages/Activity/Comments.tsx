@@ -7,13 +7,13 @@ import {
     forwardRef,
 } from "react";
 import * as Icon from "react-bootstrap-icons";
-import { Divider, TextArea, Button, BUTTONS } from "customer_portal-ui-shared";
+import { Divider, TextArea, Button } from "customer_portal-ui-shared";
 import moment from "moment";
 import * as commentService from "../../service/CommentService";
 import type { Comment } from "../../service/CommentService";
 import { normalizeCommentFromApi } from "../../service/CommentService";
-import InformationPopup from "../../Common/InformationPopup";
-import { Modal } from 'react-bootstrap';
+import { usePopup } from "../../Common/PopupProvider";
+import { resultMessage } from "../../Common/UtilityMessage";
 const COMMENT_MAX_LENGTH = 4000;
 
 export interface WorkflowCommentItem {
@@ -73,12 +73,9 @@ const Comments = forwardRef<CommentsHandle, CommentsProps>(({
     const [newComment, setNewComment] = useState("");
     const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
     const [postingComment, setPostingComment] = useState(false);
+    const popup = usePopup();
     const [commentError, setCommentError] = useState("");
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
-    const [popupPageName, setPopupPageName] = useState<string | undefined>();
     const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
-    const [showDeleteModal, setShowDeleteModal] = useState(false);
-    const [commentToDelete, setCommentToDelete] = useState<Comment | null>(null);
 
     useEffect(() => {
         setEditingCommentId(null);
@@ -101,32 +98,33 @@ const Comments = forwardRef<CommentsHandle, CommentsProps>(({
         }
     }, [canUseComments, projectId, taskIdForApi, notes]);
 
-    const handleDeleteComment = (c: Comment) => {
-        setCommentToDelete(c);
-        setShowDeleteModal(true);
-    };
+    const handleDeleteComment = async (c: Comment) => {
+        const confirmed = await popup.confirm({
+            title: "Delete Comment",
+            message: "Are you sure you want to delete this comment?",
+            confirmText: "Delete",
+            danger: true
+        });
+        if (!confirmed) return;
 
-    const handleConfirmDeleteComment = async () => {
-        if (!commentToDelete) return;
-        setDeletingCommentId(commentToDelete.id);
-        setShowDeleteModal(false);
+        setDeletingCommentId(c.id);
         try {
             await commentService.deleteComment(
-                commentToDelete.id,
-                commentToDelete.projectId ?? projectId,
-                commentToDelete.comment ?? ""
+                c.id,
+                c.projectId ?? projectId,
+                c.comment ?? ""
             );
             await loadComments();
             onCommentChanged?.();
-
-            setPopupPageName("DeleteComment");
-            setShowInfoPopup(true);
-
-        } catch {
+            popup.success({
+                title: "Delete Comment",
+                message: resultMessage("Comment", "Deleted")
+            });
+        } catch (e: any) {
             setCommentError("Could not delete comment. Try again.");
+            popup.error({ message: e?.message || "Could not delete comment. Try again." });
         } finally {
             setDeletingCommentId(null);
-            setCommentToDelete(null);
         }
     };
 
@@ -202,8 +200,10 @@ const Comments = forwardRef<CommentsHandle, CommentsProps>(({
             await loadComments();
             onCommentChanged?.();
             if (!opts?.suppressSuccessPopup) {
-                setPopupPageName(wasEditing ? "UpdateCommentSuccess" : "CreateCommentSuccess");
-                setShowInfoPopup(true);
+                popup.success({
+                    title: wasEditing ? "Edit Comment" : "Create Comment",
+                    message: resultMessage("Comment", wasEditing ? "Updated" : "Saved")
+                });
             }
             return true;
         } catch (e) {
@@ -347,59 +347,6 @@ const Comments = forwardRef<CommentsHandle, CommentsProps>(({
                     </div>
                 )}
             </div>
-            <Modal
-                show={showDeleteModal}
-                size="lg"
-                centered
-                onHide={() => { setShowDeleteModal(false); setCommentToDelete(null); }}
-                animation={false}
-                backdrop="static"
-                className="information-popup-modal"
-                backdropClassName="information-popup-backdrop"
-            >
-                <Modal.Header closeButton>
-                    <Modal.Title>Delete Comment</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <div className="row">
-                        <div className="col-md-12">
-                            <div className="d-flex justify-content">
-                                {/* <div className="delete-icon-wrapper mb-4">
-                                    <Icon.Trash size={24} />
-                                </div> */}
-                                <p className="_500 tx-14">
-                                    Are you sure you want to delete this comment?
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </Modal.Body>
-                <Modal.Footer className="gap-3">
-                    <Button
-                        variant={BUTTONS.SECONDARY}
-                        onClick={() => { setShowDeleteModal(false); setCommentToDelete(null); }}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        variant={BUTTONS.PRIMARY}
-                        onClick={handleConfirmDeleteComment}
-                        disabled={!!deletingCommentId}
-                    >
-                        Delete
-                    </Button>
-                </Modal.Footer>
-            </Modal>
-            {showInfoPopup && (
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    onClose={() => {
-                        setShowInfoPopup(false);
-                        setPopupPageName(undefined);
-                    }}
-                    pageName={popupPageName}
-                />
-            )}
         </>
     );
 });

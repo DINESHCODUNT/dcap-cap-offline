@@ -17,8 +17,7 @@ import { applySurveyStatusFieldUpdate } from '../../utils/surveyStatusFieldSync'
 import * as projectService from '../../service/ProjectService';
 import { usePermissions } from '../../context/PermissionContext';
 import { ROLES } from '../../constants/roles';
-import InformationPopup from '../../Common/InformationPopup';
-import ConfirmationPopup from '../../Common/ConfirmationPopup';
+import { usePopup } from '../../Common/PopupProvider';
 import { isElectron } from '../../utils/runtime';
 import SyncConfirmModal from '../Project/SyncConfirmModal';
 import { ExportConfigurationModal } from './ExportConfigurationModal';
@@ -114,13 +113,18 @@ const ReportOverview: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<any | null>(null);
 
+    const popup = usePopup();
+
     // In desktop app for local copy, project is never read-only (unless discarded by admin).
     // Read-only alert only applies on the website when synchedOnline != null.
     const isOfflineProject = !isDesktop && (isOfflineProjectStatus || data?.synchedOnline != null);
+    const canReportEdit = !isDesktop || Boolean(data?.reportEdit ?? data?.ReportEdit);
+    const isReportReadOnly = isDesktop ? !canReportEdit : Boolean(isOfflineProject);
+    const canExport = isDesktop ? Boolean(data?.reportExport ?? data?.ReportExport) : true;
+    const canExportAll = isDesktop ? Boolean(data?.reportExportAll ?? data?.ReportExportAll) : true;
+    const showExportMenu = canExport || canExportAll;
 
     const [showDiscardOfflineWarning, setShowDiscardOfflineWarning] = useState(false);
-    const [showReleaseOfflinePopup, setShowReleaseOfflinePopup] = useState(false);
-    const [isReleasingOffline, setIsReleasingOffline] = useState(false);
     const [showSyncModal, setShowSyncModal] = useState(false);
 
     const [activeView, setActiveView] = useState<{
@@ -134,9 +138,6 @@ const ReportOverview: React.FC = () => {
     const [reportIndex, setReportIndex] = useState<any>(null);
     const [reportData, setReportData] = useState<any>(null);
 
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
-    const [popupPageName, setPopupPageName] = useState<string>();
-
     const [hiReportData, setHiReportData] = useState<any>(null);
 
     const [isExporting, setIsExporting] = useState(false);
@@ -148,8 +149,6 @@ const ReportOverview: React.FC = () => {
     const [exportTemplate, setExportTemplate] = useState<{ id: number, name: string } | null>(null);
     const [validateTemplate, setValidateTemplate] = useState<{ id: number, name: string } | null>(null);
     const [isNewProject, setIsNewProject] = useState(false);
-    const [showResetPopup, setShowResetPopup] = useState(false);
-    const [isResetting, setIsResetting] = useState(false);
     const [validateVisible, setValidateVisible] = useState(false);
     const [allValidateVisible, setAllValidateVisible] = useState(false);
     const [isWarningHovered, setIsWarningHovered] = useState(false);
@@ -163,7 +162,7 @@ const ReportOverview: React.FC = () => {
     const [isValidatingAll, setIsValidatingAll] = useState(false);
     const navigate = useNavigate();
 
-    const isButtonloading = isExporting || isExportingAll || isResetting || isValidating || isValidatingAll;
+    const isButtonloading = isExporting || isExportingAll || isValidating || isValidatingAll;
 
     useEffect(() => {
         if (validateVisible || allValidateVisible) {
@@ -225,6 +224,14 @@ useEffect(() => {
             })
             .then(({ indexRes, newProject }) => {
                 const result = structuredClone(indexRes.data);
+                if (isDesktop) {
+                    const hasReportEdit = Boolean(result?.reportEdit ?? (result as any)?.ReportEdit);
+                    const hasReportView = Boolean(result?.reportView ?? (result as any)?.ReportView);
+                    if (!hasReportEdit && !hasReportView) {
+                        navigate('/app/access-denied');
+                        return;
+                    }
+                }
                 if (result?.reportPartGrid?.length > 0) {
                     result.reportPartGrid = result.reportPartGrid.map((p: any) => ({
                         ...p,
@@ -242,7 +249,14 @@ useEffect(() => {
                 setReportIndex(result);
                 setData(result);
             })
-            .catch(() => {
+            .catch((err) => {
+                if (isDesktop) {
+                    const msg = String(err?.response?.data?.errorMessage || err?.message || "");
+                    if (err?.response?.status === 403 || msg.toLowerCase().includes("access denied")) {
+                        navigate('/app/access-denied');
+                        return;
+                    }
+                }
             });
 
     }, [projectId]);
@@ -422,6 +436,10 @@ useEffect(() => {
 
                 const warnings = parseValidateGradingResponse(response.data);
                 setValidateWarnings(warnings);
+                if (warnings.length === 0) {
+                    setValidateVisible(false);
+                    popup.success("Validation completed successfully!", "Validate");
+                }
             } else {
                 setValidateVisible(true);
                 response = await surveyReportService.exportValidationPartial(
@@ -431,9 +449,14 @@ useEffect(() => {
 
                 const warnings = parseValidateGradingResponse(response.data);
                 setValidateWarnings(warnings);
+                if (warnings.length === 0) {
+                    setValidateVisible(false);
+                    popup.success("Validation completed successfully!", "Validate");
+                }
             }
 
-        } catch (err) {
+        } catch (err: any) {
+            popup.error(err?.response?.data || err?.message || "Validation failed. Please try again.", "Validate");
         } finally {
             setIsValidating(false);
         }
@@ -502,8 +525,13 @@ useEffect(() => {
             }
 
             setValidateAllWarnings(allWarnings);
+            if (allWarnings.length === 0) {
+                setAllValidateVisible(false);
+                popup.success("All parts have been successfully validated.", "Validate");
+            }
 
-        } catch (err) {
+        } catch (err: any) {
+            popup.error(err?.response?.data || err?.message || "Validation failed. Please try again.", "Validate");
         } finally {
             setIsValidatingAll(false);
         }
@@ -618,6 +646,7 @@ useEffect(() => {
         } catch (err) {
             setModal(null);
             setIsExporting(false);
+            popup.error("Exported  falied!", "Export");
         }
     };
 
@@ -648,7 +677,12 @@ useEffect(() => {
 
             const warnings = parseValidateGradingResponse(response.data);
             setValidateWarnings(warnings);
-        } catch (err) {
+            if (warnings.length === 0) {
+                setValidateVisible(false);
+                popup.success("Validation completed successfully!", "Validate");
+            }
+        } catch (err: any) {
+            popup.error(err?.response?.data || err?.message || "Validation failed. Please try again.", "Validate");
         } finally {
             setIsValidating(false);
         }
@@ -731,6 +765,7 @@ useEffect(() => {
         } catch (err) {
             setModal(null);
             setIsExporting(false);
+            popup.error("Exported  falied!", "Export");
         }
     };
 
@@ -759,6 +794,7 @@ useEffect(() => {
                 setModal(null);
                 setIsExporting(false);
                 setIsExportingAll(false);
+                popup.success("Exported successfully!", "Export");
             },
             onClose: () => {
                 window.URL.revokeObjectURL(url);
@@ -770,41 +806,45 @@ useEffect(() => {
     };
 
     const handleResetTemplate = async () => {
+        if (!reportIndex?.reportPartGrid) return;
+
+        const partName = activeView.part === "VMD"
+            ? "Vessel Main Data"
+            : activeView.part === "HI"
+                ? "Part H & I"
+                : `Part ${activeView.part}`;
+
+        const confirmed = await popup.confirm({
+            title: "Reset Template",
+            message: `Are you sure you want to reset the template ${partName}?`,
+            confirmText: "Yes, Reset",
+            cancelText: "Cancel",
+            danger: true
+        });
+        if (!confirmed) return;
 
         try {
-
-            if (!reportIndex?.reportPartGrid)
-                return;
-
             let template: any = null;
 
             if (activeView.part === "VMD") {
-
                 template = reportIndex.reportPartGrid.find(
                     (x: any) =>
                         x.name === "Vessel Main Data" ||
                         x.templateId === 0
                 );
-
             } else if (activeView.part === "HI") {
-
                 template = reportIndex.reportPartGrid.find(
                     (x: any) =>
                         (x.name === "Part H & I" || x.name === "Part H&I")
                 );
-
             } else {
-
                 template = reportIndex.reportPartGrid.find(
                     (x: any) =>
                         x.name === `Part ${activeView.part}`
                 );
             }
 
-            if (!template)
-                return;
-
-            setIsResetting(true);
+            if (!template) return;
 
             await surveyReportService.deleteReport(
                 projectId,
@@ -825,18 +865,9 @@ useEffect(() => {
                 response.data?.data || response.data;
 
             setReportData(result);
-
-            setPopupPageName("ResetSuccess");
-            setShowInfoPopup(true);
-
-        } catch (err) {
-            setPopupPageName("ResetError");
-            setShowInfoPopup(true);
-
-        } finally {
-
-            setIsResetting(false);
-            setShowResetPopup(false);
+            popup.success("Template has been reset successfully.", "Reset Template");
+        } catch (err: any) {
+            popup.error({ message: err?.message || "Failed to reset template. Please try again.", title: "Reset Template" });
         }
     };
 
@@ -970,6 +1001,7 @@ useEffect(() => {
                     data={data}
                     reportData={reportData}
                     isOfflineProject={isOfflineProject}
+                    readOnly={isDesktop}
                     onPortChange={handlePortChange}
                     onReportNoChange={handleReportNoChange}
                     onReportDateChange={handleReportDateChange}
@@ -991,6 +1023,7 @@ useEffect(() => {
                     data={data}
                     reportData={reportData}
                     isOfflineProject={isOfflineProject}
+                    readOnly={isDesktop}
                     onPortChange={handlePortChange}
                     onReportNoChange={handleReportNoChange}
                     onReportDateChange={handleReportDateChange}
@@ -1013,6 +1046,7 @@ useEffect(() => {
                     data={data}
                     reportData={reportData}
                     isOfflineProject={isOfflineProject}
+                    readOnly={isDesktop}
                     onPortChange={handlePortChange}
                     onReportNoChange={handleReportNoChange}
                     onReportDateChange={handleReportDateChange}
@@ -1037,6 +1071,7 @@ useEffect(() => {
                 onNavigate={handleNavigate}
                 isNewProject={isNewProject}
                 isOfflineProject={isOfflineProject}
+                readOnly={isReportReadOnly}
                 refreshCurrentReport={refreshCurrentReport}
             />
         );
@@ -1097,6 +1132,7 @@ useEffect(() => {
         } catch (err) {
             setModal(null);
             setIsExportingAll(false);
+            popup.error("Exported  falied!", "Export");
         }
     };
 
@@ -1158,15 +1194,22 @@ useEffect(() => {
     }, [activeView.section, reportData, projectId, reportIndex, refreshCurrentReport]);
 
     const handleReleaseOffline = async () => {
+        const confirmed = await popup.confirm({
+            title: "Confirm",
+            message: "Do you want to cancel the offline download and make the project available online? Any offline data will be lost.",
+            confirmText: "Yes, Proceed",
+            cancelText: "No",
+            danger: true
+        });
+        if (!confirmed) return;
+
         try {
-            setIsReleasingOffline(true);
             await projectService.releaseOfflineDownload(projectId);
-            setShowReleaseOfflinePopup(false);
+            await popup.success("Offline download cancelled", "Success");
             navigate(".", { replace: true, state: { ...location.state, projectStatus: "online" } });
             window.location.reload();
-        } catch (error) {
-        } finally {
-            setIsReleasingOffline(false);
+        } catch (error: any) {
+            popup.error("Offline download cancelled falied", "Error");
         }
     };
 
@@ -1222,31 +1265,36 @@ useEffect(() => {
                             </Dropdown.Menu>
                         </Dropdown>
 
-                        <Dropdown>
-                            <Dropdown.Toggle as={CustomDropdownToggle} id="dropdown-export" disabled={isButtonloading || isOfflineProject || loading}>
-                                Export(s)
-                            </Dropdown.Toggle>
-                            <Dropdown.Menu>
-                                <Dropdown.Item onClick={handleExport} disabled={isButtonloading || isOfflineProject}>
-                                    {isExporting ? "Exporting..." : "Export"}
-                                </Dropdown.Item>
-                                <Dropdown.Item onClick={handleExportAll} disabled={isButtonloading || isOfflineProject}>
-                                    {isExportingAll ? "Exporting All..." : "Export All"}
-                                </Dropdown.Item>
-                            </Dropdown.Menu>
-                        </Dropdown>
+                        {showExportMenu && (
+                            <Dropdown>
+                                <Dropdown.Toggle as={CustomDropdownToggle} id="dropdown-export" disabled={isButtonloading || isOfflineProject || loading}>
+                                    Export(s)
+                                </Dropdown.Toggle>
+                                <Dropdown.Menu>
+                                    {canExport && (
+                                        <Dropdown.Item onClick={handleExport} disabled={isButtonloading || isOfflineProject}>
+                                            {isExporting ? "Exporting..." : "Export"}
+                                        </Dropdown.Item>
+                                    )}
+                                    {canExportAll && (
+                                        <Dropdown.Item onClick={handleExportAll} disabled={isButtonloading || isOfflineProject}>
+                                            {isExportingAll ? "Exporting All..." : "Export All"}
+                                        </Dropdown.Item>
+                                    )}
+                                </Dropdown.Menu>
+                            </Dropdown>
+                        )}
 
                         {data?.synchedOnline != null && hasRole(ROLES.ADMIN_CAP_HQ) && (
                             <Button
                                 variant={BUTTONS.SECONDARY}
-                                onClick={() => setShowReleaseOfflinePopup(true)}
-                                disabled={isReleasingOffline}
+                                onClick={handleReleaseOffline}
                                 style={{ marginLeft: "8px" }}
                             >
-                                {isReleasingOffline ? "Canceling..." : "Cancel Offline Download"}
+                                Cancel Offline Download
                             </Button>
                         )}
-                        {isDesktop && navigator.onLine && (
+                        {isDesktop && (
                             <Button
                                 variant={BUTTONS.SECONDARY}
                                 onClick={() => setShowSyncModal(true)}
@@ -1255,13 +1303,13 @@ useEffect(() => {
                                 Save to Online
                             </Button>
                         )}
-                        {reportIndex?.resetTemplate === true && activeView.part !== "VMD" && (
+                        {!isElectron() && reportIndex?.resetTemplate === true && activeView.part !== "VMD" && (
                             <Button
                                 variant={BUTTONS.SECONDARY}
-                                onClick={() => setShowResetPopup(true)}
+                                onClick={handleResetTemplate}
                                 disabled={isButtonloading || isOfflineProject || loading}
                             >
-                                {isResetting ? "Resetting..." : "Reset Template"}
+                                Reset Template
                             </Button>
                         )}
                     </div>
@@ -1297,21 +1345,7 @@ useEffect(() => {
                                     ? validateAllWarnings
                                     : validateWarnings;
 
-                                return warnings.length === 0 ? (
-                                    <div className="cl-header">
-                                        <div className="cl-icon" style={{ color: "#2e7d32" }}>
-                                            <Icon.CheckCircle />
-                                        </div>
-                                        <div className="cl-header-text">
-                                            <div className="cl-title" style={{ color: "#2e7d32" }}>
-                                                All validations passed
-                                            </div>
-                                            <div className="cl-subtitle">
-                                                No missing fields found
-                                            </div>
-                                        </div>
-                                    </div>
-                                ) : (
+                                return warnings.length === 0 ? null : (
                                     <>
                                         <div className="cl-header">
                                             <div className="cl-icon">
@@ -1394,6 +1428,7 @@ useEffect(() => {
                                 data={data}
                                 reportData={hiReportData}
                                 isOfflineProject={isOfflineProject}
+                                readOnly={isReportReadOnly}
                             />
                         )}
 
@@ -1405,31 +1440,6 @@ useEffect(() => {
                 </div>
 
             </div>
-
-            {/* PDF EXPORT */}
-            {showResetPopup && (
-
-                <ConfirmationPopup
-                    onShow={showResetPopup}
-                    title="Reset Template"
-                    message={`Are you sure you want to reset the template ${activeView.part === "VMD"
-                        ? "Vessel Main Data"
-                        : activeView.part === "HI"
-                            ? "Part H & I"
-                            : `Part ${activeView.part}`
-                        }?`}
-                    confirmText="Yes, Reset"
-                    cancelText="Cancel"
-                    loading={isResetting}
-                    onClose={() => setShowResetPopup(false)}
-                    onConfirm={async () => {
-
-                        await handleResetTemplate();
-
-                    }}
-                />
-
-            )}
 
             {isDesktop && (
                 <SyncConfirmModal
@@ -1443,34 +1453,6 @@ useEffect(() => {
                         }
                     }}
                 />
-            )}
-
-            {showReleaseOfflinePopup && (
-                <ConfirmationPopup
-                    onShow={showReleaseOfflinePopup}
-                    title="Confirm"
-                    message="Do you want to cancel the offline download and make the project available online? Any offline data will be lost."
-                    confirmText="Yes, Proceed"
-                    cancelText="No"
-                    loading={isReleasingOffline}
-                    onClose={() => setShowReleaseOfflinePopup(false)}
-                    onConfirm={handleReleaseOffline}
-                />
-            )}
-
-            {showInfoPopup && (
-
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    pageName={popupPageName}
-                    onClose={() => {
-
-                        setShowInfoPopup(false);
-                        setPopupPageName(undefined);
-
-                    }}
-                />
-
             )}
             <NotificationContainer position="bottom-right" />
 

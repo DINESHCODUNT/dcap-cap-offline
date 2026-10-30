@@ -179,6 +179,13 @@ export function GetConformationMessage(
     }
 }
 
+export function resultMessage(
+    name: string,
+    action: 'Created' | 'Updated' | 'Deleted' | 'Saved' | 'Uploaded'
+): string {
+    return `${name} - has been ${action} Successfully.`;
+}
+
 export function GetPopupMessage(pageName?: string) {
     switch (pageName) {
         case "CreateGrading":
@@ -191,7 +198,7 @@ export function GetPopupMessage(pageName?: string) {
             return "Part deleted successfully";
 
         case "SavePart":
-            return "Part save successfully";
+            return "Part saved successfully";
 
         case "UpdatePart":
             return "Part updated successfully";

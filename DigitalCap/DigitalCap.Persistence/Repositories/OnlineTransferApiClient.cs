@@ -106,7 +106,11 @@ namespace DigitalCap.Persistence.Repositories
                         throw new HttpRequestException($"The CAP server returned an error ({response.StatusCode}): {snippet}");
                     }
 
-                    throw new HttpRequestException($"Request to {request.RequestUri?.AbsolutePath} failed with status {response.StatusCode}.");
+                    var path = request.RequestUri?.AbsolutePath;
+                    var snippet4xx = string.IsNullOrWhiteSpace(body) ? string.Empty : (body.Length > 300 ? body.Substring(0, 300) + "..." : body);
+                    throw new HttpRequestException(!string.IsNullOrEmpty(snippet4xx)
+                        ? $"Request to {path} failed with status {response.StatusCode}: {snippet4xx}"
+                        : $"Request to {path} failed with status {response.StatusCode}.");
                 }
 
                 return response;

@@ -6,6 +6,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { PermissionProvider } from "./context/PermissionContext";
 import initializeMsal from "./msalInstance";
 import App from "./App";
+import { PopupProvider } from "./Common/PopupProvider";
 import { SideDialogManagerProvider, SideDialogContainer } from "customer_portal-ui-shared";
 import "regenerator-runtime/runtime";
 import { Provider } from "react-redux";
@@ -24,10 +25,12 @@ import { store } from "../src/store/store";
                             <SideDialogManagerProvider>
                                 <AuthProvider>
                                     <PermissionProvider>
-                                        <App />
-                                        <div id="side-dialog-root">
-                                            <SideDialogContainer />
-                                        </div>
+                                        <PopupProvider>
+                                            <App />
+                                            <div id="side-dialog-root">
+                                                <SideDialogContainer />
+                                            </div>
+                                        </PopupProvider>
                                     </PermissionProvider>
                                 </AuthProvider>
                             </SideDialogManagerProvider>

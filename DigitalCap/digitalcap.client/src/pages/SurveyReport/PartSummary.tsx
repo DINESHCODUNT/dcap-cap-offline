@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 import { Label, Input, DatePickerInput, Divider, Card, RadioInput, CheckboxInput } from "customer_portal-ui-shared";
 import RichTextEditor from "../../Common/RichTextEditor";
 import { updateHIReport, updateGradingCondition, updateGradingNotes } from "../../service/SurveyReportService";
 import { getPartDisplayLabel } from "./partUtils";
+import { usePopup } from "../../Common/PopupProvider";
+import { isEmptyDate } from "../../utils/dateTime";
 
 type GradeOption = string | number;
 
@@ -13,12 +15,13 @@ interface PartSummaryProps {
     data?: any;
     reportData?: any;
     isOfflineProject?: boolean;
+    readOnly?: boolean;
 }
 type FormData = {
     report_no: string;
     orgname: string;
     certificate_no: string;
-    expire_date: Date;
+    expire_date: Date | null;
     accomodation: string;
     vessel_type: string;
     zonea: string;
@@ -27,8 +30,8 @@ type FormData = {
     maintanance: string;
     additional_comments: string;
     photographs: string;
-    startDate: Date;
-    endDate: Date;
+    startDate: Date | null;
+    endDate: Date | null;
     reportDate: string;
     remarks: string;
     survey_confirmed: string;
@@ -42,7 +45,7 @@ type FormData = {
     leademployee_no: string;
     surveyername: string;
     employee_no: string;
-    visitDate: Date;
+    visitDate: Date | null;
     individualA: string;
     individualB: string;
     individualC: string;
@@ -54,13 +57,25 @@ type FormData = {
 
 const GRADE_OPTIONS: GradeOption[] = [1, 2, 3, 4, 5, 'N/A'];
 
-const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOfflineProject }) => {
+const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOfflineProject, readOnly }) => {
+    const isLocked = Boolean(isOfflineProject || readOnly);
+    const popup = usePopup();
+    const saveErrorOpenRef = useRef(false);
+
+    const handleSaveError = () => {
+        if (!saveErrorOpenRef.current) {
+            saveErrorOpenRef.current = true;
+            popup.error("Your change could not be saved. Please try again.", "Save").finally(() => {
+                saveErrorOpenRef.current = false;
+            });
+        }
+    };
 
     const [formData, setFormData] = React.useState<FormData>({
         report_no: "",
         orgname: "",
         certificate_no: "",
-        expire_date: new Date(),
+        expire_date: null,
 
         accomodation: "",
         vessel_type: "Double Hull Crude Oil Carrier",
@@ -70,8 +85,8 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
         maintanance: "",
         additional_comments: "",
         photographs: "",
-        startDate: new Date(),
-        endDate: new Date(),
+        startDate: null,
+        endDate: null,
         reportDate: "",
         remarks: "",
         survey_confirmed: "",
@@ -85,7 +100,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
         leademployee_no: "",
         surveyername: "",
         employee_no: "",
-        visitDate: new Date(),
+        visitDate: null,
         individualA: "",
         individualB: "",
         individualC: "",
@@ -120,10 +135,9 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                 hiReport.certificateNumber ?? "",
 
             expire_date:
-                hiReport.expiryDate &&
-                    hiReport.expiryDate !== "0001-01-01T00:00:00"
+                !isEmptyDate(hiReport.expiryDate)
                     ? new Date(hiReport.expiryDate)
-                    : new Date(),
+                    : null,
 
             accomodation:
                 hiReport.accommodation ?? "",
@@ -150,14 +164,14 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                 hiReport.photoGraphs ?? "",
 
             startDate:
-                hiReport.operationalTestStart
+                !isEmptyDate(hiReport.operationalTestStart)
                     ? new Date(hiReport.operationalTestStart)
-                    : new Date(),
+                    : null,
 
             endDate:
-                hiReport.operationalTestFinish
+                !isEmptyDate(hiReport.operationalTestFinish)
                     ? new Date(hiReport.operationalTestFinish)
-                    : new Date(),
+                    : null,
 
             reportDate:
                 hiReport.associatedReportDate ?? "",
@@ -199,9 +213,9 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                 hiReport.surveyorNumber ?? "",
 
             visitDate:
-                hiReport.lastVisitDate
+                !isEmptyDate(hiReport.lastVisitDate)
                     ? new Date(hiReport.lastVisitDate)
-                    : new Date(),
+                    : null,
 
             individualA:
                 hiReport.individualA ?? "",
@@ -342,12 +356,14 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
             await updateHIReport(payload);
 
         } catch (error) {
+            handleSaveError();
         }
     };
 
     const debounceRef = React.useRef<any>(null);
 
     const handleChange = (field: string, value: any) => {
+        if (isLocked) return;
         setFormData(prev => {
             const updatedData = { ...prev, [field]: value };
 
@@ -363,6 +379,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
     };
 
     const handleUpdateGradingCondition = async (gradingId: number, choices: { choiceName: string, value: boolean }[]) => {
+        if (isLocked) return;
         try {
             const payload = {
                 templateId: reportData?.template?.id,
@@ -373,6 +390,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
             };
             await updateGradingCondition(payload);
         } catch (error) {
+            handleSaveError();
         }
     };
 
@@ -426,7 +444,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 onChange={(value: string) =>
                                                     handleChange("orgname", value)
                                                 }
-                                                disabled={isOfflineProject}
+                                                disabled={isLocked}
                                             />
                                         </span>
 
@@ -437,7 +455,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 onChange={(value: string) =>
                                                     handleChange("certificate_no", value)
                                                 }
-                                                disabled={isOfflineProject}
+                                                disabled={isLocked}
                                             />
                                         </span>
                                         <span className="certify">expiry date </span>
@@ -447,7 +465,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                     handleChange("expire_date", date)
                                                 }
                                                 value={formData.expire_date}
-                                                disabled={isOfflineProject}
+                                                disabled={isLocked}
                                             />
                                         </span>
                                         <span className="certify">UTM submitted in way of the following transverse zones was carried out and completed in accordance with CAP Survey requirements:</span>
@@ -463,7 +481,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 onChange={(value: string) =>
                                                     handleChange("zonea", value)
                                                 }
-                                                disabled={isOfflineProject}
+                                                disabled={isLocked}
                                             />
                                         </div>
                                     </div>
@@ -478,7 +496,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 onChange={(value: string) =>
                                                     handleChange("zoneb", value)
                                                 }
-                                                disabled={isOfflineProject}
+                                                disabled={isLocked}
                                             />
                                         </div>
                                     </div>
@@ -491,7 +509,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 onChange={(value: string) =>
                                                     handleChange("zonec", value)
                                                 }
-                                                disabled={isOfflineProject}
+                                                disabled={isLocked}
                                             />
                                         </div>
                                     </div>
@@ -520,7 +538,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("maintanance", "Yes")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                         <RadioInput
                                             label="No"
@@ -528,7 +546,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("maintanance", "No")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                 </div>
@@ -542,7 +560,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 handleChange("additional_comments", value)
                                             }
                                             placeholder="Enter Additional Comments..."
-                                            readOnly={isOfflineProject}
+                                            readOnly={isLocked}
                                         /></div>
                                 </div>
                             </div>
@@ -571,7 +589,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("accomodation", "Yes")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -580,7 +598,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("accomodation", "No")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -589,7 +607,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("accomodation", "N/A")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                 </div>
@@ -619,7 +637,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("photographs", "Yes")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -628,7 +646,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("photographs", "No")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -637,7 +655,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("photographs", "N/A")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                     </div>
@@ -652,7 +670,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                     handleChange("additional_comments", value)
                                                 }
                                                 placeholder="Enter Additional Comments..."
-                                                readOnly={isOfflineProject}
+                                                readOnly={isLocked}
                                             />
                                         </div>
                                     </div>)}
@@ -680,7 +698,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={(value: string) =>
                                                 handleChange("operational_location", value)
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -690,7 +708,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 handleChange("startDate", date)
                                             }
                                             value={formData.startDate}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-2 form-group">
@@ -700,7 +718,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 handleChange("endDate", date)
                                             }
                                             value={formData.endDate}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
 
@@ -731,7 +749,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={(value: string) =>
                                                 handleChange("report_no", value)
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-4 form-group">
@@ -742,7 +760,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={(value: string) =>
                                                 handleChange("reportDate", value)
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
 
@@ -779,7 +797,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("survey_confirmed", "Yes")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -788,7 +806,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("survey_confirmed", "No")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -797,7 +815,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("survey_confirmed", "N/A")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                     </div>
@@ -817,7 +835,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("class_recommendations", "Yes")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -826,7 +844,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("class_recommendations", "No")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -835,7 +853,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("class_recommendations", "N/A")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                     </div>
@@ -855,7 +873,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("fatigue_analysis", "Yes")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -864,7 +882,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("fatigue_analysis", "No")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -873,7 +891,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("fatigue_analysis", "N/A")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                     </div>
@@ -893,7 +911,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("modifications", "Yes")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -902,7 +920,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("modifications", "No")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -911,7 +929,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("modifications", "N/A")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                     </div>
@@ -931,7 +949,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("plating_condition", "Yes")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -940,7 +958,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("plating_condition", "No")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -949,7 +967,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("plating_condition", "N/A")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                     </div>
@@ -969,7 +987,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("bottom_plating", "Yes")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -978,7 +996,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("bottom_plating", "No")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                         <RadioInput
@@ -987,7 +1005,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             onChange={() =>
                                                 handleChange("bottom_plating", "N/A")
                                             }
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
 
                                     </div>
@@ -1006,7 +1024,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             handleChange("remarks", value)
                                         }
                                         placeholder="Enter Additional Comments..."
-                                        readOnly={isOfflineProject}
+                                        readOnly={isLocked}
                                     />
 
                                 </div>
@@ -1059,6 +1077,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                                 }
                                                                 onChange={(val: string) => {
 
+                                                                    if (isLocked) return;
                                                                     setGrades((prev: any) => ({
                                                                         ...prev,
                                                                         [`${grade.id}_comment`]: val
@@ -1071,10 +1090,11 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                                         gradingId: grade.id,
                                                                         value: val
                                                                     }).catch(() => {
+                                                                        handleSaveError();
                                                                     });
                                                                 }}
                                                                 maxLength={20}
-                                                                disabled={isOfflineProject}
+                                                                disabled={isLocked}
                                                             />
                                                         </td>
                                                         {grade.checkbox?.map((item: any) => (
@@ -1197,7 +1217,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                                         }));
                                                                         await handleUpdateGradingCondition(grade.id, choicesToUpdate);
                                                                     }}
-                                                                    disabled={isOfflineProject}
+                                                                    disabled={isLocked}
                                                                 />
                                                             </td>
                                                         ))}
@@ -1262,7 +1282,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 value
                                             )
                                         }
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
 
                                 </div>
@@ -1284,7 +1304,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 value
                                             )
                                         }
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
 
                                 </div>
@@ -1304,7 +1324,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                             )
                                         }
                                         value={formData.visitDate}
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
 
                                 </div>
@@ -1336,7 +1356,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 value
                                             )
                                         }
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
 
                                 </div>
@@ -1358,7 +1378,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 value
                                             )
                                         }
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
 
                                 </div>
@@ -1389,7 +1409,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 value
                                             )
                                         }
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
 
                                 </div>
@@ -1414,7 +1434,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 value
                                             )
                                         }
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
 
                                 </div>
@@ -1439,7 +1459,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 value
                                             )
                                         }
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
 
                                 </div>
@@ -1464,7 +1484,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 value
                                             )
                                         }
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
 
                                 </div>
@@ -1489,7 +1509,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 value
                                             )
                                         }
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
 
                                 </div>
@@ -1514,7 +1534,7 @@ const PartSummary: React.FC<PartSummaryProps> = ({ activePart, reportData, isOff
                                                 value
                                             )
                                         }
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
 
                                 </div>

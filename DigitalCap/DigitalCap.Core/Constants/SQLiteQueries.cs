@@ -394,8 +394,8 @@ ORDER BY [Order],TankTypeId,CreatedDttm";
             //public static readonly string ByStatus = $"{Schema}.Read_Projects_ByStatus";
             public static readonly string ReadStatuses = $"{Schema}.Read_Project_Statuses";
             public static readonly string UpdateProjectStatus = $"{Schema}.Update_Project_Status_Manual";
-            public static readonly string UpdatePriority = $"{Schema}.Update_Project_Priority";
-            public static readonly string UpdatePercentComplete = $"{Schema}.Update_Project_Percent_Complete";
+            public static readonly string UpdatePriority = "UPDATE Projects SET ProjectPriority = @Priority, LastModifiedBy = @User, ModifiedDate = DATETIME('now') WHERE ID = @Id";
+            public static readonly string UpdatePercentComplete = "UPDATE Projects SET PercentComplete = @PercentComplete, LastModifiedBy = @User, ModifiedDate = DATETIME('now') WHERE ID = @ID";
             public static readonly string Grading = $"{Schema}.Read_Project_Grading";
 
 
@@ -434,6 +434,17 @@ ORDER BY [Order],TankTypeId,CreatedDttm";
             public static readonly string GetProjectNamesByIMO = $"SELECT DISTINCT IMO as Value,Name AS Text,ID as ProjectId FROM [Projects] where IMO is not null and IMO=@IMO order by IMO";
             public static readonly string GetProjectListByIMO = $"SELECT DISTINCT Id as value,Name AS text FROM [Projects] where IMO is not null and IMO=@IMO order by Id";
 
+        }
+
+        public static class Projects
+        {
+            public static readonly string UpdatePercentComplete = Project.UpdatePercentComplete;
+            public static readonly string UpdatePriority = Project.UpdatePriority;
+        }
+
+        public static class ProjectGrading
+        {
+            public static readonly string GetGradingById = ProjectMapping.GetGradingbyId;
         }
 
         public static class File

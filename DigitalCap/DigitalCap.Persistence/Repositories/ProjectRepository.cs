@@ -185,7 +185,7 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
-                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
+                if (Connection.IsSqlite() || Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
                 {
                     var sqliteList = await Connection.QueryAsync<SelectListItem>(
                         sql: DigitalCap.Core.Constants.SQLiteQueries.Project.GetProjectListByIMO,
@@ -715,6 +715,21 @@ namespace DigitalCap.Persistence.Repositories
 
         public async Task<int> UpdatePercentComplete(int projectId, byte percentComplete, string currentUser)
         {
+            if (Connection.IsSqlite())
+            {
+                var rows = await Connection.ExecuteAsync(
+                    sql: DigitalCap.Core.Constants.SQLiteQueries.Project.UpdatePercentComplete,
+                    param: new
+                    {
+                        ID = projectId,
+                        PercentComplete = percentComplete,
+                        User = currentUser
+                    },
+                    transaction: Transaction);
+                this.Commit();
+                return rows;
+            }
+
             var result = await Connection.ExecuteAsync(
     sql: "CAP.Update_Project_Percent_Complete",
     param: new
@@ -1098,6 +1113,27 @@ namespace DigitalCap.Persistence.Repositories
 
 
         public async Task UpdatePriority(int id, int? priority, string currentUser)
+        {
+            if (Connection.IsSqlite())
+            {
+                await Connection.ExecuteAsync(
+                    sql: DigitalCap.Core.Constants.SQLiteQueries.Project.UpdatePriority,
+                    param: new
+                    {
+                        Id = id,
+                        Priority = priority,
+                        User = currentUser
+                    },
+                    transaction: Transaction
+                );
+                this.Commit();
+                return;
+            }
+
+            await UpdatePrioritySqlServer(id, priority, currentUser);
+        }
+
+        private async Task UpdatePrioritySqlServer(int id, int? priority, string currentUser)
         {
             await Connection.ExecuteAsync(
                 sql: "CAP.Update_Project_Priority",

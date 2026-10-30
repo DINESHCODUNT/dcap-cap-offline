@@ -60,9 +60,9 @@ const DocumentList = forwardRef<CommonAttachmentHandle, DocumentListProps>(funct
                 </li>
             </ul>
 
-            <div className="row">
-                <div className="col-md-6 mb-3 mt-2">
-                    <div className="d-flex justify-content-start align-items-center gap-2">
+            <div className="d-flex justify-content-start align-items-center gap-2 mb-3 mt-2">
+
+
                         <AbsSearch
                             handleClear={() => handleClearFilter()}
                             value={sval}
@@ -82,8 +82,8 @@ const DocumentList = forwardRef<CommonAttachmentHandle, DocumentListProps>(funct
                         >
                             Clear Filter
                         </a>
-                    </div>
-                </div>
+
+
             </div>
             <div className="attachment-wrapper">
                 <CommonAttachment

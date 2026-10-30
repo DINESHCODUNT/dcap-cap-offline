@@ -34,3 +34,22 @@ export function GetUserMenuPermissions(): Promise<AxiosResponse> {
     const routePath = `/api/UserPermission/GetUserMenuPermissions`;
     return axiosInstance.get(routePath);
 }
+
+export interface ManageTankPermission {
+    read: boolean;
+    edit: boolean;
+    delete: boolean;
+}
+
+export function getManageTankPermission(
+    projectId?: number | string | null,
+    imo?: number | string | null
+): Promise<AxiosResponse<ManageTankPermission>> {
+    const routePath = `/api/UserPermission/GetManageTankPermission`;
+    return axiosInstance.get(routePath, {
+        params: {
+            projectId: projectId ?? undefined,
+            imo: imo ?? undefined
+        }
+    });
+}

@@ -16,9 +16,10 @@ import BulkImageUpload from './BulkImageUpload';
 import ReportContentListView from './ReportContentListView';
 import Spinner from 'react-bootstrap/Spinner';
 import * as surveyReportService from '../../service/SurveyReportService';
-import ConfirmationPopup from '../../Common/ConfirmationPopup';
-import InformationPopup from '../../Common/InformationPopup';
+import { usePopup } from '../../Common/PopupProvider';
 import { getPartDisplayLabel, findPartInGrid, getPartNameFromGrid } from './partUtils';
+import { isElectron } from '../../utils/runtime';
+import { usePermissions } from '../../context/PermissionContext';
 interface ReportContentProps {
     activePart: string;
     activeSection: string;
@@ -34,6 +35,7 @@ interface ReportContentProps {
     ) => void;
     isNewProject?: boolean;
     isOfflineProject?: boolean;
+    readOnly?: boolean;
     refreshCurrentReport: () => Promise<void>;
 }
 
@@ -60,9 +62,14 @@ const ReportContent: React.FC<ReportContentProps> = ({
     loading,
     onNavigate,
     isNewProject,
-    isOfflineProject, refreshCurrentReport
+    isOfflineProject,
+    readOnly,
+    refreshCurrentReport
 }) => {
+    const isLocked = Boolean(isOfflineProject || readOnly);
     const navigate = useNavigate();
+    const { pagePermissions, hasPagePermission } = usePermissions();
+    const canManageTank = !isElectron() || !!(pagePermissions?.manageTank?.read || pagePermissions?.manageTank?.edit || hasPagePermission('manageTank') || hasPagePermission('ManageTank'));
     const reportData = useMemo(() => {
         if (!rawReportData) return null;
         return isNewProject
@@ -134,6 +141,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
         if (!reportData) return [];
 
         const appendTankSections = (sections: any[]) => {
+            if (isElectron()) return sections;
             const tankSections = toArray(
                 reportData?.tankReportView?.sections ??
                 reportData?.template?.tankReportView?.sections
@@ -296,6 +304,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
             }
         } catch (err) {
             console.error(err);
+            handleSaveError();
         }
     };
 
@@ -324,6 +333,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
             }
         } catch (err) {
             console.error(err);
+            handleSaveError();
         }
     };
 
@@ -351,6 +361,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
             }
         } catch (err) {
             console.error(err);
+            handleSaveError();
         }
     };
 
@@ -413,16 +424,21 @@ const ReportContent: React.FC<ReportContentProps> = ({
         }
     };
 
-    const [showDeletePopup, setShowDeletePopup] = useState(false);
-    const [selectedDeleteTank, setSelectedDeleteTank] = useState<any>(null);
+    const popup = usePopup();
+    const saveErrorOpenRef = useRef(false);
 
-    const [deleteLoading, setDeleteLoading] = useState(false);
+    const handleSaveError = () => {
+        if (!saveErrorOpenRef.current) {
+            saveErrorOpenRef.current = true;
+            popup.error("Your change could not be saved. Please try again.", "Save").finally(() => {
+                saveErrorOpenRef.current = false;
+            });
+        }
+    };
     const tooltipRef = useRef<HTMLDivElement>(null);
 
     const sideDialog = useContext(SideDialogManagerContext) as any;
     const id = _uniqueId("sideDialog_");
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
-    const [popupPageName, setPopupPageName] = useState<string>();
 
     const sections = useMemo(() => {
         if (!data) return [];
@@ -868,6 +884,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                 });
 
             } catch (err) {
+                handleSaveError();
             }
 
             return;
@@ -959,7 +976,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
             });
 
         } catch (err) {
-
+            handleSaveError();
         }
     };
 
@@ -1095,6 +1112,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
     }, [projectId]);
 
     const handleClick = () => {
+        if (isLocked) return;
         let filteredReportSectionOptions = reportSectionOptions;
         if (!isNewProject) {
             filteredReportSectionOptions = reportSectionOptions.filter((opt: any) => opt.value?.startsWith(`${reportData.template.id}:`));
@@ -1132,6 +1150,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                 templateId={reportData.template.id}
                 onUploadSuccess={refreshCurrentReport}
                 isNewProject={isNewProject}
+                readOnly={isLocked}
             />
         });
     };
@@ -1175,56 +1194,74 @@ const ReportContent: React.FC<ReportContentProps> = ({
     const totalCount =
         tanks.length;
 
-    const handleDeleteImage = async () => {
+    const confirmDeleteImage = (tankToDelete: any) => {
+        if (!tankToDelete) return;
 
-        if (!selectedDeleteTank)
-            return;
-
-        try {
-            setDeleteLoading(true);
-
-            const isTankSection = toArray(
-                reportData?.tankReportView?.sections ?? reportData?.template?.tankReportView?.sections
-            ).some((tank: any) =>
-                [tank?.sectionMappingId, tank?.sectionId, tank?.id]
-                    .filter(Boolean)
-                    .map(String)
-                    .map(s => s.trim().toLowerCase())
-                    .includes(String(selectedDeleteTank.sectionId).trim().toLowerCase())
-            );
-
-            if (isTankSection) {
-                await surveyReportService.deleteTankCardImage({
-                    templateId: selectedDeleteTank.templateId ?? 0,
-                    projectId: projectId,
-                    sectionId: selectedDeleteTank.sectionId,
-                    cardNumber: selectedDeleteTank.cardId,
-                    imageId: Number(selectedDeleteTank.imageId ?? 0),
-                });
-            } else if (isNewProject) {
-                await surveyReportService.deleteGenericImage(
-                    selectedDeleteTank.templateId ?? 0,
-                    projectId,
-                    selectedDeleteTank.sectionId,
-                    selectedDeleteTank.cardId,
-                    Number(selectedDeleteTank.imageId ?? 0)
+        popup.confirmAsync({
+            title: "Delete Image",
+            message: "Are you sure you want to delete this image?",
+            confirmButtonText: "Yes",
+            cancelButtonText: "Cancel",
+            danger: true,
+            onConfirm: async () => {
+                const isTankSection = toArray(
+                    reportData?.tankReportView?.sections ?? reportData?.template?.tankReportView?.sections
+                ).some((tank: any) =>
+                    [tank?.sectionMappingId, tank?.sectionId, tank?.id]
+                        .filter(Boolean)
+                        .map(String)
+                        .map(s => s.trim().toLowerCase())
+                        .includes(String(tankToDelete.sectionId).trim().toLowerCase())
                 );
-            } else {
-                await surveyReportService.deleteImage({
-                    templateId: selectedDeleteTank.templateId,
-                    projectId: projectId,
-                    sectionId: selectedDeleteTank.sectionId,
-                    cardId: selectedDeleteTank.cardId,
-                    imageId: selectedDeleteTank.imageId,
-                    replaceImage: false
-                });
-            }
 
-            setTanks(prev =>
-                prev.map(t =>
-                    t.id === selectedDeleteTank.id
+                if (isTankSection) {
+                    await surveyReportService.deleteTankCardImage({
+                        templateId: tankToDelete.templateId ?? 0,
+                        projectId: projectId,
+                        sectionId: tankToDelete.sectionId,
+                        cardNumber: tankToDelete.cardId,
+                        imageId: Number(tankToDelete.imageId ?? 0),
+                    });
+                } else if (isNewProject) {
+                    await surveyReportService.deleteGenericImage(
+                        tankToDelete.templateId ?? 0,
+                        projectId,
+                        tankToDelete.sectionId,
+                        tankToDelete.cardId,
+                        Number(tankToDelete.imageId ?? 0)
+                    );
+                } else {
+                    await surveyReportService.deleteImage({
+                        templateId: tankToDelete.templateId,
+                        projectId: projectId,
+                        sectionId: tankToDelete.sectionId,
+                        cardId: tankToDelete.cardId,
+                        imageId: tankToDelete.imageId,
+                        replaceImage: false
+                    });
+                }
+
+                setTanks(prev =>
+                    prev.map(t =>
+                        t.id === tankToDelete.id
+                            ? {
+                                ...t,
+                                hasImage: false,
+                                imageUrl: null,
+                                imageId: 0,
+                                descriptionId: "",
+                                descriptionText: "",
+                                additionalDescription: "",
+                                selectedCondition: ""
+                            }
+                            : t
+                    )
+                );
+
+                setActiveTank(prev =>
+                    prev && prev.id === tankToDelete.id
                         ? {
-                            ...t,
+                            ...prev,
                             hasImage: false,
                             imageUrl: null,
                             imageId: 0,
@@ -1233,37 +1270,12 @@ const ReportContent: React.FC<ReportContentProps> = ({
                             additionalDescription: "",
                             selectedCondition: ""
                         }
-                        : t
-                )
-            );
+                        : prev
+                );
 
-            setShowDeletePopup(false);
-
-            setActiveTank(prev =>
-                prev && prev.id === selectedDeleteTank.id
-                    ? {
-                        ...prev,
-                        hasImage: false,
-                        imageUrl: null,
-                        imageId: 0,
-                        descriptionId: "",
-                        descriptionText: "",
-                        additionalDescription: "",
-                        selectedCondition: ""
-                    }
-                    : prev
-            );
-
-            setPopupPageName("DeleteTankImage");
-
-            setShowInfoPopup(true);
-
-        } catch (err) {
-
-        } finally {
-
-            setDeleteLoading(false);
-        }
+                popup.success("Image has been deleted successfully.", "Delete Image");
+            }
+        }).catch((err: any) => popup.error(err?.response?.data || err?.message || "Unable to delete the image. Please try again.", "Delete Image"));
     };
 
     const closePanel = () => {
@@ -1322,13 +1334,15 @@ const ReportContent: React.FC<ReportContentProps> = ({
         <div className="report-content">
             <div className="project-header">
                 <div className="section-title p-2 p-md-3 pe-5 pe-md-3 border-bottom d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-md-3 position-relative">
-                    <div className="d-md-none position-absolute" style={{ right: '54px', top: '12px', zIndex: 10 }}>
-                        <button className='info-tooltip shadow-sm'
-                            onClick={() => setVisible((prev) => !prev)}
-                            aria-label="Show grading system information"
-                            aria-expanded={visible}
-                            style={{ width: '32px', height: '32px', borderRadius: '6px', borderRight: '1px solid #dee2e6', padding: 0 }}> <Icon.InfoCircle size={16} /> </button>
-                    </div>
+                    {!isElectron() && (
+                        <div className="d-md-none position-absolute" style={{ right: '54px', top: '12px', zIndex: 10 }}>
+                            <button className='info-tooltip shadow-sm'
+                                onClick={() => setVisible((prev) => !prev)}
+                                aria-label="Show grading system information"
+                                aria-expanded={visible}
+                                style={{ width: '32px', height: '32px', borderRadius: '6px', borderRight: '1px solid #dee2e6', padding: 0 }}> <Icon.InfoCircle size={16} /> </button>
+                        </div>
+                    )}
                     <div className="d-flex flex-row gap-3 w-100 w-md-auto justify-content-between justify-content-md-start">
                         <div className="d-flex flex-column">
                             <h5>{sectionLabel}</h5>
@@ -1341,11 +1355,13 @@ const ReportContent: React.FC<ReportContentProps> = ({
                     </div>
                     <div className="section-actions w-100 w-md-auto d-flex justify-content-end mt-2 mt-md-0">
                         <div className="d-flex flex-wrap gap-2 align-items-center justify-content-end w-100">
-                            <div className="d-none d-md-block"><button className='info-tooltip'
-                                onClick={() => setVisible((prev) => !prev)}
-                                aria-label="Show grading system information"
-                                aria-expanded={visible}> <Icon.InfoCircle /> </button></div>
-                            {(activePart === "B" || activePart === "C" || activePart === "D") && (
+                            {!isElectron() && (
+                                <div className="d-none d-md-block"><button className='info-tooltip'
+                                    onClick={() => setVisible((prev) => !prev)}
+                                    aria-label="Show grading system information"
+                                    aria-expanded={visible}> <Icon.InfoCircle /> </button></div>
+                            )}
+                            {canManageTank && (activePart === "B" || activePart === "C" || activePart === "D") && (
                                 <div>
                                     <Button
                                         variant={BUTTONS.SECONDARY}
@@ -1375,7 +1391,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                     </div>
                 </div>
             </div>
-            {visible && (
+            {!isElectron() && visible && (
                 <div ref={tooltipRef} role="tooltip" className='tooltip-panel'>
                     <div className='hint-wrapper'>
                         <h5 className='hint-title d-flex justify-content-between align-items-center'>
@@ -1482,11 +1498,11 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                                                     });
 
                                                                 } catch (err) {
-
+                                                                    handleSaveError();
                                                                 }
                                                             }}
                                                             maxLength={20}
-                                                            disabled={isOfflineProject}
+                                                            disabled={isLocked}
                                                         />
                                                     </td>
 
@@ -1512,7 +1528,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                                                             checked
                                                                         )
                                                                     }
-                                                                    disabled={isOfflineProject}
+                                                                    disabled={isLocked}
                                                                 />
                                                             </td>
                                                         );
@@ -1552,9 +1568,9 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                     key={`${reportData?.template?.id}-${projectId}-${activeSection}`}
                                     id={`${reportData?.template?.id}-${projectId}-${activeSection}-remarks-input`}
                                     value={notes}
-                                    readOnly={isOfflineProject}
+                                    readOnly={isLocked}
                                     onChange={async (value) => {
-                                        if (isOfflineProject) return;
+                                        if (isLocked) return;
                                         setNotes(value);
                                         try {
                                             await surveyReportService.updateSectionNotes({
@@ -1564,7 +1580,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                                 value: value
                                             });
                                         } catch (err) {
-
+                                            handleSaveError();
                                         }
                                     }}
                                     placeholder="Enter Notes here..."
@@ -1589,7 +1605,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                             selected={viewMode === 'GRID' ? 'Grid' : 'List'}
                                         />
                                     </div>
-                                    <Button onClick={handleClick} disabled={isOfflineProject}>Bulk Update</Button>
+                                    <Button onClick={handleClick} disabled={isLocked}>Bulk Update</Button>
                                 </div>
                             </div>
                         </div>
@@ -1651,7 +1667,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                     tanks={filtered}
                                     conditionOptions={conditionOptions}
                                     descriptionOptions={activeDescriptionOptions}
-                                    isOfflineProject={isOfflineProject}
+                                    isOfflineProject={isLocked}
                                     onViewImage={(tankId) => {
                                         const index = slides.findIndex((s) => s.title === tankId);
                                         if (index >= 0) {
@@ -1662,8 +1678,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                     onDeleteImage={(tankId) => {
                                         const tk = tanks.find(t => t.id === tankId);
                                         if (tk) {
-                                            setSelectedDeleteTank(tk);
-                                            setShowDeletePopup(true);
+                                            confirmDeleteImage(tk);
                                         }
                                     }}
                                     onConditionChange={handleConditionChange}
@@ -1680,7 +1695,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                             <div
                                 key={tank.id}
                                 onClick={() => {
-                                    if (!isOfflineProject) {
+                                    if (!isLocked) {
                                         toggleActive(tank.id);
                                     }
                                 }}
@@ -1698,7 +1713,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                                 }}>
                                                     <Icon.ZoomIn size={20} />
                                                 </button>
-                                                {!isOfflineProject && (
+                                                {!isLocked && (
                                                     <>
                                                         <button
                                                             className="overlay-btn"
@@ -1726,8 +1741,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                                             title="Remove"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                setSelectedDeleteTank(tank);
-                                                                setShowDeletePopup(true);
+                                                                confirmDeleteImage(tank);
                                                             }}
                                                         >
                                                             <Icon.Trash2 size={20} />
@@ -1738,7 +1752,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                         </>
                                     ) : (
                                         <> <Icon.Image size={64} color={getIconColor(tank)} />
-                                            {!isOfflineProject && (
+                                            {!isLocked && (
                                                 <div className="image-overlay">
                                                     <button
                                                         className="overlay-btn"
@@ -1819,20 +1833,8 @@ const ReportContent: React.FC<ReportContentProps> = ({
                             container: { backgroundColor: "rgba(0,0,0,0.85)" },
                         }}
                     />
-                    <ConfirmationPopup
-                        onShow={showDeletePopup}
-                        title="Delete Image"
-                        message="Are you sure you want to delete this image?"
-                        confirmText="Yes"
-                        cancelText="Cancel"
-                        loading={deleteLoading}
-                        onClose={() => {
-                            setShowDeletePopup(false);
-                        }}
-                        onConfirm={handleDeleteImage}
-                    />
                 </div>
-                {!isOfflineProject && (
+                {!isLocked && (
                     <>
                         <button
                             onClick={togglePanel}
@@ -1850,6 +1852,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                 activeTank={activeTank}
                                 projectId={projectId}
                                 tanks={tanks}
+                                readOnly={isLocked}
                                 onNavigateTank={(tank: any) => {
                                     setActiveTank(tank);
 
@@ -1912,22 +1915,6 @@ const ReportContent: React.FC<ReportContentProps> = ({
                     </>
                 )}
             </div>
-
-            {showInfoPopup && (
-
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    pageName={popupPageName}
-                    onClose={() => {
-
-                        setShowInfoPopup(false);
-                        setPopupPageName(undefined);
-
-                    }}
-                />
-
-            )}
-
         </div>
 
 

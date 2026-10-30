@@ -379,6 +379,7 @@
 
 
 .feed {
+    height: 320px;
     max-height: 320px;
     min-height: 200px;
     overflow-y: auto;
@@ -3069,12 +3070,16 @@
     display: flex;
     align-items: flex-start;
     width: 100%;
+    flex-wrap: wrap;
+    row-gap: 20px;
+    max-width: 100%;
     padding: 20px 8px 20px;
 
     .workflow-step {
         position: relative;
         flex: 1;
-        min-width: 120px;
+        min-width: 70px;
+        max-width: 140px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -3098,6 +3103,7 @@
             margin-top: 8px;
             font-size: 12px;
             line-height: 16px;
+            word-break: break-word;
             color: #6c757d;
         }
 
@@ -3125,6 +3131,7 @@
     .workflow-connector {
         flex: 1;
         height: 2px;
+        min-width: 12px;
         background-color: #dee2e6;
         position: relative;
         z-index: 1;
@@ -3132,6 +3139,20 @@
 
 
     }
+}
+
+.workflow-summary-column {
+    min-width: 260px;
+
+    h5, span {
+        word-wrap: break-word;
+    }
+}
+
+.workflow-progress-action {
+    width: 220px;
+    min-width: 180px;
+    max-width: 100%;
 }
 
 .project-landing-empty {
@@ -3458,5 +3479,91 @@
 
 /* Let the Activity Log use the full height of the page when on the dedicated Recent Activity page */
 .recent-activity-page .feed {
+    height: auto !important;
     max-height: calc(100vh - 250px) !important;
+}
+
+/* Universal App Popup (Information & Confirmation Modals) */
+.app-popup {
+    max-width: 560px;
+    width: 100%;
+
+    .modal-content {
+        border-radius: 6px;
+        border: 1px solid rgba(0, 0, 0, 0.125);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+        overflow: hidden;
+    }
+
+    .modal-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid #dee2e6;
+        align-items: center;
+
+        .modal-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #002a4e;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 0;
+            line-height: 1.4;
+        }
+
+        .btn-close {
+            margin: -0.5rem -0.5rem -0.5rem auto;
+            padding: 0.5rem;
+            font-size: 12px;
+        }
+    }
+
+    .modal-body {
+        padding: 20px;
+
+        p, .app-popup-message {
+            font-size: 15px;
+            color: #333333;
+            margin-bottom: 0;
+            line-height: 1.5;
+            word-break: break-word;
+        }
+    }
+
+    .modal-footer {
+        padding: 12px 20px 20px 20px;
+        border-top: none;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 8px;
+    }
+}
+
+/* Report Overview Header: aligned logo | labels | inputs */
+.report-header {
+    .report-header-fields {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+
+        .report-header-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .report-header-label {
+            width: 80px;
+            min-width: 80px;
+            flex-shrink: 0;
+            white-space: nowrap;
+            margin-bottom: 0;
+
+            label {
+                margin-bottom: 0;
+                white-space: nowrap;
+            }
+        }
+    }
 }

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import ABSLogo from '../../assets/images/ABSLogo.svg';
 import { Label, Input, DatePickerInput, AbsSelect } from "customer_portal-ui-shared";
 import { updateReport } from "../../service/SurveyReportService";
-import { parseVisitDate, formatVisitDateForSave } from "../../utils/dateTime";
+import { parseVisitDate, formatVisitDateForSave, isEmptyDate } from "../../utils/dateTime";
+import { usePopup } from "../../Common/PopupProvider";
 
 interface CertField {
     id: string;
@@ -110,6 +111,7 @@ const StatutoryCertificates: React.FC<{
     data: any;
     reportData: any;
     isOfflineProject?: boolean;
+    readOnly?: boolean;
     onPortChange?: (newPort: string) => void;
     onReportNoChange?: (newReportNo: string) => void;
     onReportDateChange?: (newDate: any) => void;
@@ -117,7 +119,20 @@ const StatutoryCertificates: React.FC<{
     onFirstVisitDateChange?: (newDate: any) => void;
     onVesselFieldChange?: (field: string, value: any) => void;
     onVesselNameChange?: (vesselName: string) => void;
-}> = ({ reportData, isOfflineProject = false, onVesselFieldChange }) => {
+}> = ({ reportData, isOfflineProject = false, readOnly, onVesselFieldChange }) => {
+    const popup = usePopup();
+    const saveErrorOpenRef = useRef(false);
+
+    const handleSaveError = () => {
+        if (!saveErrorOpenRef.current) {
+            saveErrorOpenRef.current = true;
+            popup.error("Your change could not be saved. Please try again.", "Save").finally(() => {
+                saveErrorOpenRef.current = false;
+            });
+        }
+    };
+
+    const isLocked = Boolean(readOnly || isOfflineProject);
 
     const [formData, setFormData] = useState<FormData>({
         report_no: "",
@@ -137,7 +152,7 @@ const StatutoryCertificates: React.FC<{
         )
     );
     const parseDate = (dateStr: string) => {
-        if (!dateStr || dateStr === "0001-01-01T00:00:00") return null;
+        if (isEmptyDate(dateStr)) return null;
         return new Date(dateStr);
     };
 
@@ -150,7 +165,7 @@ const StatutoryCertificates: React.FC<{
 
         setFormData({
             report_no: reportData?.reportNo ?? vessel.reportNo ?? "",
-            portdate: vessel.portDate && vessel.portDate !== "0001-01-01T00:00:00" ? new Date(vessel.portDate) : null,
+            portdate: !isEmptyDate(vessel.portDate) ? new Date(vessel.portDate) : null,
             vessel_name: vessel.vesselName || "",
             name_prefix: vessel.selectedPrefix || "",
             imoNumber: vessel.imoNumber || "",
@@ -158,7 +173,7 @@ const StatutoryCertificates: React.FC<{
             port: reportData?.reportPort ?? reportData?.report?.reportPort ?? "",
         });
 
-        if (vessel.portDate && vessel.portDate !== "0001-01-01T00:00:00") {
+        if (!isEmptyDate(vessel.portDate)) {
             setPortDate(new Date(vessel.portDate));
         }
 
@@ -189,7 +204,7 @@ const StatutoryCertificates: React.FC<{
 
     }, [reportData]);
     const getDateStatus = (dateStr: string) => {
-        if (!dateStr || dateStr === "0001-01-01T00:00:00" || dateStr === "") {
+        if (isEmptyDate(dateStr)) {
             return { color: 'transparent', status: '' };
         }
         const today = new Date();
@@ -234,6 +249,7 @@ const StatutoryCertificates: React.FC<{
             });
 
         } catch (error) {
+            handleSaveError();
         }
     };
 
@@ -271,6 +287,7 @@ const StatutoryCertificates: React.FC<{
             });
 
         } catch (error) {
+            handleSaveError();
         }
     };
     return (
@@ -283,14 +300,14 @@ const StatutoryCertificates: React.FC<{
                 </div>
                 <div className="report-area">
                     <div className="report-header ">
-                        <div className="section-title d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between p-3 p-md-4">
+                        <div className="section-title d-flex flex-column flex-md-row align-items-start align-items-md-center gap-4 p-3 p-md-4">
                             <img src={ABSLogo} alt="Vessel Main Data" className="report-header-image mb-3 mb-md-0" />
-                            <div className="section-actions w-100 w-md-25">
-                                <div className="row align-items-center mb-3">
-                                    <div className="col-3">
+                            <div className="report-header-fields">
+                                <div className="report-header-row">
+                                    <div className="report-header-label">
                                         <Label name="Report No" bold inline />
                                     </div>
-                                    <div className="col-9">
+                                    <div>
                                         <Input
                                             label=""
                                             placeholder="Enter Report No"
@@ -310,18 +327,18 @@ const StatutoryCertificates: React.FC<{
                                                         portdate instanceof Date
                                                             ? portdate.toISOString()
                                                             : "",
-                                                });
+                                                }).catch(handleSaveError);
                                                 onVesselFieldChange?.("report_no", value);
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                 </div>
-                                <div className="row align-items-center mb-3">
-                                    <div className="col-3">
+                                <div className="report-header-row">
+                                    <div className="report-header-label">
                                         <Label name="Port/Date" bold inline />
                                     </div>
-                                    <div className="col-9 d-flex flex-column flex-md-row gap-2">
+                                    <div className="d-flex flex-column flex-md-row gap-2">
                                         <Input
                                             placeholder="Enter Port"
                                             value={formData.port || ""}
@@ -337,10 +354,10 @@ const StatutoryCertificates: React.FC<{
                                                         portdate instanceof Date
                                                             ? portdate.toISOString()
                                                             : "",
-                                                });
+                                                }).catch(handleSaveError);
                                                 onVesselFieldChange?.("port", value);
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                         <DatePickerInput
                                             onChange={(date: any) => {
@@ -349,7 +366,7 @@ const StatutoryCertificates: React.FC<{
                                                 }
                                             }}
                                             value={lastVisitDate}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                 </div>
@@ -387,7 +404,7 @@ const StatutoryCertificates: React.FC<{
                                                         portdate instanceof Date
                                                             ? portdate.toISOString()
                                                             : "",
-                                                });
+                                                }).catch(handleSaveError);
                                                 onVesselFieldChange?.("name_prefix", String(selectedValue));
                                             }}
                                             options={[
@@ -400,7 +417,7 @@ const StatutoryCertificates: React.FC<{
                                                     : []
                                             }
                                             placeholder="Select "
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </span>
                                     <input
@@ -420,10 +437,10 @@ const StatutoryCertificates: React.FC<{
                                                     portdate instanceof Date
                                                         ? portdate.toISOString()
                                                         : "",
-                                            });
+                                            }).catch(handleSaveError);
                                             onVesselFieldChange?.("vessel_name", e.target.value);
                                         }}
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     /><span> of </span>
                                     <span className="text-uppercase _500 certify">
                                         {formData.flag}
@@ -442,7 +459,7 @@ const StatutoryCertificates: React.FC<{
                                                     }
                                                 }}
                                                 value={firstVisitDate}
-                                                disabled={isOfflineProject}
+                                                disabled={isLocked}
                                             />
                                         </span>
                                     </span>
@@ -503,7 +520,7 @@ const StatutoryCertificates: React.FC<{
                                                                             <DatePickerInput
                                                                                 value={parseDate(currentDate)}
                                                                                 onChange={(val: Date) => handleDateChange(field.id, val)}
-                                                                                disabled={isOfflineProject}
+                                                                                disabled={isLocked}
                                                                             />
                                                                         </div>
 

@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button, AbsReactTable, BUTTONS, Divider, Input, AbsSelect, AbsSearch, RadioInput, Label } from "customer_portal-ui-shared";
 import * as Icon from 'react-bootstrap-icons';
 import ManageTankTemplateList from './ManageTankTemplateList';
 import { Modal, Offcanvas, Spinner } from 'react-bootstrap';
 import * as tankService from '../../../../service/TankService';
 import * as gradingService from '../../../../service/GradingService';
-import InformationPopup from '../../../../Common/InformationPopup';
+import { usePopup } from '../../../../Common/PopupProvider';
+import { getManageTankPermission } from '../../../../service/UserPermissionService';
+import { resultMessage } from '../../../../Common/UtilityMessage';
+import { isElectron } from '../../../../utils/runtime';
 
 interface ManageTankRow {
     tankId?: string;
@@ -41,11 +45,11 @@ type SelectOption = {
     value: number | string;
 };
 const ManageTankList: React.FC = () => {
+    const popup = usePopup();
     const [showMobileSidebar, setShowMobileSidebar] = useState(false);
     const [val, updateVal] = React.useState<string>("");
     const [searchApplied, updateSearchApplied] = React.useState<string | null>(null);
     const [open, setOpen] = React.useState<boolean>();
-    const [deleteModel, setDeleteModel] = React.useState<boolean>();
     const [statusModel, setStatusModel] = React.useState<boolean>();
     const [tankList, setTankList] = useState<ManageTankRow[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
@@ -75,9 +79,6 @@ const ManageTankList: React.FC = () => {
     const [tankOptions, setTankOptions] = useState<SelectOption[]>([]);
     const [editingTankId, setEditingTankId] = useState<string | null>(null);
     const [error, setError] = React.useState<boolean>();
-    const [deletingTank, setDeletingTank] = useState<ManageTankRow | null>(null);
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
-    const [popupPageName, setPopupPageName] = useState<string | undefined>();
     const initialFilterState = {
         resetPageIndex: false,
         expandAll: false,
@@ -108,6 +109,50 @@ const ManageTankList: React.FC = () => {
     const [appliedFilters, setAppliedFilters] = React.useState({
         ...initialFilterState,
     });
+
+    const [searchParams] = useSearchParams();
+    const selectedImo = useMemo(() => {
+        const filters = (appliedFilters.filters as any) || {};
+        return (
+            filters.imoNumber?.selectedFilters?.[0] ??
+            filters.imo?.selectedFilters?.[0] ??
+            filters.imoNumber?.searchTerm ??
+            filters.imo?.searchTerm ??
+            filters.IMONumber ??
+            searchParams.get('imoNumber') ??
+            searchParams.get('imo') ??
+            searchParams.get('IMO') ??
+            ''
+        );
+    }, [appliedFilters.filters, searchParams]);
+
+    const [tankPermissions, setTankPermissions] = useState<{ edit: boolean; delete: boolean }>({
+        edit: false,
+        delete: false
+    });
+
+    useEffect(() => {
+        if (!isElectron()) return;
+
+        // Until the result arrives, canEdit/canDelete = false (reference hides first, then shows)
+        setTankPermissions({ edit: false, delete: false });
+
+        getManageTankPermission(undefined, selectedImo || undefined)
+            .then((res) => {
+                if (res.data) {
+                    setTankPermissions({
+                        edit: Boolean(res.data.edit),
+                        delete: Boolean(res.data.delete)
+                    });
+                }
+            })
+            .catch(() => {
+                setTankPermissions({ edit: false, delete: false });
+            });
+    }, [selectedImo]);
+
+    const canEdit = !isElectron() || Boolean(tankPermissions.edit);
+    const canDelete = !isElectron() || Boolean(tankPermissions.delete);
     useEffect(() => {
         loadTankList();
     }, []);
@@ -208,47 +253,58 @@ const ManageTankList: React.FC = () => {
                 tankId: editingTankId
             };
 
-            if (editingTankId) {
-                await tankService.updateTank(payload);
+            const isEdit = !!editingTankId;
+            const tankName = formData.tankName;
+            try {
+                if (editingTankId) {
+                    await tankService.updateTank(payload);
+                } else {
+                    await tankService.createTank(payload as any);
+                }
 
-                setPopupPageName("UpdateTank");
-            } else {
-                await tankService.createTank(payload as any);
-
-                setPopupPageName("CreateTank");
+                setOpen(false);
+                resetForm();
+                loadTankList();
+                popup.success({
+                    title: isEdit ? "Edit Tank" : "Create Tank",
+                    message: resultMessage(tankName || "Tank", isEdit ? "Updated" : "Created")
+                });
+            } catch (err: any) {
+                popup.error({ message: err?.message || `Failed to ${isEdit ? 'update' : 'create'} tank.` });
             }
-
-            setShowInfoPopup(true);
-            setOpen(false);
-            resetForm();
-            loadTankList();
-
         } catch (err) {
         }
     };
-    const handleDeleteTank = async () => {
-        if (!deletingTank?.tankId) return;
+
+    const onDeleteTank = async (tank: ManageTankRow) => {
+        if (!tank?.tankId) return;
+
+        const confirmed = await popup.confirm({
+            title: "Delete Tank",
+            message: `Are you sure you want to delete ${tank.tankName} Tank?`,
+            confirmText: "Delete",
+            danger: true
+        });
+        if (!confirmed) return;
 
         try {
             await tankService.deleteTank(
-                deletingTank.tankId,
+                tank.tankId,
                 "",
                 0
             );
 
-            setDeleteModel(false);
-            setDeletingTank(null);
-
-            setPopupPageName("DeleteTank");
-            setShowInfoPopup(true);
-
             await loadTankList();
-
-        } catch (err) {
+            popup.success({
+                title: "Delete Tank",
+                message: resultMessage(tank.tankName || "Tank", "Deleted")
+            });
+        } catch (err: any) {
+            popup.error({ message: err?.message || "Failed to delete tank." });
         }
     };
-    const handleBulkStatusUpdate = async () => {
 
+    const handleBulkStatusUpdate = async () => {
         try {
             const response = await tankService.updateTankStatus({
                 data: selectedIds,
@@ -256,19 +312,20 @@ const ManageTankList: React.FC = () => {
                 IMO: ""
             });
             if (response && response.data) {
-
                 setStatusModel(false);
 
                 setSelectedIds([]);
                 setSelectedTankNames([]);
                 setBulkStatus(true);
 
-                setPopupPageName("UpdateTankStatus");
-                setShowInfoPopup(true);
-
                 await loadTankList();
+                popup.success({
+                    title: "Update Tank Status",
+                    message: "Tank status updated successfully"
+                });
             }
-        } catch (e) {
+        } catch (e: any) {
+            popup.error({ message: e?.message || "Failed to update tank status." });
         }
     };
 
@@ -707,23 +764,26 @@ const ManageTankList: React.FC = () => {
                 sorting: false,
                 Cell: ({ row }: any) => (
                     <div className="d-flex gap-3">
-                        <Button
-                            variant={BUTTONS.TABLEDOWNLOAD}
-                            startIcon={<Icon.PencilFill />}
-                            onClick={(e: any) => {
-                                e.stopPropagation();
-                                handleEditTank(row.original);
-                            }}
-                        />
-                        <Button
-                            variant={BUTTONS.TABLEDOWNLOAD}
-                            startIcon={<Icon.TrashFill />}
-                            onClick={(e: any) => {
-                                e.stopPropagation();
-                                setDeletingTank(row.original);
-                                setDeleteModel(true);
-                            }}
-                        />
+                        {canEdit && (
+                            <Button
+                                variant={BUTTONS.TABLEDOWNLOAD}
+                                startIcon={<Icon.PencilFill />}
+                                onClick={(e: any) => {
+                                    e.stopPropagation();
+                                    handleEditTank(row.original);
+                                }}
+                            />
+                        )}
+                        {canDelete && (
+                            <Button
+                                variant={BUTTONS.TABLEDOWNLOAD}
+                                startIcon={<Icon.TrashFill />}
+                                onClick={(e: any) => {
+                                    e.stopPropagation();
+                                    onDeleteTank(row.original);
+                                }}
+                            />
+                        )}
                     </div>
                 )
             }
@@ -761,17 +821,6 @@ const ManageTankList: React.FC = () => {
         }
         return "Tank";
     }, [hierarchicalFilters]);
-
-    useEffect(() => {
-        if (showInfoPopup) {
-            const timer = setTimeout(() => {
-                setShowInfoPopup(false);
-                setPopupPageName(undefined);
-            }, 2000);
-
-            return () => clearTimeout(timer);
-        }
-    }, [showInfoPopup]);
 
     const handleRowSelected = useCallback((rows: ManageTankRow[]) => {
         if (!rows || !Array.isArray(rows)) return;
@@ -848,16 +897,20 @@ const ManageTankList: React.FC = () => {
                                 </div>
                             </div>
                             <div className="col-md-6 d-flex justify-content-end gap-2">
-                                <div>
-                                    <Button variant={BUTTONS.PRIMARY} onClick={() => {
-                                        resetForm();
-                                        setOpen(true);
-                                    }}>Add New Tank</Button>
-                                </div>
-                                <div>
-                                    <Button variant={BUTTONS.PRIMARY} disabled={selectedIds.length === 0}
-                                        onClick={() => setStatusModel(true)}>Change Status</Button>
-                                </div>
+                                {canEdit && (
+                                    <>
+                                        <div>
+                                            <Button variant={BUTTONS.PRIMARY} onClick={() => {
+                                                resetForm();
+                                                setOpen(true);
+                                            }}>Add New Tank</Button>
+                                        </div>
+                                        <div>
+                                            <Button variant={BUTTONS.PRIMARY} disabled={selectedIds.length === 0}
+                                                onClick={() => setStatusModel(true)}>Change Status</Button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                         <div className="custom-react-table">
@@ -875,7 +928,7 @@ const ManageTankList: React.FC = () => {
                                     expand={false}
                                     allowColumnsShowHide={false}
                                     shadow={true}
-                                    rowSelect
+                                    rowSelect={canEdit}
                                     onRowSelected={handleRowSelected}
                                     dataCount={dataCount}
                                     applyFilterCallback={applyFilter}
@@ -1026,37 +1079,7 @@ const ManageTankList: React.FC = () => {
                     </div>
                 </Offcanvas.Body>
             </Offcanvas>
-            <Modal show={deleteModel} size="lg" centered onHide={() => setDeleteModel(false)} animation={false} backdrop="static">
-                <Modal.Header closeButton>
-                    <Modal.Title>Delete Tank</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <div className="row">
-                        <div className="col-md-12">
-                            <div className="d-flex justify-content-center align-items-center flex-column">
-                                <div className="delete-icon-wrapper mb-4">
-                                    <Icon.Trash size={24} />
-                                </div>
-                                <p className='_500 tx-14'>
-                                    Are you sure you want to delete <b> {deletingTank?.tankName}</b> Tank?
-
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </Modal.Body>
-                <Modal.Footer className='gap-3'>
-                    <Button variant={BUTTONS.SECONDARY} onClick={() => setDeleteModel(false)}>
-                        Cancel
-                    </Button>
-
-                    <Button variant={BUTTONS.PRIMARY} onClick={handleDeleteTank}>
-                        Delete
-                    </Button>
-
-                </Modal.Footer>
-            </Modal>
-            <Modal show={statusModel} size="lg" centered onHide={() => setStatusModel(false)} animation={false} backdrop="static">
+            <Modal show={statusModel} dialogClassName="app-popup" centered onHide={() => setStatusModel(false)} animation={false} backdrop="static">
                 <Modal.Header closeButton>
                     <Modal.Title>Confirm</Modal.Title>
                 </Modal.Header>
@@ -1064,16 +1087,13 @@ const ManageTankList: React.FC = () => {
                     <div className="row">
                         <div className="col-md-12">
                             <div className="d-flex justify-content-center align-items-center flex-column">
-                                <div className="info-icon-wrapper mb-4">
-                                    <Icon.Exclamation size={24} />
-                                </div>
                                 <p className='_500 tx-14 text-center'>
                                     {selectedTankNames.length === 1
                                         ? `Are you sure you want to change '${selectedTankNames[0]}' status?`
                                         : `Are you sure you want to change status of ${selectedTankNames.length} tanks?`}
                                 </p>
 
-                                <div className='d-flex jusify-content-center flex-row'>
+                                <div className='d-flex justify-content-center flex-row gap-3'>
                                     <RadioInput
                                         label="Active"
                                         checked={bulkStatus === true}
@@ -1085,14 +1105,12 @@ const ManageTankList: React.FC = () => {
                                         checked={bulkStatus === false}
                                         onChange={() => setBulkStatus(false)}
                                     />
-
-
                                 </div>
                             </div>
                         </div>
                     </div>
                 </Modal.Body>
-                <Modal.Footer className='gap-3'>
+                <Modal.Footer className='gap-2'>
                     <Button variant={BUTTONS.SECONDARY} onClick={() => setStatusModel(false)}>
                         No, Cancel
                     </Button>
@@ -1101,16 +1119,6 @@ const ManageTankList: React.FC = () => {
                     </Button>
                 </Modal.Footer>
             </Modal>
-            {showInfoPopup && (
-                <InformationPopup
-                    show={showInfoPopup}
-                    pageName={popupPageName}
-                    onClose={() => {
-                        setShowInfoPopup(false);
-                        setPopupPageName(undefined);
-                    }}
-                />)}
-
         </>
     );
 };

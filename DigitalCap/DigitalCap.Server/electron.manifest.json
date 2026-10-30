@@ -12,7 +12,7 @@
     "appId": "com.DigitalCapDev.app",
     "productName": "CAP App",
     "copyright": "2026",
-    "buildVersion": "1.1.4",
+    "buildVersion": "1.0.1",
     "compression": "maximum",
     "directories": {
       "output": "../../../bin/Desktop"

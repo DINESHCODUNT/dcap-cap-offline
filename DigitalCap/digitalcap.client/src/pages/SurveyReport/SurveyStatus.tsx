@@ -1,8 +1,9 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import ABSLogo from '../../assets/images/ABSLogo.svg';
 import { Label, Input, DatePickerInput, AbsSelect } from "customer_portal-ui-shared";
 import { updateReport } from "../../service/SurveyReportService";
-import { parseVisitDate, formatVisitDateForSave } from "../../utils/dateTime";
+import { parseVisitDate, formatVisitDateForSave, isEmptyDate } from "../../utils/dateTime";
+import { usePopup } from "../../Common/PopupProvider";
 
 type FormData = {
     report_no: string;
@@ -39,7 +40,7 @@ const SURVEY_REPORT_PARTS = {
     vessel_name: 4,
 };
 const parseDate = (value: any): Date | null => {
-    if (!value || value === "0001-01-01T00:00:00") {
+    if (isEmptyDate(value)) {
         return null;
     }
 
@@ -51,6 +52,7 @@ const SurveyStatus: React.FC<{
     data: any;
     reportData: any;
     isOfflineProject?: boolean;
+    readOnly?: boolean;
     onPortChange?: (newPort: string) => void;
     onReportNoChange?: (newReportNo: string) => void;
     onReportDateChange?: (newDate: any) => void;
@@ -59,7 +61,10 @@ const SurveyStatus: React.FC<{
     onVesselFieldChange?: (field: string, value: any) => void;
     onSurveyStatusFieldChange?: (field: string, value: any, specialHullNo?: number | string) => void;
     onVesselNameChange?: (vesselName: string) => void;
-}> = ({ reportData, isOfflineProject = false, onVesselFieldChange, onSurveyStatusFieldChange }) => {
+}> = ({ reportData, isOfflineProject = false, readOnly, onVesselFieldChange, onSurveyStatusFieldChange }) => {
+    const popup = usePopup();
+    const saveErrorOpenRef = useRef(false);
+    const isLocked = Boolean(readOnly || isOfflineProject);
 
     const [formData, setFormData] = React.useState<FormData>({
         report_no: "",
@@ -206,6 +211,12 @@ const SurveyStatus: React.FC<{
             });
 
         } catch (error) {
+            if (!saveErrorOpenRef.current) {
+                saveErrorOpenRef.current = true;
+                popup.error("Your change could not be saved. Please try again.", "Save").finally(() => {
+                    saveErrorOpenRef.current = false;
+                });
+            }
         }
     };
 
@@ -218,14 +229,14 @@ const SurveyStatus: React.FC<{
             </div>
             <div className="report-area">
                 <div className="report-header">
-                    <div className="section-title d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between p-3 p-md-4">
+                    <div className="section-title d-flex flex-column flex-md-row align-items-start align-items-md-center gap-4 p-3 p-md-4">
                         <img src={ABSLogo} alt="Vessel Main Data" className="report-header-image mb-3 mb-md-0" />
-                        <div className="section-actions w-100 w-md-25">
-                            <div className="row align-items-center mb-3">
-                                <div className="col-3">
+                        <div className="report-header-fields">
+                            <div className="report-header-row">
+                                <div className="report-header-label">
                                     <Label name="Report No" bold inline />
                                 </div>
-                                <div className="col-9">
+                                <div>
                                     <Input
                                         label=""
                                         placeholder="Enter Report No"
@@ -234,15 +245,15 @@ const SurveyStatus: React.FC<{
                                             setFormData(prev => ({ ...prev, report_no: value }));
                                             handleSurveyUpdate("report_no", value);
                                         }}
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
                                 </div>
                             </div>
-                            <div className="row align-items-center mb-3">
-                                <div className="col-3">
+                            <div className="report-header-row">
+                                <div className="report-header-label">
                                     <Label name="Port/Date" bold inline />
                                 </div>
-                                <div className="col-9 d-flex flex-column flex-md-row gap-2">
+                                <div className="d-flex flex-column flex-md-row gap-2">
                                     <Input
                                         placeholder="Enter Port"
                                         value={formData.port || ""}
@@ -250,7 +261,7 @@ const SurveyStatus: React.FC<{
                                             setFormData((prev) => ({ ...prev, port: value }));
                                             handleSurveyUpdate("port", value);
                                         }}
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
                                     <DatePickerInput
                                         onChange={(date: any) => {
@@ -258,7 +269,7 @@ const SurveyStatus: React.FC<{
                                             handleSurveyUpdate("lastVisitDate", date);
                                         }}
                                         value={lastVisitDate}
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
                                 </div>
                             </div>
@@ -297,7 +308,7 @@ const SurveyStatus: React.FC<{
                                                 : []
                                         }
                                         placeholder="Select "
-                                        disabled={isOfflineProject}
+                                        disabled={isLocked}
                                     />
                                 </span>
                                 <input
@@ -308,7 +319,7 @@ const SurveyStatus: React.FC<{
                                     onChange={(e) => {
                                         handleSurveyUpdate("vessel_name", e.target.value);
                                     }}
-                                    disabled={isOfflineProject}
+                                    disabled={isLocked}
                                 /><span> of </span>
                                 <span className="text-uppercase _500 certify">
                                     {formData.flag}
@@ -325,7 +336,7 @@ const SurveyStatus: React.FC<{
                                                 handleSurveyUpdate("firstVisitDate", date);
                                             }}
                                             value={firstVisitDate}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </span>
                                 </span>
@@ -354,7 +365,7 @@ const SurveyStatus: React.FC<{
                                                     date
                                                 );
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-3 form-group">
@@ -368,7 +379,7 @@ const SurveyStatus: React.FC<{
                                                     date
                                                 );
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-3 form-group">
@@ -396,7 +407,7 @@ const SurveyStatus: React.FC<{
                                                 }
 
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-3 form-group">
@@ -410,7 +421,7 @@ const SurveyStatus: React.FC<{
                                                     date
                                                 );
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-3 form-group">
@@ -428,7 +439,7 @@ const SurveyStatus: React.FC<{
                                                     date
                                                 );
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-3 form-group">
@@ -442,7 +453,7 @@ const SurveyStatus: React.FC<{
                                                     date
                                                 );
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
                                     <div className="col-md-3 form-group">
@@ -459,7 +470,7 @@ const SurveyStatus: React.FC<{
                                                 );
 
                                             }}
-                                            disabled={isOfflineProject}
+                                            disabled={isLocked}
                                         />
                                     </div>
 

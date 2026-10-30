@@ -1,10 +1,11 @@
-﻿using DigitalCap.Core.Interfaces.Repository;
+using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Interfaces.Service;
 using DigitalCap.Core.Models.Permissions;
 using DigitalCap.Persistence.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using System.Text.Json;
 
 namespace DigitalCap.WebApi.Controllers
@@ -14,10 +15,17 @@ namespace DigitalCap.WebApi.Controllers
     public class UserPermissionController : ApiBaseController
     {
         private readonly IUserPermissionService _userPermissionService;
+        private readonly IUserPermissionRepository _userPermissionRepository;
+        private readonly IProjectRepository _projectRepository;
 
-        public UserPermissionController(IUserPermissionService userPermissionService)
+        public UserPermissionController(
+            IUserPermissionService userPermissionService,
+            IUserPermissionRepository userPermissionRepository,
+            IProjectRepository projectRepository)
         {
             _userPermissionService = userPermissionService;
+            _userPermissionRepository = userPermissionRepository;
+            _projectRepository = projectRepository;
         }
 
         #region Permission Management
@@ -150,6 +158,38 @@ namespace DigitalCap.WebApi.Controllers
                     error = ex.Message
                 });
             }
+        }
+
+        [HttpGet("[action]")]
+        public async Task<IActionResult> GetManageTankPermission([FromQuery] int? projectId, [FromQuery] string? imo)
+        {
+            var currentUserName = CurrentUsername
+                ?? User.FindFirstValue(ClaimTypes.Upn)
+                ?? User.FindFirstValue(ClaimTypes.Email)
+                ?? User.FindFirstValue(ClaimTypes.Name)
+                ?? User.Identity?.Name
+                ?? string.Empty;
+
+            if (!projectId.HasValue && !string.IsNullOrWhiteSpace(imo))
+            {
+                if (int.TryParse(imo.Trim(), out var imoNum))
+                {
+                    var projectList = await _projectRepository.GetProjectListByIMO(imoNum);
+                    if (projectList != null && projectList.Count > 0 && int.TryParse(projectList[0].Value, out var pid))
+                    {
+                        projectId = pid;
+                    }
+                }
+            }
+
+            var permission = await _userPermissionRepository.GetRolePermissionByUserName(currentUserName, "Manage Tank", projectId);
+
+            return Ok(new
+            {
+                read = permission?.Read ?? false,
+                edit = permission?.Edit ?? false,
+                delete = permission?.Delete ?? false
+            });
         }
         #endregion
     }

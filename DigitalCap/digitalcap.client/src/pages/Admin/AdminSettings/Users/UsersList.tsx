@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button, AbsReactTable, BUTTONS, AbsSearch } from "customer_portal-ui-shared";
 import * as Icon from 'react-bootstrap-icons';
-import { Modal, Spinner } from 'react-bootstrap';
+import { Spinner } from 'react-bootstrap';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import * as absUserService from '../../../../service/AbsUserService';
-import InformationPopup from '../../../../Common/InformationPopup';
+import { usePopup } from '../../../../Common/PopupProvider';
+import { resultMessage } from '../../../../Common/UtilityMessage';
 import AddUser, { type CapUser } from './AddUser';
 import { usePermissions } from '../../../../context/PermissionContext';
 import { PERMISSIONS } from '../../../../constants/permissions';
@@ -31,19 +32,15 @@ const UsersList: React.FC = () => {
     const userUpdated = searchParams.get('userUpdated') === 'true';
     const autoOpen = searchParams.get('autoOpen') === 'true' || (company && userRole);
 
+    const popup = usePopup();
     const [isClientUsers, setIsClientUsers] = useState(false);
     const [val, updateVal] = useState<string>("");
     const [searchApplied, updateSearchApplied] = useState<string | null>(null);
-    const [deleteModel, setDeleteModel] = useState<boolean>(false);
     const [capUsersFilter, setCapUsersFilter] = useState<CapUser[]>([]);
     const { hasGlobalPermission, reloadPermissions } = usePermissions();
     const [paginatedUsers, setPaginatedUsers] = useState<CapUser[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
-    const [deletingUser, setDeletingUser] = useState<CapUser | null>(null);
-    const [showInfoPopup, setShowInfoPopup] = useState<boolean>(false);
-    const [popupPageName, setPopupPageName] = useState<string>("");
     const [dataCount, setDataCount] = useState<number>(0);
-    const [responseMsg, setResponseMsg] = useState<string>("");
 
     const initialFilterState = {
         searchType: "list",
@@ -73,14 +70,18 @@ const UsersList: React.FC = () => {
         loadCapUsers();
 
         if (userCreated) {
-            setPopupPageName("CreateUser");
-            setShowInfoPopup(true);
+            popup.success({
+                title: "Create User",
+                message: resultMessage("User", "Created")
+            });
             const newSearchParams = new URLSearchParams(searchParams);
             newSearchParams.delete('userCreated');
             navigate({ search: newSearchParams.toString() }, { replace: true });
         } else if (userUpdated) {
-            setPopupPageName("UpdateUser");
-            setShowInfoPopup(true);
+            popup.success({
+                title: "Edit User",
+                message: resultMessage("User", "Updated")
+            });
             const newSearchParams = new URLSearchParams(searchParams);
             newSearchParams.delete('userUpdated');
             navigate({ search: newSearchParams.toString() }, { replace: true });
@@ -218,30 +219,6 @@ const UsersList: React.FC = () => {
         setDataCount(columnFiltered.length);
     }, [capUsersFilter, searchApplied, applyColumnFilters]);
 
-    const handleDeleteConfirm = async () => {
-        if (!deletingUser) return;
-
-        setLoading(true);
-        try {
-            if (isClientUsers) {
-                await absUserService.deleteClientUser(deletingUser.aspNetUserId);
-            } else {
-                await absUserService.deleteAbsUser(deletingUser.aspNetUserId);
-            }
-
-            setPopupPageName("DeleteUser");
-            setShowInfoPopup(true);
-            await loadCapUsers();
-
-        } catch (error) {
-        }
-        finally {
-            setDeleteModel(false);
-            setDeletingUser(null);
-            setLoading(false);
-        }
-    };
-
     const applyFilter = useCallback(
         (filtersObj: any) => {
             const {
@@ -344,23 +321,48 @@ const UsersList: React.FC = () => {
         setShowAddUser(true);
     }, []);
 
-    const handleDeleteClickMemo = useMemo(() => (user: CapUser) => {
-        setDeletingUser(user);
-        setDeleteModel(true);
-    }, []);
+    const handleDeleteClickMemo = useMemo(() => async (user: CapUser) => {
+        const userName = user ? `${user.firstName} ${user.lastName}` : '';
+        const confirmed = await popup.confirm({
+            title: "Delete User",
+            message: `Are you sure you want to delete '${userName}' User?`,
+            confirmText: "Delete",
+            danger: true
+        });
+        if (!confirmed) return;
+
+        setLoading(true);
+        try {
+            if (isClientUsers) {
+                await absUserService.deleteClientUser(user.aspNetUserId);
+            } else {
+                await absUserService.deleteAbsUser(user.aspNetUserId);
+            }
+
+            await loadCapUsers();
+            popup.success({
+                title: "Delete User",
+                message: resultMessage(userName || "User", "Deleted")
+            });
+        } catch (error: any) {
+            popup.error({ message: error?.message || "Failed to delete user." });
+        } finally {
+            setLoading(false);
+        }
+    }, [isClientUsers, popup]);
 
     const handleAddUserSaved = async (action: "CreateUser" | "UpdateUser") => {
-        setPopupPageName(action);
-        setShowInfoPopup(true);
         setEditUser(null);
         await loadCapUsers();
         await reloadPermissions();
+        popup.success({
+            title: action === "CreateUser" ? "Create User" : "Edit User",
+            message: resultMessage("User", action === "CreateUser" ? "Created" : "Updated")
+        });
     };
 
     const handleAddUserError = (message: string) => {
-        setResponseMsg(message);
-        setPopupPageName("Manage ABS Users");
-        setShowInfoPopup(true);
+        popup.error({ message });
     };
 
     const handleAddUserHide = () => {
@@ -557,46 +559,6 @@ const UsersList: React.FC = () => {
                 isClientUsers={isClientUsers}
                 existingUsers={capUsersFilter}
             />
-            <Modal show={deleteModel} size="lg" centered onHide={() => setDeleteModel(false)} animation={false} backdrop="static">
-                <Modal.Header closeButton>
-                    <Modal.Title>Delete User</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <div className="row">
-                        <div className="col-md-12">
-                            <div className="d-flex justify-content-center align-items-center flex-column">
-                                <div className="delete-icon-wrapper mb-4">
-                                    <Icon.Trash size={24} />
-                                </div>
-                                <p className='_500 tx-14'>
-                                    Are you sure you want to delete '{deletingUser ? `${deletingUser.firstName} ${deletingUser.lastName}` : ''}' User?
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </Modal.Body>
-                <Modal.Footer className='gap-3'>
-                    <Button variant={BUTTONS.SECONDARY} onClick={() => {
-                        setDeleteModel(false);
-                        setDeletingUser(null);
-                    }}>
-                        Cancel
-                    </Button>
-                    <Button variant={BUTTONS.PRIMARY} onClick={handleDeleteConfirm} disabled={loading}>
-                        {loading ? 'Deleting...' : 'Delete'}
-                    </Button>
-                </Modal.Footer>
-            </Modal>
-
-            {showInfoPopup && (
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    onClose={() => setShowInfoPopup(false)}
-                    pageName={popupPageName}
-                    message={responseMsg}
-                />
-            )}
-
         </>
 
     );

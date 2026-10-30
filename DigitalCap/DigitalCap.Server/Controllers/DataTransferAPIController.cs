@@ -35,7 +35,7 @@ namespace DigitalCap.Server.Controllers
             ?? User.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier");
 
         [HttpPost("Download")]
-        public async Task<IActionResult> Download([FromQuery] int projectId, CancellationToken cancellationToken)
+        public async Task<IActionResult> Download([FromQuery] int projectId, [FromQuery] bool redownload = false, CancellationToken cancellationToken = default)
         {
             var userName = CurrentUsername;
             if (string.IsNullOrWhiteSpace(userName))
@@ -44,7 +44,7 @@ namespace DigitalCap.Server.Controllers
             DataTransferResult result;
             try
             {
-                result = await _dataTransferService.DownloadAsync(projectId, CurrentUserObjectId ?? string.Empty, userName, cancellationToken);
+                result = await _dataTransferService.DownloadAsync(projectId, CurrentUserObjectId ?? string.Empty, userName, redownload, cancellationToken);
             }
             catch (Exception ex)
             {

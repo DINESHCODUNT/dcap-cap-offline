@@ -584,17 +584,18 @@ export interface PendingChanges {
 }
 
 /** Copies the project from the online database into the desktop's local database. */
-export function downloadProjectOffline(projectId: number, signal?: AbortSignal): Promise<AxiosResponse<TransferResult>> {
+export function downloadProjectOffline(projectId: number, signal?: AbortSignal, redownload?: boolean): Promise<AxiosResponse<TransferResult>> {
     return axiosInstance.post<TransferResult>(`/api/DataTransferAPI/Download`, null, {
-        params: { projectId },
+        params: redownload ? { projectId, redownload: true } : { projectId },
         signal
     });
 }
 
 /** Uploads offline changes; with release the local copy is removed and the online lock freed. */
-export function syncProjectOnline(projectId: number, release: boolean): Promise<AxiosResponse<TransferResult>> {
+export function syncProjectOnline(projectId: number, release: boolean, signal?: AbortSignal): Promise<AxiosResponse<TransferResult>> {
     return axiosInstance.post<TransferResult>(`/api/DataTransferAPI/Sync`, null, {
         params: { projectId, release },
+        signal
     });
 }
 

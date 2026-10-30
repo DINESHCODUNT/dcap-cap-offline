@@ -575,7 +575,8 @@ export interface UpdateHIReportPayload {
     companyName?: string;
     certificateNumber?: string;
 
-    expiryDate?: string;
+    expiryDate?: string | Date | null;
+    ExpiryDate?: string | Date | null;
 
     thicknessMeasurementA?: string;
     thicknessMeasurementB?: string;
@@ -587,8 +588,10 @@ export interface UpdateHIReportPayload {
     photoGraphs?: string;
 
     operationalTestLocation?: string;
-    operationalTestStart?: string;
-    operationalTestFinish?: string;
+    operationalTestStart?: string | Date | null;
+    OperationalTestStart?: string | Date | null;
+    operationalTestFinish?: string | Date | null;
+    OperationalTestFinish?: string | Date | null;
 
     optionalTestSatisFactory?: string;
 
@@ -603,7 +606,8 @@ export interface UpdateHIReportPayload {
     surveyorName?: string;
     surveyorNumber?: string;
 
-    lastVisitDate?: string;
+    lastVisitDate?: string | Date | null;
+    LastVisitDate?: string | Date | null;
 
     individualA?: string;
     individualB?: string;
@@ -1226,6 +1230,8 @@ export interface ReportIndexViewModel {
     projectName: string;
     reportPartGrid: ReportPart[];
     isSynched: boolean;
+    reportEdit?: boolean;
+    reportView?: boolean;
     reportExport?: boolean;
     reportExportAll?: boolean;
     resetTemplate?: boolean;
@@ -1294,6 +1300,8 @@ export interface ReportIndexViewModel {
     projectName: string;
     reportPartGrid: ReportPart[];
     isSynched: boolean;
+    reportEdit?: boolean;
+    reportView?: boolean;
     reportExport?: boolean;
     reportExportAll?: boolean;
     resetTemplate?: boolean;

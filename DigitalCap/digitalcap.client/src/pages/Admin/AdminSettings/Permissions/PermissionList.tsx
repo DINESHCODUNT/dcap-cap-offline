@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { AbsSelect, AbsSearch, CheckboxInput, Label } from "customer_portal-ui-shared";
 import { Spinner } from 'react-bootstrap';
 import * as userPermissionService from '../../../../service/UserPermissionService';
+import { usePopup } from '../../../../Common/PopupProvider';
 
 interface RoleOption {
     id: string | number;
@@ -25,6 +26,7 @@ type FormData = {
 };
 
 const PermissionList: React.FC = () => {
+    const popup = usePopup();
     const [val, updateVal] = React.useState<string>("");
     const [searchApplied, updateSearchApplied] = React.useState<string | null>(null);
     const [loading, setLoading] = React.useState<boolean>(false);
@@ -115,7 +117,8 @@ const PermissionList: React.FC = () => {
                     return perm;
                 }));
             }
-        } catch (error) {
+        } catch (error: any) {
+            popup.error(error?.response?.data || error?.message || "Unable to update the permission. Please try again.", "Permissions");
         }
     };
 

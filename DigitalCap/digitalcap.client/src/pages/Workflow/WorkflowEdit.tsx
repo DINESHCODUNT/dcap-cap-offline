@@ -16,7 +16,8 @@ import type { SingleTask } from "../../Interface/Workflow";
 import { resolveProjectTaskRowId } from "../../Interface/Workflow";
 import DocumentList, { type CommonAttachmentHandle } from "../File/DocumentList";
 import Comments, { type CommentsHandle } from "../Activity/Comments";
-import InformationPopup from "../../Common/InformationPopup";
+import { usePopup } from "../../Common/PopupProvider";
+import { resultMessage } from "../../Common/UtilityMessage";
 
 interface WorkflowEditProps {
     id: string;
@@ -50,12 +51,9 @@ const WorkflowEdit: React.FC<WorkflowEditProps> = ({
 
     const [taskDetails, setTaskDetails] = useState<SingleTask | null>(taskData ?? null);
     const [statusOptions, setStatusOptions] = useState<{ text: string; value: string }[]>([]);
+    const popup = usePopup();
     const [saving, setSaving] = useState(false);
     const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-    const [showInfoPopup, setShowInfoPopup] = useState(false);
-    const [popupPageName, setPopupPageName] = useState<string | undefined>();
-    /** When true, closing the success popup also closes the side panel (after Save). */
-    const closePanelAfterInfoPopup = useRef(false);
     const commentsRef = useRef<CommentsHandle>(null);
     const attachmentsRef = useRef<CommonAttachmentHandle>(null);
     const [orchestrationError, setOrchestrationError] = useState("");
@@ -206,9 +204,9 @@ const WorkflowEdit: React.FC<WorkflowEditProps> = ({
                     ? true
                     : await commentsRef.current.saveIfNeeded({ suppressSuccessPopup: true });
             if (!commentsOk) {
-                setOrchestrationError(
-                    "Task details were saved, but the comment could not be saved. Fix the issue and try Save again."
-                );
+                const msg = "Task details were saved, but the comment could not be saved. Fix the issue and try Save again.";
+                setOrchestrationError(msg);
+                popup.error({ message: msg });
                 return;
             }
 
@@ -217,32 +215,24 @@ const WorkflowEdit: React.FC<WorkflowEditProps> = ({
                     ? { ok: true as const }
                     : await attachmentsRef.current.flushAttachments({ suppressSuccessPopup: true });
             if (!attachRes.ok) {
-                setOrchestrationError(
-                    attachRes.message ??
-                    "Task details were saved, but one or more file changes could not be completed."
-                );
+                const msg = attachRes.message ?? "Task details were saved, but one or more file changes could not be completed.";
+                setOrchestrationError(msg);
+                popup.error({ message: msg });
                 return;
             }
 
-            closePanelAfterInfoPopup.current = true;
-            setPopupPageName("SaveTaskDetailsSuccess");
-            setShowInfoPopup(true);
-
-        } catch (e) {
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const handleInformationPopupClose = () => {
-        const alsoClosePanel = closePanelAfterInfoPopup.current;
-        closePanelAfterInfoPopup.current = false;
-        setShowInfoPopup(false);
-        setPopupPageName(undefined);
-        if (alsoClosePanel) {
             onSaveSuccess?.();
             window.dispatchEvent(new Event("refreshProjectList"));
             handleClose();
+            popup.success({
+                title: "Task Details",
+                message: resultMessage("Task details", "Saved")
+            });
+
+        } catch (e: any) {
+            popup.error({ message: e?.message || "Failed to save task details." });
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -494,13 +484,6 @@ const WorkflowEdit: React.FC<WorkflowEditProps> = ({
                     </>
                 )}
             </SideDialog>
-            {showInfoPopup && (
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    onClose={handleInformationPopupClose}
-                    pageName={popupPageName}
-                />
-            )}
         </>
     );
 };

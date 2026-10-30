@@ -59,7 +59,13 @@ namespace DigitalCap.WebApi.Controllers
             }
 
             if (!result.IsSuccess)
+            {
+                if (result.ErrorMessage == "Access Denied" || result.ErrorMessage == "Access denied")
+                {
+                    return StatusCode(403, new { result.ErrorMessage, result.ErrorMessages, result.ErrorCode });
+                }
                 return BadRequest(new { result.ErrorMessage, result.ErrorMessages, result.ErrorCode });
+            }
             return Ok(result.Data);
         }
 
@@ -575,7 +581,7 @@ namespace DigitalCap.WebApi.Controllers
                 request.ProjectId,
                 request.CompanyName,
                 request.CertificateNumber,
-                request.ExpiryDate,
+                request.ExpiryDate ?? DateTime.MinValue,
                 request.ThicknessMeasurementA,
                 request.ThicknessMeasurementB,
                 request.ThicknessMeasurementC,
@@ -584,8 +590,8 @@ namespace DigitalCap.WebApi.Controllers
                 request.Accommodation,
                 request.PhotoGraphs,
                 request.OperationalTestLocation,
-                request.OperationalTestStart,
-                request.OperationalTestFinish,
+                request.OperationalTestStart ?? DateTime.MinValue,
+                request.OperationalTestFinish ?? DateTime.MinValue,
                 request.OptionalTestSatisFactory,
                 request.AssociatedReportNumber,
                 request.AssociatedReportDate,
@@ -594,7 +600,7 @@ namespace DigitalCap.WebApi.Controllers
                 request.LeadSurveyorNumber,
                 request.SurveyorName,
                 request.SurveyorNumber,
-                request.LastVisitDate,
+                request.LastVisitDate ?? DateTime.MinValue,
                 request.IndividualA,
                 request.IndividualB,
                 request.IndividualC,

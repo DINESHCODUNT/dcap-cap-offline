@@ -237,7 +237,7 @@ export default function ActivityLog({
 
     if (loading) {
         return (
-            <div className="card-area">
+            <div className="h-100 d-flex flex-column flex-grow-1">
                 <div className="section-title">
                     <h5 className='_600'>Activity Log</h5>
                     <div className="section-actions">
@@ -248,7 +248,7 @@ export default function ActivityLog({
                         )}
                     </div>
                 </div>
-                <div className="feed d-flex flex-column justify-content-center align-items-center">
+                <div className="feed flex-grow-1 d-flex flex-column justify-content-center align-items-center" style={{ minHeight: "320px" }}>
                     <Spinner animation="border" role="status" variant="primary">
                         <span className="visually-hidden">Loading...</span>
                     </Spinner>

@@ -41,7 +41,7 @@ namespace DigitalCap.Infrastructure.Service
 
         // ================================================================ download
 
-        public async Task<DataTransferResult> DownloadAsync(int projectId, string userId, string userName, CancellationToken cancellationToken = default)
+        public async Task<DataTransferResult> DownloadAsync(int projectId, string userId, string userName, bool redownload = false, CancellationToken cancellationToken = default)
         {
             if (!IsOnline.OnlineOrOffline)
                 return DataTransferResult.Fail(DataTransferStatus.Offline, "You are offline. Connect to the internet to download the project.");
@@ -51,7 +51,7 @@ namespace DigitalCap.Infrastructure.Service
                 return DataTransferResult.Fail(DataTransferStatus.Conflict, "A download or sync of this project is already in progress.");
             try
             {
-                return await DownloadCoreAsync(projectId, userId, userName, cancellationToken);
+                return await DownloadCoreAsync(projectId, userId, userName, redownload, cancellationToken);
             }
             finally
             {
@@ -59,7 +59,7 @@ namespace DigitalCap.Infrastructure.Service
             }
         }
 
-        private async Task<DataTransferResult> DownloadCoreAsync(int projectId, string userId, string userName, CancellationToken ct)
+        private async Task<DataTransferResult> DownloadCoreAsync(int projectId, string userId, string userName, bool redownload, CancellationToken ct)
         {
             // 1. Server marker: someone else holding the project offline blocks the download.
             IsSynchedOnline? marker;
@@ -90,7 +90,7 @@ namespace DigitalCap.Infrastructure.Service
             try
             {
                 existsLocally = await _offline.ProjectExistsAsync(projectId, ct);
-                if (existsLocally)
+                if (existsLocally && !redownload)
                 {
                     var pending = await _offline.GetPendingChangesAsync(projectId, ct);
                     if (pending.HasChanges)
@@ -247,6 +247,19 @@ namespace DigitalCap.Infrastructure.Service
             {
                 _logger.LogError(ex, "Sync {ProjectId}: reading the local database failed", projectId);
                 return new DataTransferResult { Status = DataTransferStatus.Error, Message = "Could not read the local database: " + ex.Message };
+            }
+
+            // Safety net: verify the online download lock before uploading anything.
+            try
+            {
+                var marker = await _online.GetDownloadedProjectAsync(projectId, ct);
+                if (marker == null)
+                    return DataTransferResult.Fail(DataTransferStatus.Conflict, "CAP Administrator has cancelled the project from offline download.  You may contact CAP HQ for further queries.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sync {ProjectId}: checking online download lock failed", projectId);
+                return new DataTransferResult { Status = DataTransferStatus.Error, Message = "Could not check online project status: " + ex.Message };
             }
 
             // Upload (reference DataSyncing). Nothing is final online until MoveToOnlineTable succeeds.

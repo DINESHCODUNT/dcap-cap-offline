@@ -3,11 +3,14 @@ import { useSearchParams } from 'react-router-dom';
 import { Button, AbsReactTable, BUTTONS, Divider, Input, AbsSelect, AbsSearch, RadioInput, Label } from "customer_portal-ui-shared";
 import * as Icon from 'react-bootstrap-icons';
 import ManageTankTemplateList from './ManageTankTemplateList';
-import InformationPopup from '../../../../Common/InformationPopup';
 import { Modal, Offcanvas, Spinner } from 'react-bootstrap';
 import type { TankDto, SelectOption } from "../../../../Interface/ProjectTank";
 import * as tankService from '../../../../service/TankService';
 import * as gradingService from '../../../../service/GradingService';
+import { usePopup } from '../../../../Common/PopupProvider';
+import { getManageTankPermission } from '../../../../service/UserPermissionService';
+import { resultMessage } from '../../../../Common/UtilityMessage';
+import { isElectron } from '../../../../utils/runtime';
 interface ManageTankRow {
     tankId: string;
     tankName: string;
@@ -137,6 +140,7 @@ const buildFilterOptionsFromTanks = (
 };
 
 const ProjectTankList: React.FC = () => {
+    const popup = usePopup();
     const [showMobileSidebar, setShowMobileSidebar] = useState(false);
     const [searchParams] = useSearchParams();
     const urlImo = searchParams.get('imoNumber') || '';
@@ -144,7 +148,6 @@ const ProjectTankList: React.FC = () => {
     const [val, updateVal] = React.useState<string>("");
     const [searchApplied, updateSearchApplied] = React.useState<string | null>(null);
     const [open, setOpen] = React.useState<boolean>();
-    const [deleteModel, setDeleteModel] = React.useState<boolean>();
     const [statusModel, setStatusModel] = React.useState<boolean>();
     const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
     const [selectedTankNames, setSelectedTankNames] = React.useState<string[]>([]);
@@ -164,11 +167,8 @@ const ProjectTankList: React.FC = () => {
     const [projectNameOptions, setProjectNameOptions] = React.useState<SelectOption[]>([]);
     const [isSaving, setIsSaving] = React.useState<boolean>(false);
     const [formErrors, setFormErrors] = React.useState<{ [key: string]: string }>({});
-    const [showInfoPopup, setShowInfoPopup] = React.useState<boolean>(false);
-    const [popupPageName, setPopupPageName] = React.useState<string | undefined>();
     const [modalImoNumber, setModalImoNumber] = React.useState<string>("");
     const [editingTankId, setEditingTankId] = React.useState<string | null>(null);
-    const [deletingTank, setDeletingTank] = React.useState<any | null>(null);
     const [projectId, setProjectId] = React.useState<number | null>(null);
     const [activationStatus, setActivationStatus] = React.useState<boolean | null>(true);
     const [isFilterEnabled, setIsFilterEnabled] = React.useState(false);
@@ -190,6 +190,33 @@ const ProjectTankList: React.FC = () => {
         tank_name: "",
         activation_status: null
     });
+
+    const [tankPermissions, setTankPermissions] = useState<{ edit: boolean; delete: boolean }>({
+        edit: false,
+        delete: false
+    });
+
+    useEffect(() => {
+        if (!isElectron()) return;
+        setTankPermissions({ edit: false, delete: false });
+        const projectId = urlProject ? Number(urlProject) : undefined;
+        const imo = filterFormData.imo_number || urlImo || undefined;
+        getManageTankPermission(projectId, imo)
+            .then((res) => {
+                if (res.data) {
+                    setTankPermissions({
+                        edit: Boolean(res.data.edit),
+                        delete: Boolean(res.data.delete)
+                    });
+                }
+            })
+            .catch(() => {
+                setTankPermissions({ edit: false, delete: false });
+            });
+    }, [urlProject, filterFormData.imo_number, urlImo]);
+
+    const canEdit = !isElectron() || Boolean(tankPermissions.edit);
+    const canDelete = !isElectron() || Boolean(tankPermissions.delete);
 
     const [modalFormData, setModalFormData] = React.useState<ModalFormData>({
         tank_name: "",
@@ -523,7 +550,6 @@ const ProjectTankList: React.FC = () => {
 
     const handleBulkStatusUpdate = async () => {
         if (selectedIds.length === 0) {
-
             return;
         }
 
@@ -538,17 +564,17 @@ const ProjectTankList: React.FC = () => {
 
             if (response?.data) {
                 setStatusModel(false);
-
-                setPopupPageName("UpdateTankStatus");
-                setShowInfoPopup(true);
-
                 setSelectedIds([]);
                 setSelectedTankNames([]);
                 setBulkStatus(true);
-
                 await refreshTankListWithFilters();
+                popup.success({
+                    title: "Update Tank Status",
+                    message: "Tank status updated successfully"
+                });
             }
         } catch (e: any) {
+            popup.error({ message: e?.message || "Failed to update tank status." });
         } finally {
             setIsSaving(false);
         }
@@ -670,6 +696,9 @@ const ProjectTankList: React.FC = () => {
                 status: activationStatus === true
             };
 
+            const isEdit = !!editingTankId;
+            const tankName = modalFormData.tank_name.trim();
+
             if (editingTankId) {
                 await tankService.updateTank({
                     ...payload,
@@ -679,19 +708,16 @@ const ProjectTankList: React.FC = () => {
                 await tankService.createTank(payload);
             }
 
-            if (editingTankId) {
-                setPopupPageName("UpdateTank");
-            } else {
-                setPopupPageName("CreateTank");
-            }
-            setShowInfoPopup(true);
-
             setOpen(false);
             resetForm();
-
             await refreshTankListWithFilters();
+            popup.success({
+                title: isEdit ? "Edit Tank" : "Create Tank",
+                message: resultMessage(tankName || "Tank", isEdit ? "Updated" : "Created")
+            });
 
-        } catch (e) {
+        } catch (e: any) {
+            popup.error({ message: e?.message || `Failed to ${editingTankId ? 'update' : 'create'} tank.` });
         } finally {
             setIsSaving(false);
         }
@@ -702,16 +728,23 @@ const ProjectTankList: React.FC = () => {
         resetForm();
     };
 
-    const handleDeleteTank = async () => {
-        if (!deletingTank) return;
+    const onDeleteTank = async (tank: any) => {
+        if (!tank) return;
+
+        const tankName = tank.tankName || tank.tank_name || "this tank";
+        const confirmed = await popup.confirm({
+            title: "Delete Tank",
+            message: `Are you sure you want to delete '${tankName}'?`,
+            confirmText: "Delete",
+            danger: true
+        });
+        if (!confirmed) return;
 
         setIsSaving(true);
         try {
-            const tankId = deletingTank.tankId || deletingTank.TankId || deletingTank.id || "";
-
-            const rowProjectId = deletingTank.projectId || deletingTank.ProjectId || projectId || 0;
-
-            const imoValue = filterFormData.imo_number || deletingTank.imoNumber || deletingTank.IMONumber || modalImoNumber || "";
+            const tankId = tank.tankId || tank.TankId || tank.id || "";
+            const rowProjectId = tank.projectId || tank.ProjectId || projectId || 0;
+            const imoValue = filterFormData.imo_number || tank.imoNumber || tank.IMONumber || modalImoNumber || "";
 
             await tankService.deleteTank(
                 tankId,
@@ -719,14 +752,13 @@ const ProjectTankList: React.FC = () => {
                 rowProjectId
             );
 
-            setPopupPageName("DeleteTank");
-            setShowInfoPopup(true);
-
-            setDeleteModel(false);
-            setDeletingTank(null);
-
             await refreshTankListWithFilters();
-        } catch (e) {
+            popup.success({
+                title: "Delete Tank",
+                message: resultMessage(tankName || "Tank", "Deleted")
+            });
+        } catch (e: any) {
+            popup.error({ message: e?.message || "Failed to delete tank." });
         } finally {
             setIsSaving(false);
         }
@@ -878,15 +910,18 @@ const ProjectTankList: React.FC = () => {
                 Cell: ({ row }: { row: { original: any } }) => {
                     return (
                         <div className='d-flex justify-content-start gap-3'>
-                            <Button
-                                variant={BUTTONS.TABLEDOWNLOAD}
-                                startIcon={<Icon.PencilFill />}
-                                onClick={() => handleEditTank(row.original)}
-                            ></Button>
-                            <Button variant={BUTTONS.TABLEDOWNLOAD} onClick={() => {
-                                setDeletingTank(row.original);
-                                setDeleteModel(true);
-                            }} startIcon={<Icon.TrashFill />}></Button>
+                            {canEdit && (
+                                <Button
+                                    variant={BUTTONS.TABLEDOWNLOAD}
+                                    startIcon={<Icon.PencilFill />}
+                                    onClick={() => handleEditTank(row.original)}
+                                ></Button>
+                            )}
+                            {canDelete && (
+                                <Button variant={BUTTONS.TABLEDOWNLOAD} onClick={() => {
+                                    onDeleteTank(row.original);
+                                }} startIcon={<Icon.TrashFill />}></Button>
+                            )}
                         </div>
                     );
                 }
@@ -1646,12 +1681,16 @@ const ProjectTankList: React.FC = () => {
                             </div>
                         </div>
                         <div className="col-md-6 d-flex justify-content-end gap-2">
-                            <div>
-                                <Button variant={BUTTONS.PRIMARY} onClick={handleAddNewTank}>Add New Tank</Button>
-                            </div>
-                            <div>
-                                <Button variant={BUTTONS.PRIMARY} disabled={selectedIds.length === 0} onClick={handleChangeStatusClick}>Change Status</Button>
-                            </div>
+                            {canEdit && (
+                                <>
+                                    <div>
+                                        <Button variant={BUTTONS.PRIMARY} onClick={handleAddNewTank}>Add New Tank</Button>
+                                    </div>
+                                    <div>
+                                        <Button variant={BUTTONS.PRIMARY} disabled={selectedIds.length === 0} onClick={handleChangeStatusClick}>Change Status</Button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                     <div className="custom-react-table">
@@ -1669,7 +1708,7 @@ const ProjectTankList: React.FC = () => {
                                 expand={false}
                                 allowColumnsShowHide={false}
                                 shadow={true}
-                                rowSelect
+                                rowSelect={canEdit}
                                 onRowSelected={(rows: any[]) => {
                                     const ids = rows.map((row: any) => row.tankId || row.id || "").filter((id: string) => id !== "");
                                     const names = rows.map((row: any) => row.tankName || row.tank_name || "").filter((name: string) => name !== "");
@@ -1883,39 +1922,7 @@ const ProjectTankList: React.FC = () => {
                     </div>
                 </Offcanvas.Body>
             </Offcanvas>
-            <Modal show={deleteModel} size="lg" centered onHide={() => setDeleteModel(false)} animation={false} backdrop="static">
-                <Modal.Header closeButton>
-                    <Modal.Title>Delete Tank</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <div className="row">
-                        <div className="col-md-12">
-                            <div className="d-flex justify-content-center align-items-center flex-column">
-                                <div className="delete-icon-wrapper mb-4">
-                                    <Icon.Trash size={24} />
-                                </div>
-                                <p className='_500 tx-14'>
-                                    {deletingTank
-                                        ? `Are you sure you want to delete '${deletingTank.tankName || deletingTank.tank_name || "this tank"}'?`
-                                        : "Are you sure you want to delete this tank?"}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </Modal.Body>
-                <Modal.Footer className='gap-3'>
-                    <Button variant={BUTTONS.SECONDARY} onClick={() => {
-                        setDeleteModel(false);
-                        setDeletingTank(null);
-                    }}>
-                        Cancel
-                    </Button>
-                    <Button variant={BUTTONS.PRIMARY} onClick={handleDeleteTank} disabled={isSaving}>
-                        {isSaving ? "Deleting..." : "Delete"}
-                    </Button>
-                </Modal.Footer>
-            </Modal>
-            <Modal show={statusModel} size="lg" centered onHide={() => setStatusModel(false)} animation={false} backdrop="static">
+            <Modal show={statusModel} dialogClassName="app-popup" centered onHide={() => setStatusModel(false)} animation={false} backdrop="static">
                 <Modal.Header closeButton>
                     <Modal.Title>Confirm</Modal.Title>
                 </Modal.Header>
@@ -1923,15 +1930,12 @@ const ProjectTankList: React.FC = () => {
                     <div className="row">
                         <div className="col-md-12">
                             <div className="d-flex justify-content-center align-items-center flex-column">
-                                <div className="info-icon-wrapper mb-4">
-                                    <Icon.Exclamation size={24} />
-                                </div>
                                 <p className='_500 tx-14 text-center'>
                                     {selectedTankNames.length === 1
                                         ? `Are you sure you want to change '${selectedTankNames[0]}' status?`
                                         : `Are you sure you want to change status of ${selectedTankNames.length} tanks?`}
                                 </p>
-                                <div className='d-flex jusify-content-center flex-row'>
+                                <div className='d-flex justify-content-center flex-row gap-3'>
                                     <RadioInput
                                         label="Active"
                                         checked={bulkStatus === true}
@@ -1943,13 +1947,12 @@ const ProjectTankList: React.FC = () => {
                                         checked={bulkStatus === false}
                                         onChange={() => setBulkStatus(false)}
                                     />
-
                                 </div>
                             </div>
                         </div>
                     </div>
                 </Modal.Body>
-                <Modal.Footer className='gap-3'>
+                <Modal.Footer className='gap-2'>
                     <Button variant={BUTTONS.SECONDARY} onClick={() => setStatusModel(false)}>
                         No, Cancel
                     </Button>
@@ -1958,21 +1961,9 @@ const ProjectTankList: React.FC = () => {
                     </Button>
                 </Modal.Footer>
             </Modal>
-            {showInfoPopup && (
-                <InformationPopup
-                    onShow={showInfoPopup}
-                    onClose={() => {
-                        setShowInfoPopup(false);
-                        setOpen(false);
-                        resetForm();
-                    }}
-                    pageName={popupPageName}
-                />
-            )}
         </>
     );
 };
 
 export default ProjectTankList;
-
 
