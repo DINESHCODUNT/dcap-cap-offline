@@ -591,6 +591,14 @@ export function downloadProjectOffline(projectId: number, signal?: AbortSignal, 
     });
 }
 
+/** Polls download/sync progress percentage for a project. */
+export function getTransferProgress(projectId: number, signal?: AbortSignal): Promise<AxiosResponse<{ percent: number }>> {
+    return axiosInstance.get<{ percent: number }>(`/api/DataTransferAPI/Progress`, {
+        params: { projectId },
+        signal
+    });
+}
+
 /** Uploads offline changes; with release the local copy is removed and the online lock freed. */
 export function syncProjectOnline(projectId: number, release: boolean, signal?: AbortSignal): Promise<AxiosResponse<TransferResult>> {
     return axiosInstance.post<TransferResult>(`/api/DataTransferAPI/Sync`, null, {

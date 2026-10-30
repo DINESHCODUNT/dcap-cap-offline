@@ -50,6 +50,7 @@ namespace DigitalCap.Persistence.Extensions
             // Project download/sync: own SqlConnection (Azure SQL) / SqliteConnection (local), not the unit of work.
             services.AddScoped<IOnlineTransferRepository, OnlineTransferApiClient>();
             services.AddScoped<IOfflineTransferRepository>(_ => new OfflineTransferRepository());
+            services.AddSingleton<ITransferProgressStore, TransferProgressStore>();
             services.AddScoped<IDataTransferService, DataTransferService>();
             services.AddScoped<IUserAccountRepository, UserAccountRepository>();
             services.AddScoped<IUserPermissionRepository, UserPermissionRepository>();

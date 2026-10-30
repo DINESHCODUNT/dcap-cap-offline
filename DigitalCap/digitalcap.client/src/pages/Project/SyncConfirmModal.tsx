@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import Modal from 'react-bootstrap/Modal';
 import { Button, BUTTONS } from "customer_portal-ui-shared";
@@ -6,6 +6,7 @@ import * as Icon from 'react-bootstrap-icons';
 import * as projectService from '../../service/ProjectService';
 import { usePopup } from '../../Common/PopupProvider';
 import { measureConnectionSpeed, isNetworkConnectionError } from '../../utils/connectionSpeed';
+import TransferProgressBar from '../../Common/TransferProgressBar';
 
 export interface SyncConfirmModalProps {
     project: { id: number; name: string } | null;
@@ -38,6 +39,17 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
     const [syncSuccessModal, setSyncSuccessModal] = useState<boolean>(false);
     const [syncReleased, setSyncReleased] = useState<boolean>(false);
     const [transferError, setTransferError] = useState<string | null>(null);
+    const [progressPercent, setProgressPercent] = useState<number>(0);
+    const progressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (progressPollRef.current) {
+                clearInterval(progressPollRef.current);
+                progressPollRef.current = null;
+            }
+        };
+    }, []);
 
     const isBusy = isSyncing || isDownloading || isReleasing;
 
@@ -124,20 +136,48 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
             return;
         }
 
+        setProgressPercent(0);
+        if (progressPollRef.current) {
+            clearInterval(progressPollRef.current);
+            progressPollRef.current = null;
+        }
+
         const release = syncOption === 'remove';
         setIsSyncing(true);
         setIsSyncInBackground(false);
         const controller = new AbortController();
         setSyncAbortController(controller);
 
+        progressPollRef.current = setInterval(async () => {
+            try {
+                const res = await projectService.getTransferProgress(project.id);
+                if (typeof res?.data?.percent === 'number') {
+                    setProgressPercent(res.data.percent);
+                }
+            } catch {
+                // ignore polling errors
+            }
+        }, 500);
+
         try {
             const response = await projectService.syncProjectOnline(project.id, release, controller.signal);
+            if (progressPollRef.current) {
+                clearInterval(progressPollRef.current);
+                progressPollRef.current = null;
+            }
             if (!response.data?.success) {
+                setProgressPercent(0);
                 throw { response };
             }
+            setProgressPercent(100);
             setSyncReleased(Boolean(response.data.released));
             setSyncSuccessModal(true);
         } catch (err: any) {
+            if (progressPollRef.current) {
+                clearInterval(progressPollRef.current);
+                progressPollRef.current = null;
+            }
+            setProgressPercent(0);
             if (axios.isCancel(err) || err?.name === 'CanceledError' || err?.name === 'AbortError') {
                 return;
             }
@@ -155,12 +195,21 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
             }
             setTransferError(projectService.getTransferErrorMessage(err, "Unable to Sync/Download due to a very low internet connection. Please proceed when your internet connection is having at least 10 mbps download and upload speed."));
         } finally {
+            if (progressPollRef.current) {
+                clearInterval(progressPollRef.current);
+                progressPollRef.current = null;
+            }
             setIsSyncing(false);
             setSyncAbortController(null);
         }
     };
 
     const handleStopSync = () => {
+        if (progressPollRef.current) {
+            clearInterval(progressPollRef.current);
+            progressPollRef.current = null;
+        }
+        setProgressPercent(0);
         if (syncAbortController) {
             syncAbortController.abort();
         }
@@ -175,16 +224,44 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
         if (!project?.id) return;
 
         if (cancelledOption === 'redownload') {
+            setProgressPercent(0);
+            if (progressPollRef.current) {
+                clearInterval(progressPollRef.current);
+                progressPollRef.current = null;
+            }
             setIsDownloading(true);
+
+            progressPollRef.current = setInterval(async () => {
+                try {
+                    const res = await projectService.getTransferProgress(project.id);
+                    if (typeof res?.data?.percent === 'number') {
+                        setProgressPercent(res.data.percent);
+                    }
+                } catch {
+                    // ignore polling errors
+                }
+            }, 500);
+
             try {
                 const response = await projectService.downloadProjectOffline(project.id, undefined, true);
+                if (progressPollRef.current) {
+                    clearInterval(progressPollRef.current);
+                    progressPollRef.current = null;
+                }
                 if (response.data && response.data.success === false) {
+                    setProgressPercent(0);
                     throw { response };
                 }
+                setProgressPercent(100);
                 popup.success("Download completed successfully", "Success");
                 onSuccess?.(false);
                 onClose();
             } catch (err: any) {
+                if (progressPollRef.current) {
+                    clearInterval(progressPollRef.current);
+                    progressPollRef.current = null;
+                }
+                setProgressPercent(0);
                 if (isNetworkConnectionError(err)) {
                     setIsDownloading(false);
                     onClose();
@@ -197,6 +274,10 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
                 }
                 setTransferError(projectService.getTransferErrorMessage(err, "Unable to download project."));
             } finally {
+                if (progressPollRef.current) {
+                    clearInterval(progressPollRef.current);
+                    progressPollRef.current = null;
+                }
                 setIsDownloading(false);
             }
         } else {
@@ -249,45 +330,31 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
         <>
             {/* Sync / Cancelled Modal */}
             <Modal
-                show={Boolean(project) && !syncSuccessModal && !transferError && !showDiscardConfirm && !isSyncing}
-                onHide={() => !isBusy && !isCheckingLock && onClose()}
+                show={Boolean(project) && !syncSuccessModal && !transferError && !showDiscardConfirm && !isSyncing && !isCheckingLock}
+                onHide={() => !isBusy && onClose()}
                 centered
                 backdrop="static"
             >
-                <Modal.Header closeButton={!isBusy && !isCheckingLock}>
+                <Modal.Header closeButton={!isBusy}>
                     <Modal.Title>Confirm</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
-                    {isCheckingLock ? (
-                        <div className="text-center py-4">
-                            <div className="spinner-border text-primary" role="status">
-                                <span className="visually-hidden">Loading...</span>
-                            </div>
-                        </div>
-                    ) : isDownloading ? (
+                    {isDownloading ? (
                         <>
                             <div className="d-flex align-items-center gap-3 mb-2">
                                 <Icon.Download className="text-primary" size={24} />
                                 <h5 className="mb-0">Downloading the {project?.name} project in Offline Mode</h5>
                             </div>
                             <div className="text-center py-4">
-                                <div className="progress mb-3" style={{ height: '20px' }}>
-                                    <div
-                                        className="progress-bar progress-bar-striped progress-bar-animated bg-success"
-                                        role="progressbar"
-                                        style={{ width: '100%' }}
-                                    />
+                                <div className="mb-3">
+                                    <TransferProgressBar percent={progressPercent} height="20px" variant="bg-success" />
                                 </div>
                             </div>
                         </>
                     ) : isBusy ? (
                         <div className="text-center py-4">
-                            <div className="progress mb-3" style={{ height: '20px' }}>
-                                <div
-                                    className="progress-bar progress-bar-striped progress-bar-animated bg-success"
-                                    role="progressbar"
-                                    style={{ width: '100%' }}
-                                />
+                            <div className="mb-3">
+                                <TransferProgressBar percent={progressPercent} height="20px" variant="bg-success" />
                             </div>
                         </div>
                     ) : isCancelled ? (
@@ -405,7 +472,7 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
                         </>
                     )}
                 </Modal.Body>
-                {!isBusy && !isCheckingLock && (
+                {!isBusy && (
                     <Modal.Footer className="gap-2">
                         <Button variant={BUTTONS.SECONDARY} onClick={onClose}>
                             No, Cancel
@@ -501,13 +568,7 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
                             <h5 className="mb-0">Synchronizing Offline data to Online mode</h5>
                         </div>
                     </div>
-                    <div className="progress" style={{ height: '10px' }}>
-                        <div
-                            className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-                            role="progressbar"
-                            style={{ width: "100%" }}
-                        />
-                    </div>
+                    <TransferProgressBar percent={progressPercent} height="10px" variant="bg-primary" />
                 </Modal.Body>
                 <Modal.Footer className="d-flex justify-content-end gap-2">
                     <Button variant={BUTTONS.SECONDARY} onClick={handleStopSync}>
@@ -529,13 +590,7 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
                                 </div>
                                 <div className="alert-content flex-grow-1">
                                     <h6 className="mb-1" style={{ fontSize: '14px', fontWeight: 600 }}>Just give us a moment to sync the project</h6>
-                                    <div className="progress" style={{ height: '6px' }}>
-                                        <div
-                                            className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-                                            role="progressbar"
-                                            style={{ width: "100%" }}
-                                        />
-                                    </div>
+                                    <TransferProgressBar percent={progressPercent} height="6px" variant="bg-primary" />
                                 </div>
                             </div>
                             <div className="actions d-flex justify-content-end gap-2 mt-2" style={{ gap: '8px' }}>
