@@ -5,7 +5,7 @@ import RichTextEditor from "../../Common/RichTextEditor";
 import Spinner from 'react-bootstrap/Spinner';
 import { updateReport } from "../../service/SurveyReportService";
 import { formatClassNotationsForDisplay, formatClassNotationsForSave } from "../../utils/classNotationFormatter";
-import { parseVisitDate, formatVisitDateForSave } from "../../utils/dateTime";
+import { parseVisitDate, formatVisitDateForSave, isEmptyDate } from "../../utils/dateTime";
 import { usePopup } from "../../Common/PopupProvider";
 
 type FormData = {
@@ -159,7 +159,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, readOnl
                 "",
 
             portdate:
-                vessel.portDate && vessel.portDate !== "0001-01-01T00:00:00"
+                !isEmptyDate(vessel.portDate)
                     ? new Date(vessel.portDate)
                     : new Date(),
 
@@ -211,7 +211,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, readOnl
             firstVisitDate: parseVisitDate(vessel.firstVisitDate) || "",
             lastVisitDate: parseVisitDate(vessel.lastVisitDate) || "",
         });
-        if (vessel.portDate && vessel.portDate !== "0001-01-01T00:00:00") {
+        if (!isEmptyDate(vessel.portDate)) {
             setportDate(new Date(vessel.portDate));
         }
 

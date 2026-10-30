@@ -1482,6 +1482,15 @@ WHERE ProjectId = @ProjectId AND (CardNumber = @CardId OR CardName = @CardId);
             }
         }
 
+        private static DateTime? NormalizeHIDate(DateTime? value)
+        {
+            if (!value.HasValue || value.Value == DateTime.MinValue || value.Value.Date <= new DateTime(1901, 1, 1))
+            {
+                return null;
+            }
+            return value.Value;
+        }
+
         public async Task<bool> UpdateHIReport(HandIReport model)
         {
             try
@@ -1492,7 +1501,7 @@ WHERE ProjectId = @ProjectId AND (CardNumber = @CardId OR CardName = @CardId);
                     model.ProjectId,
                     model.CompanyName,
                     model.CertificateNumber,
-                    model.ExpiryDate,
+                    ExpiryDate = NormalizeHIDate(model.ExpiryDate),
                     model.ThicknessMeasurementA,
                     model.ThicknessMeasurementB,
                     model.ThicknessMeasurementC,
@@ -1501,8 +1510,8 @@ WHERE ProjectId = @ProjectId AND (CardNumber = @CardId OR CardName = @CardId);
                     model.Accommodation,
                     model.PhotoGraphs,
                     model.OperationalTestLocation,
-                    model.OperationalTestStart,
-                    model.OperationalTestFinish,
+                    OperationalTestStart = NormalizeHIDate(model.OperationalTestStart),
+                    OperationalTestFinish = NormalizeHIDate(model.OperationalTestFinish),
                     model.OptionalTestSatisFactory,
                     model.AssociatedReportNumber,
                     model.AssociatedReportDate,
@@ -1511,7 +1520,7 @@ WHERE ProjectId = @ProjectId AND (CardNumber = @CardId OR CardName = @CardId);
                     model.LeadSurveyorNumber,
                     model.SurveyorName,
                     model.SurveyorNumber,
-                    model.LastVisitDate,
+                    LastVisitDate = NormalizeHIDate(model.LastVisitDate),
                     model.IndividualA,
                     model.IndividualB,
                     model.IndividualC,
@@ -1590,7 +1599,7 @@ WHERE ProjectId = @ProjectId AND [IsActive] = 1 AND [IsDeleted] = 0 AND Id = @Id
                         model.ProjectId,
                         model.CompanyName,
                         model.CertificateNumber,
-                        model.ExpiryDate,
+                        ExpiryDate = NormalizeHIDate(model.ExpiryDate),
                         model.ThicknessMeasurementA,
                         model.ThicknessMeasurementB,
                         model.ThicknessMeasurementC,
@@ -1599,8 +1608,8 @@ WHERE ProjectId = @ProjectId AND [IsActive] = 1 AND [IsDeleted] = 0 AND Id = @Id
                         model.Accommodation,
                         model.PhotoGraphs,
                         model.OperationalTestLocation,
-                        model.OperationalTestStart,
-                        model.OperationalTestFinish,
+                        OperationalTestStart = NormalizeHIDate(model.OperationalTestStart),
+                        OperationalTestFinish = NormalizeHIDate(model.OperationalTestFinish),
                         model.OptionalTestSatisFactory,
                         model.AssociatedReportNumber,
                         model.AssociatedReportDate,
@@ -1609,7 +1618,7 @@ WHERE ProjectId = @ProjectId AND [IsActive] = 1 AND [IsDeleted] = 0 AND Id = @Id
                         model.LeadSurveyorNumber,
                         model.SurveyorName,
                         model.SurveyorNumber,
-                        model.LastVisitDate,
+                        LastVisitDate = NormalizeHIDate(model.LastVisitDate),
                         model.IndividualA,
                         model.IndividualB,
                         model.IndividualC,
@@ -1648,7 +1657,7 @@ WHERE ProjectId = @ProjectId AND [IsActive] = 1 AND [IsDeleted] = 0 AND Id = @Id
                     model.ProjectId,
                     model.CompanyName,
                     model.CertificateNumber,
-                    model.ExpiryDate,
+                    ExpiryDate = NormalizeHIDate(model.ExpiryDate),
                     model.ThicknessMeasurementA,
                     model.ThicknessMeasurementB,
                     model.ThicknessMeasurementC,
@@ -1657,8 +1666,8 @@ WHERE ProjectId = @ProjectId AND [IsActive] = 1 AND [IsDeleted] = 0 AND Id = @Id
                     model.Accommodation,
                     model.PhotoGraphs,
                     model.OperationalTestLocation,
-                    model.OperationalTestStart,
-                    model.OperationalTestFinish,
+                    OperationalTestStart = NormalizeHIDate(model.OperationalTestStart),
+                    OperationalTestFinish = NormalizeHIDate(model.OperationalTestFinish),
                     model.OptionalTestSatisFactory,
                     model.AssociatedReportNumber,
                     model.AssociatedReportDate,
@@ -1667,7 +1676,7 @@ WHERE ProjectId = @ProjectId AND [IsActive] = 1 AND [IsDeleted] = 0 AND Id = @Id
                     model.LeadSurveyorNumber,
                     model.SurveyorName,
                     model.SurveyorNumber,
-                    model.LastVisitDate,
+                    LastVisitDate = NormalizeHIDate(model.LastVisitDate),
                     model.IndividualA,
                     model.IndividualB,
                     model.IndividualC,
@@ -1705,7 +1714,7 @@ WHERE ProjectId = @ProjectId AND [IsActive] = 1 AND [IsDeleted] = 0 AND Id = @Id
                         model.ProjectId,
                         model.CompanyName,
                         model.CertificateNumber,
-                        model.ExpiryDate,
+                        ExpiryDate = NormalizeHIDate(model.ExpiryDate),
                         model.ThicknessMeasurementA,
                         model.ThicknessMeasurementB,
                         model.ThicknessMeasurementC,
@@ -1714,8 +1723,8 @@ WHERE ProjectId = @ProjectId AND [IsActive] = 1 AND [IsDeleted] = 0 AND Id = @Id
                         model.Accommodation,
                         model.PhotoGraphs,
                         model.OperationalTestLocation,
-                        model.OperationalTestStart,
-                        model.OperationalTestFinish,
+                        OperationalTestStart = NormalizeHIDate(model.OperationalTestStart),
+                        OperationalTestFinish = NormalizeHIDate(model.OperationalTestFinish),
                         model.OptionalTestSatisFactory,
                         model.AssociatedReportNumber,
                         model.AssociatedReportDate,
@@ -1724,7 +1733,7 @@ WHERE ProjectId = @ProjectId AND [IsActive] = 1 AND [IsDeleted] = 0 AND Id = @Id
                         model.LeadSurveyorNumber,
                         model.SurveyorName,
                         model.SurveyorNumber,
-                        model.LastVisitDate,
+                        LastVisitDate = NormalizeHIDate(model.LastVisitDate),
                         model.IndividualA,
                         model.IndividualB,
                         model.IndividualC,

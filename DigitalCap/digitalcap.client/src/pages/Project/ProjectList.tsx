@@ -12,6 +12,7 @@ import EmptyProjectView from './EmptyProjectView';
 import SyncConfirmModal from './SyncConfirmModal';
 import { isElectron, isAppOnline } from '../../utils/runtime';
 import { measureConnectionSpeed, isNetworkConnectionError } from '../../utils/connectionSpeed';
+import { isEmptyDate } from '../../utils/dateTime';
 
 export interface SidebarProjectRow {
     name: string;
@@ -223,9 +224,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 let formattedDate = '';
 
                 if (
-                    project.commentLastModifiedDate &&
-                    !project.commentLastModifiedDate.includes('1901') &&
-                    !project.commentLastModifiedDate.includes('1900')
+                    !isEmptyDate(project.commentLastModifiedDate)
                 ) {
                     const parsed = moment(project.commentLastModifiedDate);
 

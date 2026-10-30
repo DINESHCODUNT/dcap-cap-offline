@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import ABSLogo from '../../assets/images/ABSLogo.svg';
 import { Label, Input, DatePickerInput, AbsSelect } from "customer_portal-ui-shared";
 import { updateReport } from "../../service/SurveyReportService";
-import { parseVisitDate, formatVisitDateForSave } from "../../utils/dateTime";
+import { parseVisitDate, formatVisitDateForSave, isEmptyDate } from "../../utils/dateTime";
 import { usePopup } from "../../Common/PopupProvider";
 
 interface CertField {
@@ -152,7 +152,7 @@ const StatutoryCertificates: React.FC<{
         )
     );
     const parseDate = (dateStr: string) => {
-        if (!dateStr || dateStr === "0001-01-01T00:00:00") return null;
+        if (isEmptyDate(dateStr)) return null;
         return new Date(dateStr);
     };
 
@@ -165,7 +165,7 @@ const StatutoryCertificates: React.FC<{
 
         setFormData({
             report_no: reportData?.reportNo ?? vessel.reportNo ?? "",
-            portdate: vessel.portDate && vessel.portDate !== "0001-01-01T00:00:00" ? new Date(vessel.portDate) : null,
+            portdate: !isEmptyDate(vessel.portDate) ? new Date(vessel.portDate) : null,
             vessel_name: vessel.vesselName || "",
             name_prefix: vessel.selectedPrefix || "",
             imoNumber: vessel.imoNumber || "",
@@ -173,7 +173,7 @@ const StatutoryCertificates: React.FC<{
             port: reportData?.reportPort ?? reportData?.report?.reportPort ?? "",
         });
 
-        if (vessel.portDate && vessel.portDate !== "0001-01-01T00:00:00") {
+        if (!isEmptyDate(vessel.portDate)) {
             setPortDate(new Date(vessel.portDate));
         }
 
@@ -204,7 +204,7 @@ const StatutoryCertificates: React.FC<{
 
     }, [reportData]);
     const getDateStatus = (dateStr: string) => {
-        if (!dateStr || dateStr === "0001-01-01T00:00:00" || dateStr === "") {
+        if (isEmptyDate(dateStr)) {
             return { color: 'transparent', status: '' };
         }
         const today = new Date();

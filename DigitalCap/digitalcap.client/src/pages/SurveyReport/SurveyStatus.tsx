@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import ABSLogo from '../../assets/images/ABSLogo.svg';
 import { Label, Input, DatePickerInput, AbsSelect } from "customer_portal-ui-shared";
 import { updateReport } from "../../service/SurveyReportService";
-import { parseVisitDate, formatVisitDateForSave } from "../../utils/dateTime";
+import { parseVisitDate, formatVisitDateForSave, isEmptyDate } from "../../utils/dateTime";
 import { usePopup } from "../../Common/PopupProvider";
 
 type FormData = {
@@ -40,7 +40,7 @@ const SURVEY_REPORT_PARTS = {
     vessel_name: 4,
 };
 const parseDate = (value: any): Date | null => {
-    if (!value || value === "0001-01-01T00:00:00") {
+    if (isEmptyDate(value)) {
         return null;
     }
 

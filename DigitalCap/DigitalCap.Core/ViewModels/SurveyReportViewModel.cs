@@ -148,7 +148,7 @@ namespace DigitalCap.Core.ViewModels
 
         public string CertificateNumber { get; set; }
 
-        public DateTime ExpiryDate { get; set; }
+        public DateTime? ExpiryDate { get; set; }
 
         public string ThicknessMeasurementA { get; set; }
 
@@ -166,9 +166,9 @@ namespace DigitalCap.Core.ViewModels
 
         public string OperationalTestLocation { get; set; }
 
-        public DateTime OperationalTestStart { get; set; }
+        public DateTime? OperationalTestStart { get; set; }
 
-        public DateTime OperationalTestFinish { get; set; }
+        public DateTime? OperationalTestFinish { get; set; }
 
         public string OptionalTestSatisFactory { get; set; }
 
@@ -186,7 +186,7 @@ namespace DigitalCap.Core.ViewModels
 
         public string SurveyorNumber { get; set; }
 
-        public DateTime LastVisitDate { get; set; }
+        public DateTime? LastVisitDate { get; set; }
 
         public string IndividualA { get; set; }
 

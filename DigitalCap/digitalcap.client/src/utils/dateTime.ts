@@ -13,8 +13,19 @@ export function parseApiDateTime(value: string | Date | null | undefined): Date 
     return new Date(`${normalized}Z`);
 }
 
+export const isEmptyDate = (value: any): boolean => {
+    if (value === null || value === undefined || value === "") return true;
+    if (typeof value === "string" && /^\d{2}-\d{2}-\d{4}$/.test(value.trim())) {
+        const year = Number(value.trim().split("-")[2]);
+        return isNaN(year) || year <= 1901;
+    }
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return true;
+    return d.getFullYear() <= 1901;
+};
+
 export function parseVisitDate(value: string | null | undefined): Date | "" {
-    if (!value || value === "0001-01-01T00:00:00") {
+    if (isEmptyDate(value)) {
         return "";
     }
 

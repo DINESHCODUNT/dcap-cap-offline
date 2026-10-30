@@ -8,6 +8,7 @@ import * as portService from '../../service/PortService';
 import { usePopup } from '../../Common/PopupProvider';
 import { resultMessage } from '../../Common/UtilityMessage';
 import DropdownWithSearch, { type DropdownWithSearchOption } from '../../Common/DropdownWithSearch';
+import { isEmptyDate } from '../../utils/dateTime';
 
 type FormData = {
     project_name: string;
@@ -621,7 +622,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                             sis_imo_number: projectData.sisterVesselImoNumber || '',
                             sis_vessel_name: projectData.sisterVesselName || '',
                             planned_drydock_location: projectData.drydockLocation ? String(projectData.drydockLocation) : '',
-                            potential_drydock_date: projectData.potentialDrydockDate || '',
+                            potential_drydock_date: !isEmptyDate(projectData.potentialDrydockDate) ? projectData.potentialDrydockDate : '',
                             conjunction_with_ssh_or_ihs: projectData.specialHull || false,
                             start_date: projectData.drydockStart || '',
                             end_date: projectData.drydockEnd || '',
@@ -658,7 +659,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
 
                         setFormData(mappedFormData);
 
-                        if (projectData.potentialDrydockDate) setDryDockDate(new Date(projectData.potentialDrydockDate));
+                        if (!isEmptyDate(projectData.potentialDrydockDate)) setDryDockDate(new Date(projectData.potentialDrydockDate));
                         if (projectData.drydockStart) setGaugingStartDate(new Date(projectData.drydockStart));
                         if (projectData.drydockEnd) setGaugingEndDate(new Date(projectData.drydockEnd));
                         if (projectData.surveyFirstVisit) setSurveyStartDate(new Date(projectData.surveyFirstVisit));
