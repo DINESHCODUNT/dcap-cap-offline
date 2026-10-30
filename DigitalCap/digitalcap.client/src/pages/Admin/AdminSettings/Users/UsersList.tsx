@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button, AbsReactTable, BUTTONS, AbsSearch } from "customer_portal-ui-shared";
 import * as Icon from 'react-bootstrap-icons';
-import { Spinner } from 'react-bootstrap';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import * as absUserService from '../../../../service/AbsUserService';
 import { usePopup } from '../../../../Common/PopupProvider';
@@ -521,34 +520,27 @@ const UsersList: React.FC = () => {
                 </div>
             </div>
             <div className="custom-react-table">
-                {loading ? (
-                    <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
-                        <Spinner animation="border" role="status" variant="primary">
-                            <span className="visually-hidden">Loading...</span>
-                        </Spinner>
-                    </div>
-                ) : (
-                    <AbsReactTable
-                        columns={columns}
-                        data={paginatedUsers}
-                        pagination={true}
-                        expand={false}
-                        allowColumnsShowHide={false}
-                        shadow={true}
-                        dataCount={dataCount}
-                        pageIndex={appliedFilters.pageIndex}
-                        pageSize={appliedFilters.pageSize.toString()}
-                        applyFilterCallback={applyFilter}
-                        appliedFilters={{
-                            ...appliedFilters,
-                            pageSize: appliedFilters.pageSize.toString(),
-                            pageIndex: appliedFilters.pageIndex.toString(),
-                        }}
-                        pageOptions={["20", "40", "60", "80"]}
-                        allDataProvided
+                <AbsReactTable
+                    loading={loading}
+                    columns={columns}
+                    data={paginatedUsers}
+                    pagination={true}
+                    expand={false}
+                    allowColumnsShowHide={false}
+                    shadow={true}
+                    dataCount={dataCount}
+                    pageIndex={appliedFilters.pageIndex}
+                    pageSize={appliedFilters.pageSize.toString()}
+                    applyFilterCallback={applyFilter}
+                    appliedFilters={{
+                        ...appliedFilters,
+                        pageSize: appliedFilters.pageSize.toString(),
+                        pageIndex: appliedFilters.pageIndex.toString(),
+                    }}
+                    pageOptions={["20", "40", "60", "80"]}
+                    allDataProvided
 
-                    />
-                )}
+                />
             </div>
             <AddUser
                 show={showAddUser}

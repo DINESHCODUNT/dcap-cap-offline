@@ -4,7 +4,7 @@ import * as Icon from 'react-bootstrap-icons';
 import ManageDescriptionTemplateList from './ManageDescTemplateList';
 import { usePopup } from '../../../../Common/PopupProvider';
 import { resultMessage } from '../../../../Common/UtilityMessage';
-import { Offcanvas, Spinner } from 'react-bootstrap';
+import { Offcanvas } from 'react-bootstrap';
 import * as descriptionService from '../../../../service/DescriptionService';
 import * as gradingService from '../../../../service/GradingService';
 
@@ -811,33 +811,26 @@ const ManageDescriptionList: React.FC = () => {
                             </div>
                         </div>
                         <div className="custom-react-table" style={{ position: 'relative' }}>
-                            {loading ? (
-                                <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
-                                    <Spinner animation="border" role="status" variant="primary">
-                                        <span className="visually-hidden">Loading...</span>
-                                    </Spinner>
-                                </div>
-                            ) : (
-                                <AbsReactTable
-                                    columns={columns}
-                                    data={descriptions || []}
-                                    pagination={true}
-                                    expand={false}
-                                    allowColumnsShowHide={true}
-                                    shadow={true}
-                                    allDataProvided
-                                    dataCount={fullFilteredDescriptions ? fullFilteredDescriptions.length : 0}
-                                    applyFilterCallback={applyFilter}
-                                    pageIndex={appliedFilters.pageIndex}
-                                    appliedFilters={{
-                                        ...appliedFilters,
-                                        pageSize: appliedFilters.pageSize.toString(),
-                                        pageIndex: appliedFilters.pageIndex.toString(),
-                                        searchType: "all"
-                                    }}
-                                    pageOptions={["50", "100", "150", "200"]}
-                                />
-                            )}
+                            <AbsReactTable
+                                loading={loading}
+                                columns={columns}
+                                data={descriptions || []}
+                                pagination={true}
+                                expand={false}
+                                allowColumnsShowHide={true}
+                                shadow={true}
+                                allDataProvided
+                                dataCount={fullFilteredDescriptions ? fullFilteredDescriptions.length : 0}
+                                applyFilterCallback={applyFilter}
+                                pageIndex={appliedFilters.pageIndex}
+                                appliedFilters={{
+                                    ...appliedFilters,
+                                    pageSize: appliedFilters.pageSize.toString(),
+                                    pageIndex: appliedFilters.pageIndex.toString(),
+                                    searchType: "all"
+                                }}
+                                pageOptions={["50", "100", "150", "200"]}
+                            />
                         </div>
                     </div>
                 </div>

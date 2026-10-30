@@ -3,7 +3,7 @@ import { Button, AbsReactTable, BUTTONS, Divider, Input, TextArea, AbsSearch, La
 import * as Icon from 'react-bootstrap-icons';
 import _uniqueId from "lodash/uniqueId";
 import * as clientProfileService from '../../../../service/ClientProfileService';
-import { Offcanvas, Spinner } from 'react-bootstrap';
+import { Offcanvas } from 'react-bootstrap';
 import { usePopup } from '../../../../Common/PopupProvider';
 import { resultMessage } from '../../../../Common/UtilityMessage';
 import ClientDetails from './ClientDetails';
@@ -635,32 +635,25 @@ const ClientList: React.FC = () => {
                 </div>
             </div>
             <div className="custom-react-table">
-                {loading ? (
-                    <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
-                        <Spinner animation="border" role="status" variant="primary">
-                            <span className="visually-hidden">Loading...</span>
-                        </Spinner>
-                    </div>
-                ) : (
-                    <AbsReactTable
-                        columns={columns}
-                        data={data}
-                        pagination={true}
-                        expand={false}
-                        allowColumnsShowHide={false}
-                        shadow={true}
-                        dataCount={dataCount || clientFilter.length}
-                        applyFilterCallback={applyFilter}
-                        appliedFilters={{
-                            ...appliedFilters,
-                            pageSize: appliedFilters.pageSize.toString(),
-                            pageIndex: appliedFilters.pageIndex.toString(),
-                        }}
-                        pageOptions={["10", "20", "30", "40"]}
-                        allDataProvided
+                <AbsReactTable
+                    loading={loading}
+                    columns={columns}
+                    data={data}
+                    pagination={true}
+                    expand={false}
+                    allowColumnsShowHide={false}
+                    shadow={true}
+                    dataCount={dataCount || clientFilter.length}
+                    applyFilterCallback={applyFilter}
+                    appliedFilters={{
+                        ...appliedFilters,
+                        pageSize: appliedFilters.pageSize.toString(),
+                        pageIndex: appliedFilters.pageIndex.toString(),
+                    }}
+                    pageOptions={["10", "20", "30", "40"]}
+                    allDataProvided
 
-                    />
-                )}
+                />
             </div>
             <Offcanvas show={createclient} placement={"end"} onHide={() => setCreateclient(false)} backdrop="static">
                 <Offcanvas.Header closeButton>

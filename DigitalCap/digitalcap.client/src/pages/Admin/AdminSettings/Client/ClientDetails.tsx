@@ -360,6 +360,7 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ id, clientId }) => {
 
                                 <div className="custom-react-table">
                                     <AbsReactTable
+                                        loading={detailsLoading}
                                         columns={projectHistoryColumns}
                                         data={displayedProjectHistory}
                                         pagination={true}

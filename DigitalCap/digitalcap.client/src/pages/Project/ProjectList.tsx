@@ -1120,7 +1120,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     shadow={true}
                                     allDataProvided
                                     dataCount={dataCount}
-                                    isloading={loading}
+                                    loading={loading}
                                     pageOptions={["50", "100", "150", "200"]}
                                     applyFilterCallback={applyFilter}
                                     appliedFilters={{

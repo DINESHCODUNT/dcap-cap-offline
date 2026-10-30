@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Button, AbsReactTable, BUTTONS, Divider, Input, AbsSelect, AbsSearch, RadioInput, Label } from "customer_portal-ui-shared";
 import * as Icon from 'react-bootstrap-icons';
 import ManageTankTemplateList from './ManageTankTemplateList';
-import { Modal, Offcanvas, Spinner } from 'react-bootstrap';
+import { Modal, Offcanvas } from 'react-bootstrap';
 import * as tankService from '../../../../service/TankService';
 import * as gradingService from '../../../../service/GradingService';
 import { usePopup } from '../../../../Common/PopupProvider';
@@ -914,33 +914,26 @@ const ManageTankList: React.FC = () => {
                             </div>
                         </div>
                         <div className="custom-react-table">
-                            {loading ? (
-                                <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
-                                    <Spinner animation="border" role="status" variant="primary">
-                                        <span className="visually-hidden">Loading...</span>
-                                    </Spinner>
-                                </div>
-                            ) : (
-                                <AbsReactTable
-                                    columns={columns}
-                                    data={tankList}
-                                    pagination={true}
-                                    expand={false}
-                                    allowColumnsShowHide={false}
-                                    shadow={true}
-                                    rowSelect={canEdit}
-                                    onRowSelected={handleRowSelected}
-                                    dataCount={dataCount}
-                                    applyFilterCallback={applyFilter}
-                                    appliedFilters={{
-                                        ...appliedFilters,
-                                        pageSize: appliedFilters.pageSize.toString(),
-                                        pageIndex: appliedFilters.pageIndex.toString(),
-                                    }}
-                                    pageOptions={["50", "100", "150", "200"]}
-                                    allDataProvided
-                                />
-                            )}
+                            <AbsReactTable
+                                loading={loading}
+                                columns={columns}
+                                data={tankList}
+                                pagination={true}
+                                expand={false}
+                                allowColumnsShowHide={false}
+                                shadow={true}
+                                rowSelect={canEdit}
+                                onRowSelected={handleRowSelected}
+                                dataCount={dataCount}
+                                applyFilterCallback={applyFilter}
+                                appliedFilters={{
+                                    ...appliedFilters,
+                                    pageSize: appliedFilters.pageSize.toString(),
+                                    pageIndex: appliedFilters.pageIndex.toString(),
+                                }}
+                                pageOptions={["50", "100", "150", "200"]}
+                                allDataProvided
+                            />
                         </div>
                     </div>
                 </div>
