@@ -22,17 +22,25 @@ namespace DigitalCap.Server.Controllers
     public class DataTransferAPIController : ApiBaseController
     {
         private readonly IDataTransferService _dataTransferService;
+        private readonly ITransferProgressStore _progressStore;
         private readonly ILogger<DataTransferAPIController> _logger;
 
-        public DataTransferAPIController(IDataTransferService dataTransferService, ILogger<DataTransferAPIController> logger)
+        public DataTransferAPIController(IDataTransferService dataTransferService, ITransferProgressStore progressStore, ILogger<DataTransferAPIController> logger)
         {
             _dataTransferService = dataTransferService;
+            _progressStore = progressStore;
             _logger = logger;
         }
 
         private string? CurrentUserObjectId =>
             User.FindFirstValue("oid")
             ?? User.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier");
+
+        [HttpGet("Progress")]
+        public IActionResult Progress([FromQuery] int projectId)
+        {
+            return Ok(new { percent = _progressStore.Get(projectId) });
+        }
 
         [HttpPost("Download")]
         public async Task<IActionResult> Download([FromQuery] int projectId, [FromQuery] bool redownload = false, CancellationToken cancellationToken = default)

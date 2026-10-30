@@ -30,12 +30,14 @@ namespace DigitalCap.Infrastructure.Service
 
         private readonly IOnlineTransferRepository _online;
         private readonly IOfflineTransferRepository _offline;
+        private readonly ITransferProgressStore _progressStore;
         private readonly ILogger<DataTransferService> _logger;
 
-        public DataTransferService(IOnlineTransferRepository online, IOfflineTransferRepository offline, ILogger<DataTransferService> logger)
+        public DataTransferService(IOnlineTransferRepository online, IOfflineTransferRepository offline, ITransferProgressStore progressStore, ILogger<DataTransferService> logger)
         {
             _online = online;
             _offline = offline;
+            _progressStore = progressStore;
             _logger = logger;
         }
 
@@ -61,6 +63,18 @@ namespace DigitalCap.Infrastructure.Service
 
         private async Task<DataTransferResult> DownloadCoreAsync(int projectId, string userId, string userName, bool redownload, CancellationToken ct)
         {
+            _progressStore.Set(projectId, 0);
+            int done = 0;
+            int total = 0;
+            void ReportProgress()
+            {
+                if (total > 0)
+                {
+                    var pct = Math.Min(99, (int)Math.Round(done * 100.0 / total));
+                    _progressStore.Set(projectId, pct);
+                }
+            }
+
             // 1. Server marker: someone else holding the project offline blocks the download.
             IsSynchedOnline? marker;
             try
@@ -69,6 +83,7 @@ namespace DigitalCap.Infrastructure.Service
             }
             catch (Exception ex)
             {
+                _progressStore.Remove(projectId);
                 _logger.LogError(ex, "Download {ProjectId}: reading the download marker failed", projectId);
                 return DataTransferResult.Fail(DataTransferStatus.Error, "Could not check whether the project is already downloaded: " + ex.Message);
             }
@@ -76,6 +91,7 @@ namespace DigitalCap.Infrastructure.Service
             var markerIsMine = marker != null && IsMarkerOwner(marker, userId, userName);
             if (marker != null && !markerIsMine)
             {
+                _progressStore.Remove(projectId);
                 var owner = ToLockOwner(marker);
                 return new DataTransferResult
                 {
@@ -94,15 +110,21 @@ namespace DigitalCap.Infrastructure.Service
                 {
                     var pending = await _offline.GetPendingChangesAsync(projectId, ct);
                     if (pending.HasChanges)
+                    {
+                        _progressStore.Remove(projectId);
                         return DataTransferResult.Fail(DataTransferStatus.Conflict,
                             "This project has offline changes that have not been synced. Sync first, or release it to discard the changes, before downloading again.");
+                    }
                 }
             }
             catch (Exception ex)
             {
+                _progressStore.Remove(projectId);
                 _logger.LogError(ex, "Download {ProjectId}: reading the local database failed", projectId);
                 return DataTransferResult.Fail(DataTransferStatus.Error, "Could not read the local database: " + ex.Message);
             }
+
+            done = 1;
 
             // 3. Read everything from Azure SQL before touching the local database.
             TransferDataModel data;
@@ -110,17 +132,27 @@ namespace DigitalCap.Infrastructure.Service
             {
                 var project = await _online.GetProjectDataAsync(projectId, ct);
                 if (project == null)
+                {
+                    _progressStore.Remove(projectId);
                     return DataTransferResult.Fail(DataTransferStatus.Error, $"Project {projectId} was not found online.");
+                }
                 data = project;
+                done = 2;
 
                 var sections = (await _online.GetAllSectionsAsync(projectId, ct))
                     .GroupBy(s => (s.TemplateId, s.SectionId))
                     .Select(g => g.First())
                     .ToList();
+                done = 3;
+                total = sections.Count + 4;
+                ReportProgress();
+
                 foreach (var section in sections)
                 {
                     var sectionData = await _online.GetSectionDataAsync(projectId, section.TemplateId, section.SectionId, ct);
                     MergeSection(data, sectionData);
+                    done++;
+                    ReportProgress();
                 }
 
                 // Desktop additions stored with the project: workflow tasks for the offline landing page, and the
@@ -128,9 +160,12 @@ namespace DigitalCap.Infrastructure.Service
                 // the browser's localStorage, fetched from DataTransferDevAPI GetRolePermissions/GetCurrentUserRoles).
                 data.ProjectTasks = await _online.GetProjectTasksAsync(projectId, ct);
                 data.UserSecurity = await _online.GetUserSecurityAsync(userName, ct);
+                done++;
+                ReportProgress();
             }
             catch (Exception ex)
             {
+                _progressStore.Remove(projectId);
                 _logger.LogError(ex, "Download {ProjectId}: reading project data from Azure SQL failed", projectId);
                 return DataTransferResult.Fail(DataTransferStatus.Error, "Downloading the project data failed: " + ex.Message);
             }
@@ -142,6 +177,7 @@ namespace DigitalCap.Infrastructure.Service
             }
             catch (Exception ex)
             {
+                _progressStore.Remove(projectId);
                 _logger.LogError(ex, "Download {ProjectId}: writing to the local database failed", projectId);
                 return DataTransferResult.Fail(DataTransferStatus.Error, "Saving the project to the local database failed: " + ex.Message);
             }
@@ -155,6 +191,7 @@ namespace DigitalCap.Infrastructure.Service
                 }
                 catch (Exception ex)
                 {
+                    _progressStore.Remove(projectId);
                     _logger.LogError(ex, "Download {ProjectId}: writing the download marker failed; undoing the local copy", projectId);
                     var undone = await UndoLocalDownloadAsync(projectId, existsLocally);
                     return DataTransferResult.Fail(DataTransferStatus.Error,
@@ -175,6 +212,9 @@ namespace DigitalCap.Infrastructure.Service
                     _logger.LogWarning(ex, "Download {ProjectId}: clearing the backup tables failed", projectId);
                 }
             }
+
+            _progressStore.Set(projectId, 100);
+            _ = Task.Delay(5000).ContinueWith(_ => _progressStore.Remove(projectId));
 
             return DataTransferResult.Ok(existsLocally ? "Project downloaded again for offline use." : "Project downloaded for offline use.");
         }
@@ -238,13 +278,18 @@ namespace DigitalCap.Infrastructure.Service
 
         private async Task<DataTransferResult> SyncCoreAsync(int projectId, bool release, string userName, CancellationToken ct)
         {
+            _progressStore.Set(projectId, 0);
             try
             {
                 if (!await _offline.ProjectExistsAsync(projectId, ct))
+                {
+                    _progressStore.Remove(projectId);
                     return DataTransferResult.Fail(DataTransferStatus.NotFound, "This project is not downloaded on this device.");
+                }
             }
             catch (Exception ex)
             {
+                _progressStore.Remove(projectId);
                 _logger.LogError(ex, "Sync {ProjectId}: reading the local database failed", projectId);
                 return new DataTransferResult { Status = DataTransferStatus.Error, Message = "Could not read the local database: " + ex.Message };
             }
@@ -254,10 +299,14 @@ namespace DigitalCap.Infrastructure.Service
             {
                 var marker = await _online.GetDownloadedProjectAsync(projectId, ct);
                 if (marker == null)
+                {
+                    _progressStore.Remove(projectId);
                     return DataTransferResult.Fail(DataTransferStatus.Conflict, "CAP Administrator has cancelled the project from offline download.  You may contact CAP HQ for further queries.");
+                }
             }
             catch (Exception ex)
             {
+                _progressStore.Remove(projectId);
                 _logger.LogError(ex, "Sync {ProjectId}: checking online download lock failed", projectId);
                 return new DataTransferResult { Status = DataTransferStatus.Error, Message = "Could not check online project status: " + ex.Message };
             }
@@ -269,23 +318,33 @@ namespace DigitalCap.Infrastructure.Service
                 // ReleasedErrorData before showing the sync confirmation).
                 await _online.ReleaseErrorSyncDataAsync(projectId, ct);
 
+                var sections = await _offline.GetDirtySectionsAsync(projectId, ct);
+                int total = sections.Count + 2;
+                int done = 0;
+
                 var tank = await _offline.GetTankSyncDataAsync(projectId, ct);
                 tank.ProjectId = TankBatchProjectId;
                 await _online.InsertSyncDataAsync(tank, ct);
+                done = 1;
+                _progressStore.Set(projectId, Math.Min(99, (int)Math.Round(done * 100.0 / total)));
 
-                var sections = await _offline.GetDirtySectionsAsync(projectId, ct);
                 foreach (var section in sections)
                 {
                     var batch = await _offline.GetSectionSyncDataAsync(projectId, section, ct);
                     batch.ProjectId = projectId;
                     await _online.InsertSyncDataAsync(batch, ct);
+                    done++;
+                    _progressStore.Set(projectId, Math.Min(99, (int)Math.Round(done * 100.0 / total)));
                 }
 
                 // Mirrors the reference client exactly: keep = isRelease ? 1 : 0.
                 await _online.MoveToOnlineTableAsync(projectId, release ? 1 : 0, ct);
+                _progressStore.Set(projectId, 100);
+                _ = Task.Delay(5000).ContinueWith(_ => _progressStore.Remove(projectId));
             }
             catch (Exception ex)
             {
+                _progressStore.Remove(projectId);
                 _logger.LogError(ex, "Sync {ProjectId}: upload failed", projectId);
                 try
                 {
@@ -313,6 +372,7 @@ namespace DigitalCap.Infrastructure.Service
             }
             catch (Exception ex)
             {
+                _progressStore.Remove(projectId);
                 _logger.LogError(ex, "Sync {ProjectId}: server sync succeeded but the local {Step} failed", projectId, release ? "release" : "keep");
                 return new DataTransferResult
                 {

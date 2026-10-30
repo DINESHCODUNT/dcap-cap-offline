@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import Modal from 'react-bootstrap/Modal';
@@ -13,6 +13,7 @@ import SyncConfirmModal from './SyncConfirmModal';
 import { isElectron, isAppOnline } from '../../utils/runtime';
 import { measureConnectionSpeed, isNetworkConnectionError } from '../../utils/connectionSpeed';
 import { isEmptyDate } from '../../utils/dateTime';
+import TransferProgressBar from '../../Common/TransferProgressBar';
 
 export interface SidebarProjectRow {
     name: string;
@@ -115,6 +116,17 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const [selectedOnlineProjectId, setSelectedOnlineProjectId] = useState<number | null>(null);
     const [syncConfirmProject, setSyncConfirmProject] = useState<SidebarProjectRow | null>(null);
     const [isDownloading, setIsDownloading] = useState<boolean>(false);
+    const [downloadPercent, setDownloadPercent] = useState<number>(0);
+    const downloadPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (downloadPollRef.current) {
+                clearInterval(downloadPollRef.current);
+                downloadPollRef.current = null;
+            }
+        };
+    }, []);
     const [downloadSuccessModal, setDownloadSuccessModal] = useState<boolean>(false);
     const [showDownloadConfirm, setShowDownloadConfirm] = useState<boolean>(false);
     const [showDownloadWarning, setShowDownloadWarning] = useState<boolean>(false);
@@ -354,21 +366,49 @@ const ProjectList: React.FC<ProjectListProps> = ({
         if (!selectedOnlineProjectId) return;
         const match = availableOnlineProjects.find(p => p.projectId === selectedOnlineProjectId);
         if (!match) return;
+        setDownloadPercent(0);
+        if (downloadPollRef.current) {
+            clearInterval(downloadPollRef.current);
+            downloadPollRef.current = null;
+        }
         setIsDownloading(true);
         setIsDownloadInBackground(false);
         const controller = new AbortController();
         setDownloadAbortController(controller);
         setDownloadingProjectName(match.projectName);
+
+        downloadPollRef.current = setInterval(async () => {
+            try {
+                const res = await projectService.getTransferProgress(selectedOnlineProjectId);
+                if (typeof res?.data?.percent === 'number') {
+                    setDownloadPercent(res.data.percent);
+                }
+            } catch {
+                // ignore polling errors
+            }
+        }, 500);
+
         try {
             const response = await projectService.downloadProjectOffline(selectedOnlineProjectId, controller.signal);
+            if (downloadPollRef.current) {
+                clearInterval(downloadPollRef.current);
+                downloadPollRef.current = null;
+            }
             if (response.data && response.data.success === false) {
+                setDownloadPercent(0);
                 setTransferError(response.data.message || "Unable to download project.");
             } else {
+                setDownloadPercent(100);
                 setDownloadSuccessModal(true);
                 await loadProjects();
                 await loadAvailableOnlineProjects();
             }
         } catch (err: any) {
+            if (downloadPollRef.current) {
+                clearInterval(downloadPollRef.current);
+                downloadPollRef.current = null;
+            }
+            setDownloadPercent(0);
             if (axios.isCancel(err) || err?.name === 'CanceledError') {
                 return;
             }
@@ -382,6 +422,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
             }
             setTransferError(projectService.getTransferErrorMessage(err, "Unable to Sync/Download due to a very low internet connection. Please proceed when your internet connection is having at least 10 mbps download and upload speed."));
         } finally {
+            if (downloadPollRef.current) {
+                clearInterval(downloadPollRef.current);
+                downloadPollRef.current = null;
+            }
             setIsDownloading(false);
             setDownloadAbortController(null);
             setDownloadingProjectName(null);
@@ -389,6 +433,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
     };
 
     const handleStopDropdownDownload = () => {
+        if (downloadPollRef.current) {
+            clearInterval(downloadPollRef.current);
+            downloadPollRef.current = null;
+        }
+        setDownloadPercent(0);
         if (downloadAbortController) {
             downloadAbortController.abort();
         }
@@ -1288,13 +1337,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             <h5 className="mb-0">Downloading the {downloadingProjectName} project in Offline Mode</h5>
                         </div>
                     </div>
-                    <div className="progress" style={{ height: '10px' }}>
-                        <div
-                            className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-                            role="progressbar"
-                            style={{ width: "100%" }}
-                        />
-                    </div>
+                    <TransferProgressBar percent={downloadPercent} height="10px" variant="bg-primary" />
                 </Modal.Body>
                 <Modal.Footer className="d-flex justify-content-end gap-2">
                     <Button variant={BUTTONS.SECONDARY} onClick={handleStopDropdownDownload}>
@@ -1316,13 +1359,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 </div>
                                 <div className="alert-content flex-grow-1">
                                     <h6 className="mb-1" style={{ fontSize: '14px', fontWeight: 600 }}>Download Offline is Inprogress</h6>
-                                    <div className="progress" style={{ height: '6px' }}>
-                                        <div
-                                            className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-                                            role="progressbar"
-                                            style={{ width: "100%" }}
-                                        />
-                                    </div>
+                                    <TransferProgressBar percent={downloadPercent} height="6px" variant="bg-primary" />
                                 </div>
                             </div>
                             <div className="actions d-flex justify-content-end gap-2 mt-2" style={{ gap: '8px' }}>
@@ -1344,14 +1381,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 }}
             />
 
-            {/* Speed Checking Spinner Modal */}
-            <Modal show={isCheckingSpeed} centered backdrop="static">
-                <Modal.Body className="text-center py-4">
-                    <div className="spinner-border text-primary" role="status">
-                        <span className="visually-hidden">Loading...</span>
-                    </div>
-                </Modal.Body>
-            </Modal>
+            {/* Speed Checking Spinner Modal removed (no popup during speed check) */}
 
             {/* Download Success Modal */}
             <Modal
