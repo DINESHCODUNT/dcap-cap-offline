@@ -78,6 +78,8 @@ const HeaderMenu: React.FC = () => {
                         name: "Manage Tanks",
                         navlink: "/app/Configuration/ManageTanks",
                         permission: "manageTank"
+                    }
+                    /*
                     },
                     {
                         id: "ManageGrading",
@@ -91,6 +93,7 @@ const HeaderMenu: React.FC = () => {
                         navlink: "/app/Configuration/Managedescriptions",
                         permission: "manageDescription"
                     }
+                    */
                 ],
             }
         ]

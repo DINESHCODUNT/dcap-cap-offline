@@ -9,7 +9,7 @@ namespace DigitalCap.Core.Interfaces.Service
     /// <summary>Orchestrates project download / sync / release between the online website and the local database.</summary>
     public interface IDataTransferService
     {
-        Task<DataTransferResult> DownloadAsync(int projectId, string userId, string userName, CancellationToken cancellationToken = default);
+        Task<DataTransferResult> DownloadAsync(int projectId, string userId, string userName, bool redownload = false, CancellationToken cancellationToken = default);
 
         Task<DataTransferResult> SyncAsync(int projectId, bool release, string userName, CancellationToken cancellationToken = default);
 

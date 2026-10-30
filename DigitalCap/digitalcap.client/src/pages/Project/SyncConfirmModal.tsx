@@ -177,10 +177,11 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
         if (cancelledOption === 'redownload') {
             setIsDownloading(true);
             try {
-                const response = await projectService.downloadProjectOffline(project.id);
+                const response = await projectService.downloadProjectOffline(project.id, undefined, true);
                 if (response.data && response.data.success === false) {
                     throw { response };
                 }
+                popup.success("Download completed successfully", "Success");
                 onSuccess?.(false);
                 onClose();
             } catch (err: any) {

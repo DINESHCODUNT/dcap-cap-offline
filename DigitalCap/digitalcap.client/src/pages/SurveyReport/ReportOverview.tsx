@@ -416,6 +416,10 @@ useEffect(() => {
 
                 const warnings = parseValidateGradingResponse(response.data);
                 setValidateWarnings(warnings);
+                if (warnings.length === 0) {
+                    setValidateVisible(false);
+                    popup.success("Validation completed successfully!", "Validate");
+                }
             } else {
                 setValidateVisible(true);
                 response = await surveyReportService.exportValidationPartial(
@@ -425,6 +429,10 @@ useEffect(() => {
 
                 const warnings = parseValidateGradingResponse(response.data);
                 setValidateWarnings(warnings);
+                if (warnings.length === 0) {
+                    setValidateVisible(false);
+                    popup.success("Validation completed successfully!", "Validate");
+                }
             }
 
         } catch (err: any) {
@@ -497,6 +505,10 @@ useEffect(() => {
             }
 
             setValidateAllWarnings(allWarnings);
+            if (allWarnings.length === 0) {
+                setAllValidateVisible(false);
+                popup.success("All parts have been successfully validated.", "Validate");
+            }
 
         } catch (err: any) {
             popup.error(err?.response?.data || err?.message || "Validation failed. Please try again.", "Validate");
@@ -645,6 +657,10 @@ useEffect(() => {
 
             const warnings = parseValidateGradingResponse(response.data);
             setValidateWarnings(warnings);
+            if (warnings.length === 0) {
+                setValidateVisible(false);
+                popup.success("Validation completed successfully!", "Validate");
+            }
         } catch (err: any) {
             popup.error(err?.response?.data || err?.message || "Validation failed. Please try again.", "Validate");
         } finally {
@@ -1251,7 +1267,7 @@ useEffect(() => {
                                 Cancel Offline Download
                             </Button>
                         )}
-                        {isDesktop && navigator.onLine && (
+                        {isDesktop && (
                             <Button
                                 variant={BUTTONS.SECONDARY}
                                 onClick={() => setShowSyncModal(true)}
@@ -1260,7 +1276,7 @@ useEffect(() => {
                                 Save to Online
                             </Button>
                         )}
-                        {reportIndex?.resetTemplate === true && activeView.part !== "VMD" && (
+                        {!isElectron() && reportIndex?.resetTemplate === true && activeView.part !== "VMD" && (
                             <Button
                                 variant={BUTTONS.SECONDARY}
                                 onClick={handleResetTemplate}
@@ -1302,18 +1318,7 @@ useEffect(() => {
                                     ? validateAllWarnings
                                     : validateWarnings;
 
-                                return warnings.length === 0 ? (
-                                    <div className="cl-header">
-                                        <div className="cl-header-text">
-                                            <div className="cl-title">
-                                                All validations passed
-                                            </div>
-                                            <div className="cl-subtitle">
-                                                No missing fields found
-                                            </div>
-                                        </div>
-                                    </div>
-                                ) : (
+                                return warnings.length === 0 ? null : (
                                     <>
                                         <div className="cl-header">
                                             <div className="cl-icon">

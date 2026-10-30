@@ -41,7 +41,7 @@ namespace DigitalCap.Infrastructure.Service
 
         // ================================================================ download
 
-        public async Task<DataTransferResult> DownloadAsync(int projectId, string userId, string userName, CancellationToken cancellationToken = default)
+        public async Task<DataTransferResult> DownloadAsync(int projectId, string userId, string userName, bool redownload = false, CancellationToken cancellationToken = default)
         {
             if (!IsOnline.OnlineOrOffline)
                 return DataTransferResult.Fail(DataTransferStatus.Offline, "You are offline. Connect to the internet to download the project.");
@@ -51,7 +51,7 @@ namespace DigitalCap.Infrastructure.Service
                 return DataTransferResult.Fail(DataTransferStatus.Conflict, "A download or sync of this project is already in progress.");
             try
             {
-                return await DownloadCoreAsync(projectId, userId, userName, cancellationToken);
+                return await DownloadCoreAsync(projectId, userId, userName, redownload, cancellationToken);
             }
             finally
             {
@@ -59,7 +59,7 @@ namespace DigitalCap.Infrastructure.Service
             }
         }
 
-        private async Task<DataTransferResult> DownloadCoreAsync(int projectId, string userId, string userName, CancellationToken ct)
+        private async Task<DataTransferResult> DownloadCoreAsync(int projectId, string userId, string userName, bool redownload, CancellationToken ct)
         {
             // 1. Server marker: someone else holding the project offline blocks the download.
             IsSynchedOnline? marker;
@@ -90,7 +90,7 @@ namespace DigitalCap.Infrastructure.Service
             try
             {
                 existsLocally = await _offline.ProjectExistsAsync(projectId, ct);
-                if (existsLocally)
+                if (existsLocally && !redownload)
                 {
                     var pending = await _offline.GetPendingChangesAsync(projectId, ct);
                     if (pending.HasChanges)

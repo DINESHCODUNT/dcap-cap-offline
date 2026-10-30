@@ -584,9 +584,9 @@ export interface PendingChanges {
 }
 
 /** Copies the project from the online database into the desktop's local database. */
-export function downloadProjectOffline(projectId: number, signal?: AbortSignal): Promise<AxiosResponse<TransferResult>> {
+export function downloadProjectOffline(projectId: number, signal?: AbortSignal, redownload?: boolean): Promise<AxiosResponse<TransferResult>> {
     return axiosInstance.post<TransferResult>(`/api/DataTransferAPI/Download`, null, {
-        params: { projectId },
+        params: redownload ? { projectId, redownload: true } : { projectId },
         signal
     });
 }

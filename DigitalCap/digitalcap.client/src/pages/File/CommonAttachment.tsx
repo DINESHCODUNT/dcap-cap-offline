@@ -862,24 +862,28 @@ const CommonAttachment = forwardRef<CommonAttachmentHandle, CommonAttachmentProp
                                 onClick={() => callbacksRef.current.downloadServerRow(sr)}
                             >
                             </Button>
-                            {activeTab !== 'vessel' && (
-                                <Button
-                                    type="button"
-                                    variant={BUTTONS.TABLEDOWNLOAD} startIcon={<Icon.Pencil />}
-                                    className="btn-sm p-1"
-                                    title="Edit"
-                                    onClick={() => callbacksRef.current.startEditServerRow(sr)}
-                                >
-                                </Button>
+                            {!isElectron() && (
+                                <>
+                                    {activeTab !== 'vessel' && (
+                                        <Button
+                                            type="button"
+                                            variant={BUTTONS.TABLEDOWNLOAD} startIcon={<Icon.Pencil />}
+                                            className="btn-sm p-1"
+                                            title="Edit"
+                                            onClick={() => callbacksRef.current.startEditServerRow(sr)}
+                                        >
+                                        </Button>
+                                    )}
+                                    <Button
+                                        type="button"
+                                        variant={BUTTONS.TABLEDOWNLOAD} startIcon={<Icon.Trash />}
+                                        className="btn-sm p-1 text-danger"
+                                        title="Delete"
+                                        onClick={() => callbacksRef.current.handleDeleteClick(sr)}
+                                    >
+                                    </Button>
+                                </>
                             )}
-                            <Button
-                                type="button"
-                                variant={BUTTONS.TABLEDOWNLOAD} startIcon={<Icon.Trash />}
-                                className="btn-sm p-1 text-danger"
-                                title="Delete"
-                                onClick={() => callbacksRef.current.handleDeleteClick(sr)}
-                            >
-                            </Button>
                         </div>
                     );
                 },
