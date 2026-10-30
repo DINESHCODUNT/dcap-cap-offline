@@ -5,6 +5,7 @@ import WorkflowList from "./WorkflowList";
 import * as workflowService from "../../service/WorkflowService";
 import type { WorkflowViewModel } from "../../Interface/Workflow";
 import { ProgressState } from "../../Interface/Workflow";
+import { isElectron } from "../../utils/runtime";
 
 interface WorkflowDetailsProps {
     projectId?: number;
@@ -233,13 +234,15 @@ const WorkflowDetails: React.FC<WorkflowDetailsProps> = ({ projectId }) => {
 
                 </div>
             </div>
-            <div className="workflow-list">
-                <WorkflowList
-                    projectId={projectId}
-                    tasksViewModel={workflowData?.tasksViewModel}
-                    onWorkflowSaved={loadWorkflowData}
-                />
-            </div>
+            {!isElectron() && (
+                <div className="workflow-list">
+                    <WorkflowList
+                        projectId={projectId}
+                        tasksViewModel={workflowData?.tasksViewModel}
+                        onWorkflowSaved={loadWorkflowData}
+                    />
+                </div>
+            )}
         </>
     );
 }

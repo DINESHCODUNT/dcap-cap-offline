@@ -59,7 +59,13 @@ namespace DigitalCap.WebApi.Controllers
             }
 
             if (!result.IsSuccess)
+            {
+                if (result.ErrorMessage == "Access Denied" || result.ErrorMessage == "Access denied")
+                {
+                    return StatusCode(403, new { result.ErrorMessage, result.ErrorMessages, result.ErrorCode });
+                }
                 return BadRequest(new { result.ErrorMessage, result.ErrorMessages, result.ErrorCode });
+            }
             return Ok(result.Data);
         }
 

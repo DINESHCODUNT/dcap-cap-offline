@@ -185,7 +185,7 @@ namespace DigitalCap.Persistence.Repositories
         {
             try
             {
-                if (Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
+                if (Connection.IsSqlite() || Connection is Microsoft.Data.Sqlite.SqliteConnection || Connection.GetType().Name.Contains("Sqlite"))
                 {
                     var sqliteList = await Connection.QueryAsync<SelectListItem>(
                         sql: DigitalCap.Core.Constants.SQLiteQueries.Project.GetProjectListByIMO,

@@ -1230,6 +1230,8 @@ export interface ReportIndexViewModel {
     projectName: string;
     reportPartGrid: ReportPart[];
     isSynched: boolean;
+    reportEdit?: boolean;
+    reportView?: boolean;
     reportExport?: boolean;
     reportExportAll?: boolean;
     resetTemplate?: boolean;
@@ -1298,6 +1300,8 @@ export interface ReportIndexViewModel {
     projectName: string;
     reportPartGrid: ReportPart[];
     isSynched: boolean;
+    reportEdit?: boolean;
+    reportView?: boolean;
     reportExport?: boolean;
     reportExportAll?: boolean;
     resetTemplate?: boolean;

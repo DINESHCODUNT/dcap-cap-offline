@@ -109,6 +109,8 @@ namespace DigitalCap.Infrastructure.Service
 
             model.Imonumber = project.IMO;
             model.IsRleased = project.IsReadOnlyEnabled;
+            model.ReportEdit = reportAccess?.Edit;
+            model.ReportView = reportAccess?.Read;
             model.ReportExport = (await _userPermissionRepository.GetRolePermissionByUserName(
                 currentUserName, EnumExtensions.GetDescription(ManagePages.ReportExport), projectId))?.Edit;
             model.ReportExportAll = (await _userPermissionRepository.GetRolePermissionByUserName(

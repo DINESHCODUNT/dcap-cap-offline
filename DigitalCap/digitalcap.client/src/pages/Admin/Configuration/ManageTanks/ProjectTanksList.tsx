@@ -8,6 +8,7 @@ import type { TankDto, SelectOption } from "../../../../Interface/ProjectTank";
 import * as tankService from '../../../../service/TankService';
 import * as gradingService from '../../../../service/GradingService';
 import { usePopup } from '../../../../Common/PopupProvider';
+import { getManageTankPermission } from '../../../../service/UserPermissionService';
 import { resultMessage } from '../../../../Common/UtilityMessage';
 import { isElectron } from '../../../../utils/runtime';
 interface ManageTankRow {
@@ -189,6 +190,33 @@ const ProjectTankList: React.FC = () => {
         tank_name: "",
         activation_status: null
     });
+
+    const [tankPermissions, setTankPermissions] = useState<{ edit: boolean; delete: boolean }>({
+        edit: false,
+        delete: false
+    });
+
+    useEffect(() => {
+        if (!isElectron()) return;
+        setTankPermissions({ edit: false, delete: false });
+        const projectId = urlProject ? Number(urlProject) : undefined;
+        const imo = filterFormData.imo_number || urlImo || undefined;
+        getManageTankPermission(projectId, imo)
+            .then((res) => {
+                if (res.data) {
+                    setTankPermissions({
+                        edit: Boolean(res.data.edit),
+                        delete: Boolean(res.data.delete)
+                    });
+                }
+            })
+            .catch(() => {
+                setTankPermissions({ edit: false, delete: false });
+            });
+    }, [urlProject, filterFormData.imo_number, urlImo]);
+
+    const canEdit = !isElectron() || Boolean(tankPermissions.edit);
+    const canDelete = !isElectron() || Boolean(tankPermissions.delete);
 
     const [modalFormData, setModalFormData] = React.useState<ModalFormData>({
         tank_name: "",
@@ -882,12 +910,14 @@ const ProjectTankList: React.FC = () => {
                 Cell: ({ row }: { row: { original: any } }) => {
                     return (
                         <div className='d-flex justify-content-start gap-3'>
-                            <Button
-                                variant={BUTTONS.TABLEDOWNLOAD}
-                                startIcon={<Icon.PencilFill />}
-                                onClick={() => handleEditTank(row.original)}
-                            ></Button>
-                            {!isElectron() && (
+                            {canEdit && (
+                                <Button
+                                    variant={BUTTONS.TABLEDOWNLOAD}
+                                    startIcon={<Icon.PencilFill />}
+                                    onClick={() => handleEditTank(row.original)}
+                                ></Button>
+                            )}
+                            {canDelete && (
                                 <Button variant={BUTTONS.TABLEDOWNLOAD} onClick={() => {
                                     onDeleteTank(row.original);
                                 }} startIcon={<Icon.TrashFill />}></Button>
@@ -1651,7 +1681,7 @@ const ProjectTankList: React.FC = () => {
                             </div>
                         </div>
                         <div className="col-md-6 d-flex justify-content-end gap-2">
-                            {!isElectron() && (
+                            {canEdit && (
                                 <>
                                     <div>
                                         <Button variant={BUTTONS.PRIMARY} onClick={handleAddNewTank}>Add New Tank</Button>
@@ -1678,7 +1708,7 @@ const ProjectTankList: React.FC = () => {
                                 expand={false}
                                 allowColumnsShowHide={false}
                                 shadow={true}
-                                rowSelect={!isElectron()}
+                                rowSelect={canEdit}
                                 onRowSelected={(rows: any[]) => {
                                     const ids = rows.map((row: any) => row.tankId || row.id || "").filter((id: string) => id !== "");
                                     const names = rows.map((row: any) => row.tankName || row.tank_name || "").filter((name: string) => name !== "");

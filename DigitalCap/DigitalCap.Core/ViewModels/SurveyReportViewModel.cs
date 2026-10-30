@@ -14,6 +14,8 @@ namespace DigitalCap.Core.ViewModels
         public Report Report { get; set; }
         public List<ReportPart> ReportPartGrid { get; set; }
         public List<UpskillImageData> UnplacedImages { get; set; }
+        public bool? ReportEdit { get; set; }
+        public bool? ReportView { get; set; }
         public bool? ReportExport { get; set; } = false;
         public bool? ReportExportAll { get; set; }
         public bool? ResetTemplate { get; set; }

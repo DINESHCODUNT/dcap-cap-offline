@@ -580,7 +580,7 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
                                 ),
                                 header: 'Report Details'
                             },
-                            !isElectron() && {
+                            {
                                 content: (
                                     <>
                                         <WorkflowDetails projectId={project.id} />

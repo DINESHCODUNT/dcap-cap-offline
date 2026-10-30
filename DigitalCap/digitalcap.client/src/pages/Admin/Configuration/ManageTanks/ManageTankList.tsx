@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button, AbsReactTable, BUTTONS, Divider, Input, AbsSelect, AbsSearch, RadioInput, Label } from "customer_portal-ui-shared";
 import * as Icon from 'react-bootstrap-icons';
 import ManageTankTemplateList from './ManageTankTemplateList';
@@ -6,6 +7,7 @@ import { Modal, Offcanvas, Spinner } from 'react-bootstrap';
 import * as tankService from '../../../../service/TankService';
 import * as gradingService from '../../../../service/GradingService';
 import { usePopup } from '../../../../Common/PopupProvider';
+import { getManageTankPermission } from '../../../../service/UserPermissionService';
 import { resultMessage } from '../../../../Common/UtilityMessage';
 import { isElectron } from '../../../../utils/runtime';
 
@@ -107,6 +109,50 @@ const ManageTankList: React.FC = () => {
     const [appliedFilters, setAppliedFilters] = React.useState({
         ...initialFilterState,
     });
+
+    const [searchParams] = useSearchParams();
+    const selectedImo = useMemo(() => {
+        const filters = (appliedFilters.filters as any) || {};
+        return (
+            filters.imoNumber?.selectedFilters?.[0] ??
+            filters.imo?.selectedFilters?.[0] ??
+            filters.imoNumber?.searchTerm ??
+            filters.imo?.searchTerm ??
+            filters.IMONumber ??
+            searchParams.get('imoNumber') ??
+            searchParams.get('imo') ??
+            searchParams.get('IMO') ??
+            ''
+        );
+    }, [appliedFilters.filters, searchParams]);
+
+    const [tankPermissions, setTankPermissions] = useState<{ edit: boolean; delete: boolean }>({
+        edit: false,
+        delete: false
+    });
+
+    useEffect(() => {
+        if (!isElectron()) return;
+
+        // Until the result arrives, canEdit/canDelete = false (reference hides first, then shows)
+        setTankPermissions({ edit: false, delete: false });
+
+        getManageTankPermission(undefined, selectedImo || undefined)
+            .then((res) => {
+                if (res.data) {
+                    setTankPermissions({
+                        edit: Boolean(res.data.edit),
+                        delete: Boolean(res.data.delete)
+                    });
+                }
+            })
+            .catch(() => {
+                setTankPermissions({ edit: false, delete: false });
+            });
+    }, [selectedImo]);
+
+    const canEdit = !isElectron() || Boolean(tankPermissions.edit);
+    const canDelete = !isElectron() || Boolean(tankPermissions.delete);
     useEffect(() => {
         loadTankList();
     }, []);
@@ -718,15 +764,17 @@ const ManageTankList: React.FC = () => {
                 sorting: false,
                 Cell: ({ row }: any) => (
                     <div className="d-flex gap-3">
-                        <Button
-                            variant={BUTTONS.TABLEDOWNLOAD}
-                            startIcon={<Icon.PencilFill />}
-                            onClick={(e: any) => {
-                                e.stopPropagation();
-                                handleEditTank(row.original);
-                            }}
-                        />
-                        {!isElectron() && (
+                        {canEdit && (
+                            <Button
+                                variant={BUTTONS.TABLEDOWNLOAD}
+                                startIcon={<Icon.PencilFill />}
+                                onClick={(e: any) => {
+                                    e.stopPropagation();
+                                    handleEditTank(row.original);
+                                }}
+                            />
+                        )}
+                        {canDelete && (
                             <Button
                                 variant={BUTTONS.TABLEDOWNLOAD}
                                 startIcon={<Icon.TrashFill />}
@@ -849,7 +897,7 @@ const ManageTankList: React.FC = () => {
                                 </div>
                             </div>
                             <div className="col-md-6 d-flex justify-content-end gap-2">
-                                {!isElectron() && (
+                                {canEdit && (
                                     <>
                                         <div>
                                             <Button variant={BUTTONS.PRIMARY} onClick={() => {
@@ -880,7 +928,7 @@ const ManageTankList: React.FC = () => {
                                     expand={false}
                                     allowColumnsShowHide={false}
                                     shadow={true}
-                                    rowSelect={!isElectron()}
+                                    rowSelect={canEdit}
                                     onRowSelected={handleRowSelected}
                                     dataCount={dataCount}
                                     applyFilterCallback={applyFilter}

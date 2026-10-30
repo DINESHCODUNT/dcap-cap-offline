@@ -41,10 +41,11 @@ interface Props {
     totalCount: number;
     reportData: any;
     isNewProject?: boolean;
+    readOnly?: boolean;
 }
 
 const UploadTankImage: React.FC<Props> = ({ activeTank, projectId, tanks, onNavigateTank, onUploadSuccess, onImageDeleted, onClose,
-    descriptionoptions, conditionOptions, uploadedCount, totalCount, reportData, isNewProject = false }) => {
+    descriptionoptions, conditionOptions, uploadedCount, totalCount, reportData, isNewProject = false, readOnly = false }) => {
     const [formData, setFormData] = useState<FormData>({
         description: "",
         adddescription: "",
@@ -666,6 +667,7 @@ const UploadTankImage: React.FC<Props> = ({ activeTank, projectId, tanks, onNavi
                         <Button
                             variant={BUTTONS.PRIMARY}
                             onClick={() => handleUpload(selectedFile)}
+                            disabled={readOnly}
                         >
                             Upload</Button>
                         <Button variant={BUTTONS.SECONDARY} onClick={onClose}>Cancel</Button>

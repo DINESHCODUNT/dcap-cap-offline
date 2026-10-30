@@ -1,4 +1,4 @@
-﻿using DigitalCap.Core.Models.ExportConfig;
+using DigitalCap.Core.Models.ExportConfig;
 using DigitalCap.Core.Models.Survey;
 using DigitalCap.Core.Models.Tank;
 using DigitalCap.Core.ViewModels;
@@ -17,6 +17,8 @@ namespace DigitalCap.Core.Models.ReportConfig
         public ProjectReport Report { get; set; }
         public List<ProjectPart> ReportPartGrid { get; set; }
         public List<UpskillImageData> UnplacedImages { get; set; }
+        public bool? ReportEdit { get; set; }
+        public bool? ReportView { get; set; }
         public bool? ReportExport { get; set; } = false;
         public bool? ReportExportAll { get; set; }
         public bool? ResetTemplate { get; set; }

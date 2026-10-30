@@ -118,6 +118,11 @@ const ReportOverview: React.FC = () => {
     // In desktop app for local copy, project is never read-only (unless discarded by admin).
     // Read-only alert only applies on the website when synchedOnline != null.
     const isOfflineProject = !isDesktop && (isOfflineProjectStatus || data?.synchedOnline != null);
+    const canReportEdit = !isDesktop || Boolean(data?.reportEdit ?? data?.ReportEdit);
+    const isReportReadOnly = isDesktop ? !canReportEdit : Boolean(isOfflineProject);
+    const canExport = isDesktop ? Boolean(data?.reportExport ?? data?.ReportExport) : true;
+    const canExportAll = isDesktop ? Boolean(data?.reportExportAll ?? data?.ReportExportAll) : true;
+    const showExportMenu = canExport || canExportAll;
 
     const [showDiscardOfflineWarning, setShowDiscardOfflineWarning] = useState(false);
     const [showSyncModal, setShowSyncModal] = useState(false);
@@ -219,6 +224,14 @@ useEffect(() => {
             })
             .then(({ indexRes, newProject }) => {
                 const result = structuredClone(indexRes.data);
+                if (isDesktop) {
+                    const hasReportEdit = Boolean(result?.reportEdit ?? (result as any)?.ReportEdit);
+                    const hasReportView = Boolean(result?.reportView ?? (result as any)?.ReportView);
+                    if (!hasReportEdit && !hasReportView) {
+                        navigate('/app/access-denied');
+                        return;
+                    }
+                }
                 if (result?.reportPartGrid?.length > 0) {
                     result.reportPartGrid = result.reportPartGrid.map((p: any) => ({
                         ...p,
@@ -236,7 +249,14 @@ useEffect(() => {
                 setReportIndex(result);
                 setData(result);
             })
-            .catch(() => {
+            .catch((err) => {
+                if (isDesktop) {
+                    const msg = String(err?.response?.data?.errorMessage || err?.message || "");
+                    if (err?.response?.status === 403 || msg.toLowerCase().includes("access denied")) {
+                        navigate('/app/access-denied');
+                        return;
+                    }
+                }
             });
 
     }, [projectId]);
@@ -1051,6 +1071,7 @@ useEffect(() => {
                 onNavigate={handleNavigate}
                 isNewProject={isNewProject}
                 isOfflineProject={isOfflineProject}
+                readOnly={isReportReadOnly}
                 refreshCurrentReport={refreshCurrentReport}
             />
         );
@@ -1244,19 +1265,25 @@ useEffect(() => {
                             </Dropdown.Menu>
                         </Dropdown>
 
-                        <Dropdown>
-                            <Dropdown.Toggle as={CustomDropdownToggle} id="dropdown-export" disabled={isButtonloading || isOfflineProject || loading}>
-                                Export(s)
-                            </Dropdown.Toggle>
-                            <Dropdown.Menu>
-                                <Dropdown.Item onClick={handleExport} disabled={isButtonloading || isOfflineProject}>
-                                    {isExporting ? "Exporting..." : "Export"}
-                                </Dropdown.Item>
-                                <Dropdown.Item onClick={handleExportAll} disabled={isButtonloading || isOfflineProject}>
-                                    {isExportingAll ? "Exporting All..." : "Export All"}
-                                </Dropdown.Item>
-                            </Dropdown.Menu>
-                        </Dropdown>
+                        {showExportMenu && (
+                            <Dropdown>
+                                <Dropdown.Toggle as={CustomDropdownToggle} id="dropdown-export" disabled={isButtonloading || isOfflineProject || loading}>
+                                    Export(s)
+                                </Dropdown.Toggle>
+                                <Dropdown.Menu>
+                                    {canExport && (
+                                        <Dropdown.Item onClick={handleExport} disabled={isButtonloading || isOfflineProject}>
+                                            {isExporting ? "Exporting..." : "Export"}
+                                        </Dropdown.Item>
+                                    )}
+                                    {canExportAll && (
+                                        <Dropdown.Item onClick={handleExportAll} disabled={isButtonloading || isOfflineProject}>
+                                            {isExportingAll ? "Exporting All..." : "Export All"}
+                                        </Dropdown.Item>
+                                    )}
+                                </Dropdown.Menu>
+                            </Dropdown>
+                        )}
 
                         {data?.synchedOnline != null && hasRole(ROLES.ADMIN_CAP_HQ) && (
                             <Button
@@ -1401,6 +1428,7 @@ useEffect(() => {
                                 data={data}
                                 reportData={hiReportData}
                                 isOfflineProject={isOfflineProject}
+                                readOnly={isReportReadOnly}
                             />
                         )}
 

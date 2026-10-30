@@ -35,6 +35,7 @@ interface ReportContentProps {
     ) => void;
     isNewProject?: boolean;
     isOfflineProject?: boolean;
+    readOnly?: boolean;
     refreshCurrentReport: () => Promise<void>;
 }
 
@@ -61,8 +62,11 @@ const ReportContent: React.FC<ReportContentProps> = ({
     loading,
     onNavigate,
     isNewProject,
-    isOfflineProject, refreshCurrentReport
+    isOfflineProject,
+    readOnly,
+    refreshCurrentReport
 }) => {
+    const isLocked = Boolean(isOfflineProject || readOnly);
     const navigate = useNavigate();
     const { pagePermissions, hasPagePermission } = usePermissions();
     const canManageTank = !isElectron() || !!(pagePermissions?.manageTank?.read || pagePermissions?.manageTank?.edit || hasPagePermission('manageTank') || hasPagePermission('ManageTank'));
@@ -1108,6 +1112,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
     }, [projectId]);
 
     const handleClick = () => {
+        if (isLocked) return;
         let filteredReportSectionOptions = reportSectionOptions;
         if (!isNewProject) {
             filteredReportSectionOptions = reportSectionOptions.filter((opt: any) => opt.value?.startsWith(`${reportData.template.id}:`));
@@ -1145,6 +1150,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                 templateId={reportData.template.id}
                 onUploadSuccess={refreshCurrentReport}
                 isNewProject={isNewProject}
+                readOnly={isLocked}
             />
         });
     };
@@ -1496,7 +1502,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                                                 }
                                                             }}
                                                             maxLength={20}
-                                                            disabled={isOfflineProject}
+                                                            disabled={isLocked}
                                                         />
                                                     </td>
 
@@ -1522,7 +1528,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                                                             checked
                                                                         )
                                                                     }
-                                                                    disabled={isOfflineProject}
+                                                                    disabled={isLocked}
                                                                 />
                                                             </td>
                                                         );
@@ -1562,9 +1568,9 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                     key={`${reportData?.template?.id}-${projectId}-${activeSection}`}
                                     id={`${reportData?.template?.id}-${projectId}-${activeSection}-remarks-input`}
                                     value={notes}
-                                    readOnly={isOfflineProject}
+                                    readOnly={isLocked}
                                     onChange={async (value) => {
-                                        if (isOfflineProject) return;
+                                        if (isLocked) return;
                                         setNotes(value);
                                         try {
                                             await surveyReportService.updateSectionNotes({
@@ -1599,7 +1605,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                             selected={viewMode === 'GRID' ? 'Grid' : 'List'}
                                         />
                                     </div>
-                                    <Button onClick={handleClick} disabled={isOfflineProject}>Bulk Update</Button>
+                                    <Button onClick={handleClick} disabled={isLocked}>Bulk Update</Button>
                                 </div>
                             </div>
                         </div>
@@ -1661,7 +1667,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                     tanks={filtered}
                                     conditionOptions={conditionOptions}
                                     descriptionOptions={activeDescriptionOptions}
-                                    isOfflineProject={isOfflineProject}
+                                    isOfflineProject={isLocked}
                                     onViewImage={(tankId) => {
                                         const index = slides.findIndex((s) => s.title === tankId);
                                         if (index >= 0) {
@@ -1689,7 +1695,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                             <div
                                 key={tank.id}
                                 onClick={() => {
-                                    if (!isOfflineProject) {
+                                    if (!isLocked) {
                                         toggleActive(tank.id);
                                     }
                                 }}
@@ -1707,7 +1713,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                                 }}>
                                                     <Icon.ZoomIn size={20} />
                                                 </button>
-                                                {!isOfflineProject && (
+                                                {!isLocked && (
                                                     <>
                                                         <button
                                                             className="overlay-btn"
@@ -1746,7 +1752,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                         </>
                                     ) : (
                                         <> <Icon.Image size={64} color={getIconColor(tank)} />
-                                            {!isOfflineProject && (
+                                            {!isLocked && (
                                                 <div className="image-overlay">
                                                     <button
                                                         className="overlay-btn"
@@ -1828,7 +1834,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                         }}
                     />
                 </div>
-                {!isOfflineProject && (
+                {!isLocked && (
                     <>
                         <button
                             onClick={togglePanel}
@@ -1846,6 +1852,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                 activeTank={activeTank}
                                 projectId={projectId}
                                 tanks={tanks}
+                                readOnly={isLocked}
                                 onNavigateTank={(tank: any) => {
                                     setActiveTank(tank);
 

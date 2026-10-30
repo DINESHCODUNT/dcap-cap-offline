@@ -15,8 +15,9 @@ const BulkImageUpload: React.FC<{
     templateId: number,
     data: any,
     onUploadSuccess: any,
-    isNewProject?: boolean
-}> = ({ id, fileNameOptions, descriptionOptions, reportSectionOptions, conditionOptions, projectId, templateId, onUploadSuccess, isNewProject }) => {
+    isNewProject?: boolean,
+    readOnly?: boolean
+}> = ({ id, fileNameOptions, descriptionOptions, reportSectionOptions, conditionOptions, projectId, templateId, onUploadSuccess, isNewProject, readOnly = false }) => {
 
     const sideDialog = useContext(SideDialogManagerContext) as any;
     const popup = usePopup();
@@ -73,7 +74,7 @@ const BulkImageUpload: React.FC<{
     };
 
     const handleBulkUpload = async () => {
-
+        if (readOnly) return;
         if (!validateRows()) return;
 
         setIsUploading(true);
@@ -242,7 +243,7 @@ const BulkImageUpload: React.FC<{
                     <div className="d-flex justify-content-end mt-3 gap-2">
                         <Button
                             onClick={handleBulkUpload}
-                            disabled={isUploading}
+                            disabled={isUploading || readOnly}
                         >
                             {isUploading ? "Uploading..." : "Upload All"}
                         </Button>

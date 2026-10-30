@@ -128,6 +128,8 @@ namespace DigitalCap.Infrastructure.Service
 
             await Task.WhenAll(exportTask, exportAllTask, resetTask);
 
+            model.ReportEdit = reportEditPermission?.Edit;
+            model.ReportView = reportEditPermission?.Read;
             model.ReportExport = exportTask.Result?.Edit;
             model.ReportExportAll = exportAllTask.Result?.Edit;
             model.ResetTemplate = resetTask.Result?.Edit;
