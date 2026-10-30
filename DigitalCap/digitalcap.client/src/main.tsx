@@ -11,6 +11,9 @@ import { SideDialogManagerProvider, SideDialogContainer } from "customer_portal-
 import "regenerator-runtime/runtime";
 import { Provider } from "react-redux";
 import { store } from "../src/store/store";
+import { isElectron } from "./utils/runtime";
+
+if (isElectron()) document.documentElement.classList.add('is-desktop');
 
 (async () => {
     try {

@@ -1327,6 +1327,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 backdrop="static"
             >
                 <Modal.Header closeButton>
+                    <Modal.Title>Download Offline</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
                     <div className="d-flex align-items-center gap-3 mb-3">
