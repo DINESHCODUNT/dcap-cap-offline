@@ -4,7 +4,7 @@ import * as Icon from 'react-bootstrap-icons';
 import ManageGradingTemplateList from './ManageGradingTemplateList';
 import { usePopup } from '../../../../Common/PopupProvider';
 import { resultMessage } from '../../../../Common/UtilityMessage';
-import { Offcanvas, Spinner } from 'react-bootstrap';
+import { Offcanvas } from 'react-bootstrap';
 import * as gradingService from '../../../../service/GradingService';
 
 interface ManageGradingRow {
@@ -936,33 +936,25 @@ const ManageGradingList: React.FC = () => {
                             </div>
                         </div>
                         <div className="custom-react-table">
-                            {loading ? (
-                                <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
-                                    <Spinner animation="border" role="status" variant="primary">
-                                        <span className="visually-hidden">Loading...</span>
-                                    </Spinner>
-                                </div>
-                            ) : (
-                                <AbsReactTable
-                                    columns={columns}
-                                    data={gradings}
-                                    pagination={true}
-                                    expand={false}
-                                    allowColumnsShowHide={false}
-                                    shadow={true}
-                                    allDataProvided
-                                    dataCount={dataCount}
-                                    applyFilterCallback={applyFilter}
-                                    appliedFilters={{
-                                        ...appliedFilters,
-                                        pageSize: appliedFilters.pageSize.toString(),
-                                        pageIndex: appliedFilters.pageIndex.toString(),
-                                        searchType: "all"
-                                    }}
-                                    pageOptions={["50", "100", "150", "200"]}
-                                />
-
-                            )}
+                            <AbsReactTable
+                                loading={loading}
+                                columns={columns}
+                                data={gradings}
+                                pagination={true}
+                                expand={false}
+                                allowColumnsShowHide={false}
+                                shadow={true}
+                                allDataProvided
+                                dataCount={dataCount}
+                                applyFilterCallback={applyFilter}
+                                appliedFilters={{
+                                    ...appliedFilters,
+                                    pageSize: appliedFilters.pageSize.toString(),
+                                    pageIndex: appliedFilters.pageIndex.toString(),
+                                    searchType: "all"
+                                }}
+                                pageOptions={["50", "100", "150", "200"]}
+                            />
                         </div>
                     </div>
                 </div>

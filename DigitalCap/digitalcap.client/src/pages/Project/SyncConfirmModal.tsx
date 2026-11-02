@@ -336,7 +336,7 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
                 backdrop="static"
             >
                 <Modal.Header closeButton={!isBusy}>
-                    <Modal.Title>Confirm</Modal.Title>
+                    <Modal.Title>{isDownloading ? "Download Offline" : "Confirm"}</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
                     {isDownloading ? (
@@ -558,6 +558,7 @@ export const SyncConfirmModal: React.FC<SyncConfirmModalProps> = ({
                 backdrop="static"
             >
                 <Modal.Header closeButton>
+                    <Modal.Title>Save Offline</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
                     <div className="d-flex align-items-center gap-3 mb-3">

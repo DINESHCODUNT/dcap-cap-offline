@@ -15,6 +15,7 @@ interface TankImage {
 }
 
 interface ReportContentListViewProps {
+    loading?: boolean;
     tanks: TankImage[];
     conditionOptions: any[];
     descriptionOptions: any[];
@@ -28,6 +29,7 @@ interface ReportContentListViewProps {
 }
 
 const ReportContentListView: React.FC<ReportContentListViewProps> = ({
+    loading = false,
     tanks,
     conditionOptions,
     descriptionOptions,
@@ -216,6 +218,7 @@ const ReportContentListView: React.FC<ReportContentListViewProps> = ({
     return (
         <div className="tbl-tank-list-wrapper">
             <AbsReactTable
+                loading={loading}
                 data={tanks}
                 columns={columns}
                 pagination={false}

@@ -1664,6 +1664,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                         if (viewMode === 'LIST') {
                             return (
                                 <ReportContentListView 
+                                    loading={loading}
                                     tanks={filtered}
                                     conditionOptions={conditionOptions}
                                     descriptionOptions={activeDescriptionOptions}

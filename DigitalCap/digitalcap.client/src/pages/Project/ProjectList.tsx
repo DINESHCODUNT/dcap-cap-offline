@@ -1120,7 +1120,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     shadow={true}
                                     allDataProvided
                                     dataCount={dataCount}
-                                    isloading={loading}
+                                    loading={loading}
                                     pageOptions={["50", "100", "150", "200"]}
                                     applyFilterCallback={applyFilter}
                                     appliedFilters={{
@@ -1327,6 +1327,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 backdrop="static"
             >
                 <Modal.Header closeButton>
+                    <Modal.Title>Download Offline</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
                     <div className="d-flex align-items-center gap-3 mb-3">

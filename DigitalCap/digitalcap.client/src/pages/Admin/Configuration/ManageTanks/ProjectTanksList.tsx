@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Button, AbsReactTable, BUTTONS, Divider, Input, AbsSelect, AbsSearch, RadioInput, Label } from "customer_portal-ui-shared";
 import * as Icon from 'react-bootstrap-icons';
 import ManageTankTemplateList from './ManageTankTemplateList';
-import { Modal, Offcanvas, Spinner } from 'react-bootstrap';
+import { Modal, Offcanvas } from 'react-bootstrap';
 import type { TankDto, SelectOption } from "../../../../Interface/ProjectTank";
 import * as tankService from '../../../../service/TankService';
 import * as gradingService from '../../../../service/GradingService';
@@ -1694,39 +1694,32 @@ const ProjectTankList: React.FC = () => {
                         </div>
                     </div>
                     <div className="custom-react-table">
-                        {loading ? (
-                            <div className="d-flex justify-content-center align-items-center p-5">
-                                <Spinner animation="border" role="status" variant="primary">
-                                    <span className="visually-hidden">Loading...</span>
-                                </Spinner>
-                            </div>
-                        ) : (
-                            <AbsReactTable
-                                columns={columns}
-                                data={paginatedTanklist.length ? paginatedTanklist : []}
-                                pagination={true}
-                                expand={false}
-                                allowColumnsShowHide={false}
-                                shadow={true}
-                                rowSelect={canEdit}
-                                onRowSelected={(rows: any[]) => {
-                                    const ids = rows.map((row: any) => row.tankId || row.id || "").filter((id: string) => id !== "");
-                                    const names = rows.map((row: any) => row.tankName || row.tank_name || "").filter((name: string) => name !== "");
-                                    setSelectedIds(ids);
-                                    setSelectedTankNames(names);
-                                }}
-                                allDataProvided
-                                dataCount={dataCount || filteredTanklist.length}
-                                applyFilterCallback={applyFilter}
-                                pageIndex={appliedFilters.pageIndex}
-                                appliedFilters={{
-                                    ...appliedFilters,
-                                    pageSize: appliedFilters.pageSize.toString(),
-                                    searchType: "all"
-                                }}
-                                pageOptions={["20", "40", "60", "80"]}
-                            />
-                        )}
+                        <AbsReactTable
+                            loading={loading}
+                            columns={columns}
+                            data={paginatedTanklist.length ? paginatedTanklist : []}
+                            pagination={true}
+                            expand={false}
+                            allowColumnsShowHide={false}
+                            shadow={true}
+                            rowSelect={canEdit}
+                            onRowSelected={(rows: any[]) => {
+                                const ids = rows.map((row: any) => row.tankId || row.id || "").filter((id: string) => id !== "");
+                                const names = rows.map((row: any) => row.tankName || row.tank_name || "").filter((name: string) => name !== "");
+                                setSelectedIds(ids);
+                                setSelectedTankNames(names);
+                            }}
+                            allDataProvided
+                            dataCount={dataCount || filteredTanklist.length}
+                            applyFilterCallback={applyFilter}
+                            pageIndex={appliedFilters.pageIndex}
+                            appliedFilters={{
+                                ...appliedFilters,
+                                pageSize: appliedFilters.pageSize.toString(),
+                                searchType: "all"
+                            }}
+                            pageOptions={["20", "40", "60", "80"]}
+                        />
                     </div>
                 </div>
             </div>
