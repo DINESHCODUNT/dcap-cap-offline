@@ -335,7 +335,7 @@ namespace DigitalCap.WebApi.Controllers
         #region ABS Users
 
         [HttpGet("[action]")]
-        [AllowAnonymous]
+        [PermissionAuthorize(Permission.ViewAbsUsers)]
         public async Task<IActionResult> ManageAbsUsers(
             [FromQuery] bool userUpdated = false,
             [FromQuery] bool userCreated = false)
@@ -383,7 +383,7 @@ namespace DigitalCap.WebApi.Controllers
         //}
 
         [HttpPost("[action]")]
-        [AllowAnonymous]
+        [PermissionAuthorize(Permission.ManageAbsUsers)]
         public async Task<IActionResult> AddAbsUser([FromBody] AccountViewModel model)
         {
             if (!ModelState.IsValid)

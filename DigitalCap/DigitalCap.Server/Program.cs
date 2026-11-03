@@ -36,7 +36,8 @@ if (!string.IsNullOrEmpty(keyVaultUri))
 var configuration = builder.Configuration;
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+    options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true);
 builder.Services.AddPersistenceServices(builder.Configuration);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSingleton<OneDrivePathService>();
@@ -204,8 +205,16 @@ builder.Services.AddAuthentication(options =>
         }
     };
 });
-builder.Services.AddIdentityCore<ApplicationUser>
-    (options => options.SignIn.RequireConfirmedAccount = false)
+builder.Services.AddIdentityCore<ApplicationUser>(options =>
+    {
+        options.SignIn.RequireConfirmedAccount = false;
+        options.Password.RequireDigit = false;
+        options.Password.RequiredLength = 3;
+        options.Password.RequireLowercase = false;
+        options.Password.RequireNonAlphanumeric = false;
+        options.Password.RequiredUniqueChars = 0;
+        options.Password.RequireUppercase = false;
+    })
     .AddRoles<IdentityRole>()
     .AddSignInManager()
     .AddEntityFrameworkStores<ApplicationDbContext>()
