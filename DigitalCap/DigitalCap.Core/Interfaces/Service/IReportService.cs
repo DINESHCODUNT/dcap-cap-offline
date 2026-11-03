@@ -9,6 +9,7 @@ namespace DigitalCap.Core.Interfaces.Service
         Task<byte[]> ExportAllProjectsAsExcelSpreadsheet();
         Task<byte[]> ExportAllProjectsGridAsExcelSpreadsheet();
         Task<List<Dictionary<string, string>>> ExportProjectsPartial(int minRange, int maxRange);
+        Task<List<Dictionary<string, string>>> ExportAllProjectsForUserAsync(string userName);
 
     }
 }

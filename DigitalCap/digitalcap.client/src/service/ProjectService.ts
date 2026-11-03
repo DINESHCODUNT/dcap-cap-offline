@@ -349,28 +349,52 @@ export function buildAllProjectsExportRows(projects: AllProjectsGrid[]): Array<R
     });
 }
 
+export interface ProjectsExportJobStatusResponse {
+    status: "Processing" | "Completed" | "Failed" | "NotFound";
+    rows?: Array<Record<string, string>>;
+    error?: string;
+}
+
+export function startExportAllProjects(): Promise<AxiosResponse<{ jobId: string; status: string }>> {
+    return axiosInstance.post<{ jobId: string; status: string }>(`/api/Report/StartExportAllProjects`);
+}
+
+export function getExportAllProjectsStatus(jobId: string): Promise<AxiosResponse<ProjectsExportJobStatusResponse>> {
+    return axiosInstance.get<ProjectsExportJobStatusResponse>(`/api/Report/GetExportAllProjectsStatus`, {
+        params: { jobId }
+    });
+}
+
 export async function exportAllProjectsGridPaginated(
     projectCount: number,
     onProgress?: (progress: number) => void
 ): Promise<Array<Record<string, string>>> {
-    const partitionValue = Math.ceil(projectCount / 100);
-    const projectRecords: Array<Array<Record<string, string>>> = [];
+    void projectCount;
+    const startRes = await startExportAllProjects();
+    const jobId = startRes.data?.jobId;
+    if (!jobId) {
+        throw new Error("Unable to start export job. Please try again.");
+    }
 
-    for (let i = 1; i <= partitionValue; i++) {
-        const initial = (i - 1) * 100;
-        const final = i * 100;
-
-        try {
-            const response = await exportProjectsGridPartial(initial, final);
-            projectRecords.push(response.data.result);
-
-            if (onProgress) {
-                onProgress((i / partitionValue) * 100);
-            }
-        } catch (error) {
-            throw new Error("The export is taking too long. Please try again later.");
+    let rows: Array<Record<string, string>> = [];
+    while (true) {
+        await new Promise(r => setTimeout(r, 5000));
+        const statusRes = await getExportAllProjectsStatus(jobId);
+        const s = statusRes.data;
+        if (s.status === "Completed") {
+            rows = s.rows ?? [];
+            break;
+        }
+        if (s.status === "Failed") {
+            throw new Error(s.error || "Unable to export projects. Please try again later.");
+        }
+        if (s.status === "NotFound") {
+            throw new Error("The export was lost. Please try again.");
         }
     }
+
+    const projectRecords: Array<Array<Record<string, string>>> = [rows];
+    onProgress?.(100);
 
     const finalRecordList: Array<Record<string, string>> = [];
     let count = 1;
