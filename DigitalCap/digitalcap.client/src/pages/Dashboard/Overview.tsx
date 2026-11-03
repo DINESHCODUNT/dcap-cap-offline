@@ -8,6 +8,7 @@ import DashboardWidgets from './DashboardWidgets';
 import ProjectLanding from '../Project/ProjectLanding';
 import * as projectService from '../../service/ProjectService';
 import { usePopup } from '../../Common/PopupProvider';
+import { toFriendlyErrorMessage } from '../../utils/errorMessage';
 import * as userPermissionService from "../../service/UserPermissionService";
 import { useLocation } from 'react-router-dom';
 import { isElectron } from '../../utils/runtime';
@@ -180,6 +181,7 @@ const Overview: React.FC = () => {
 
             downloadCsv(rows, `Digital CAP - All Projects - ${stamp}.csv`);
         } catch (err) {
+            popup.error(toFriendlyErrorMessage((err as any)?.message, "Unable to export projects. Please try again later."), "Export");
         } finally {
             setExporting(false);
         }

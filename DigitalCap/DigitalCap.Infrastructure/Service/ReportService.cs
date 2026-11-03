@@ -277,6 +277,53 @@ namespace DigitalCap.Infrastructure.Service
                 throw ex;
             }
         }
+
+        public async Task<List<Dictionary<string, string>>> ExportAllProjectsForUserAsync(string userName)
+        {
+            var columns = GetAllProjectsGridExcelColumns();
+
+            var identityUser = await _userManager.FindByNameAsync(userName);
+            if (identityUser == null)
+            {
+                throw new UnauthorizedAccessException("Identity user not found");
+            }
+
+            var userRoles = (await _userManager.GetRolesAsync(identityUser)).ToHashSet();
+            var isAdmin = userRoles.Contains("Admin (CAP HQ)");
+            var isContributor = userRoles.Contains("Contributor (CAP Coordinator)");
+
+            var projectsResult = await _projectService.GetAllProjectsGridExport();
+            if (!projectsResult.IsSuccess)
+            {
+                throw new Exception("Failed to retrieve projects");
+            }
+
+            var projects = projectsResult.Data;
+
+            if (!isAdmin && !isContributor)
+            {
+                var userProjects = await _userPermissionRepository.GetCurrentUserProjects(userName);
+                var userProjectsSet = userProjects.ToHashSet();
+                projects = projects
+                    .Where(project => project.ID.HasValue && userProjectsSet.Contains(project.ID.Value))
+                    .ToList();
+            }
+
+            List<Dictionary<string, string>> allRecords = new List<Dictionary<string, string>>();
+
+            foreach (var project in projects)
+            {
+                Dictionary<string, string> record = new Dictionary<string, string>();
+                foreach (var col in columns)
+                {
+                    var result = col.Item2(project)?.ToString();
+                    record.Add(col.Item1.ToString(), result == null ? "" : result);
+                }
+                allRecords.Add(record);
+            }
+
+            return allRecords;
+        }
         private (string, Func<Project, object>)[] GetExcelColumns()
         {
             var taskCache = new TaskCache(_taskRepository);

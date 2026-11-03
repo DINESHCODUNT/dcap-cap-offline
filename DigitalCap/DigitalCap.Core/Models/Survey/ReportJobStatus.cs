@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace DigitalCap.Core.Models.Survey
 {
     /// Background job state for Validate All (same as digital-cap ValidationJobStatus).
@@ -14,6 +16,13 @@ namespace DigitalCap.Core.Models.Survey
         public string Status { get; set; } = "Processing";
         public byte[]? Bytes { get; set; }
         public string? FileName { get; set; }
+        public string? Error { get; set; }
+    }
+
+    public class ProjectsExportJobStatus
+    {
+        public string Status { get; set; } = "Processing";
+        public List<Dictionary<string, string>>? Rows { get; set; }
         public string? Error { get; set; }
     }
 }

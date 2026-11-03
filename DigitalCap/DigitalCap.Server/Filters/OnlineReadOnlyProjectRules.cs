@@ -40,7 +40,8 @@ namespace DigitalCap.WebApi.Filters
         private static readonly HashSet<string> ReadOnlyActions = new(StringComparer.OrdinalIgnoreCase)
         {
             "SaveReportFile", "MergeReportPDF", "SurveyReportPDF", "ReleaseOfflineDownload",
-            "StartExportAllValidation", "StartExportAllProjectValidation", "StartExportFullPdf"
+            "StartExportAllValidation", "StartExportAllProjectValidation", "StartExportFullPdf",
+            "StartExportAllProjects"
         };
 
         private static readonly string[] ProjectIdNames = { "projectId", "projectID" };
