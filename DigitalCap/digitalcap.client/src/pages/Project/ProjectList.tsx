@@ -397,7 +397,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
             }
             if (response.data && response.data.success === false) {
                 setDownloadPercent(0);
-                setTransferError(response.data.message || "Unable to download project.");
+                setTransferError(toFriendlyErrorMessage(response.data.message, "Unable to download project."));
             } else {
                 setDownloadPercent(100);
                 setDownloadSuccessModal(true);

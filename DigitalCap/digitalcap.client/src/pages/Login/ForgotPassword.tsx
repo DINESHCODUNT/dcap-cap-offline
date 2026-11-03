@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import ABSLogo from "../../assets/images/ABSLogo.svg";
 import * as accountService from "../../service/LoginService";
 import { Button, BUTTONS, Input, Label } from 'customer_portal-ui-shared';
+import { toFriendlyErrorMessage } from "../../utils/errorMessage";
 
 const ForgotPassword: React.FC = () => {
     const navigate = useNavigate();
@@ -33,7 +34,7 @@ const ForgotPassword: React.FC = () => {
         try {
             const response = await accountService.forgotPassword({ email: email.trim() });
             setSuccess(true);
-            setResponseMsg(response?.data?.data || response?.data?.message || "If the email is registered, a password reset link has been sent.");
+            setResponseMsg(toFriendlyErrorMessage(response?.data?.data || response?.data?.message, "If the email is registered, a password reset link has been sent."));
         } catch (err: any) {
             const errorMessage =
                 err?.response?.data?.message ||
