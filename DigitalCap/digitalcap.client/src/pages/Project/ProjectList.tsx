@@ -14,6 +14,7 @@ import { isElectron, isAppOnline } from '../../utils/runtime';
 import { measureConnectionSpeed, isNetworkConnectionError } from '../../utils/connectionSpeed';
 import { isEmptyDate } from '../../utils/dateTime';
 import TransferProgressBar from '../../Common/TransferProgressBar';
+import { toFriendlyErrorMessage } from '../../utils/errorMessage';
 
 export interface SidebarProjectRow {
     name: string;
@@ -309,7 +310,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
         } catch (error: any) {
             setLoadSuccess(false);
-            setLoadError(error?.message || "Failed to load projects");
+            setLoadError(toFriendlyErrorMessage(error?.message, "Failed to load projects"));
         } finally {
 
             setLoading(false);
@@ -396,7 +397,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
             }
             if (response.data && response.data.success === false) {
                 setDownloadPercent(0);
-                setTransferError(response.data.message || "Unable to download project.");
+                setTransferError(toFriendlyErrorMessage(response.data.message, "Unable to download project."));
             } else {
                 setDownloadPercent(100);
                 setDownloadSuccessModal(true);

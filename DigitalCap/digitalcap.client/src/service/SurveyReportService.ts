@@ -1509,6 +1509,47 @@ export function updateSectionNotes(
     );
 }
 
+export interface JobStatusResponse {
+    status: "Processing" | "Completed" | "Failed" | "NotFound";
+    result?: string;
+    error?: string;
+    base64?: string;
+    fileName?: string;
+}
+
+export function startExportAllValidation(projectId: number | string) {
+    return axiosInstance.post<{ jobId: string }>(`${surveyReportBase(false)}/StartExportAllValidation`, null, { params: { projectId } });
+}
+export function startExportAllProjectValidation(projectId: number | string, imo: number | string, settings: ExportPart[]) {
+    return axiosInstance.post<{ jobId: string }>(`${surveyReportBase(false)}/StartExportAllProjectValidation`, settings, { params: { projectId, imo } });
+}
+export function getValidationStatus(jobId: string) {
+    return axiosInstance.get<JobStatusResponse>(`${surveyReportBase(false)}/GetValidationStatus`, { params: { jobId } });
+}
+export function startExportFullPdf(projectId: number, selectedSettings: any[] = []) {
+    return axiosInstance.post<{ jobId: string }>(`/api/SurveyReport/StartExportFullPdf`, selectedSettings, { params: { projectId } });
+}
+export function getExportFullPdfStatus(jobId: string) {
+    return axiosInstance.get<JobStatusResponse>(`/api/SurveyReport/GetExportFullPdfStatus`, { params: { jobId } });
+}
+
+/** Polls a job every 5 s (same as digital-cap) until Completed / Failed / NotFound. */
+export async function pollJob(
+    getStatus: (jobId: string) => Promise<AxiosResponse<JobStatusResponse>>,
+    jobId: string,
+    isCancelled: () => boolean = () => false
+): Promise<JobStatusResponse> {
+    while (true) {
+        if (isCancelled()) throw new Error("cancelled");
+        const res = await getStatus(jobId);
+        const s = res.data;
+        if (s.status === "Completed") return s;
+        if (s.status === "Failed") throw new Error(s.error || "The job failed. Please try again.");
+        if (s.status === "NotFound") throw new Error("The job was lost. Please try again.");
+        await new Promise(r => setTimeout(r, 5000));
+    }
+}
+
 export const getImageCards = (
     projectId: any,
     templateId: any,

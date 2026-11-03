@@ -151,10 +151,16 @@ const ReportOverview: React.FC = () => {
     const [isNewProject, setIsNewProject] = useState(false);
     const [validateVisible, setValidateVisible] = useState(false);
     const [allValidateVisible, setAllValidateVisible] = useState(false);
+    const [warningPanelTop, setWarningPanelTop] = useState<number>(90);
     const [isWarningHovered, setIsWarningHovered] = useState(false);
     const warningTimeoutRef = useRef<any>(null);
     const tooltipRef = useRef<HTMLDivElement>(null);
     const pageTopRef = useRef<HTMLDivElement>(null);
+    const isMountedRef = useRef(true);
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => { isMountedRef.current = false; };
+    }, []);
 
     const [validateWarnings, setValidateWarnings] = useState<string[]>([]);
     const [validateAllWarnings, setValidateAllWarnings] = useState<string[]>([]);
@@ -183,6 +189,18 @@ const ReportOverview: React.FC = () => {
             }
         };
     }, [validateVisible, allValidateVisible, isWarningHovered, isValidating, isValidatingAll]);
+
+    useEffect(() => {
+        if (!validateVisible && !allValidateVisible) return;
+        const update = () => {
+            const bottom = pageTopRef.current?.getBoundingClientRect().bottom ?? 0;
+            setWarningPanelTop(Math.max(16, Math.round(bottom + 8)));   // just below the title row; 16px from the top once scrolled past
+        };
+        update();
+        window.addEventListener("scroll", update, { passive: true });
+        window.addEventListener("resize", update);
+        return () => { window.removeEventListener("scroll", update); window.removeEventListener("resize", update); };
+    }, [validateVisible, allValidateVisible]);
 
     const [modal, setModal] = useState<{
         message?: string;
@@ -473,8 +491,9 @@ useEffect(() => {
 
             if (!isNewProject) {
 
-                const response = await surveyReportService.exportAllValidation(projectId);
-                const warnings = parseExportAllValidationResponse(response.data as string);
+                const { data: started } = await surveyReportService.startExportAllValidation(projectId);
+                const job = await surveyReportService.pollJob(surveyReportService.getValidationStatus, started.jobId, () => !isMountedRef.current);
+                const warnings = parseExportAllValidationResponse(job.result ?? "");
                 allWarnings.push(...warnings);
 
             } else {
@@ -531,9 +550,13 @@ useEffect(() => {
             }
 
         } catch (err: any) {
-            popup.error(err?.response?.data || err?.message || "Validation failed. Please try again.", "Validate");
+            if (err?.message !== "cancelled") {
+                popup.error(err?.response?.data || err?.message || "Validation failed. Please try again.", "Validate");
+            }
         } finally {
-            setIsValidatingAll(false);
+            if (isMountedRef.current) {
+                setIsValidatingAll(false);
+            }
         }
     };
     const handleNavigate = (part: string, section: string) => {
@@ -1096,8 +1119,9 @@ useEffect(() => {
             const allWarnings: string[] = [];
 
             if (!isNewProject) {
-                const response = await surveyReportService.exportAllValidation(projectId);
-                const warnings = parseExportAllValidationResponse(response.data as string);
+                const { data: started } = await surveyReportService.startExportAllValidation(projectId);
+                const job = await surveyReportService.pollJob(surveyReportService.getValidationStatus, started.jobId, () => !isMountedRef.current);
+                const warnings = parseExportAllValidationResponse(job.result ?? "");
                 allWarnings.push(...warnings);
             } else {
                 try {
@@ -1112,10 +1136,12 @@ useEffect(() => {
                     }));
                     payload = settings;
 
-                    const response = await surveyReportService.exportAllProjectValidation(projectId, imo, settings);
-                    const warnings = parseExportAllValidationResponse(response.data as string);
+                    const { data: started } = await surveyReportService.startExportAllProjectValidation(projectId, imo, settings);
+                    const job = await surveyReportService.pollJob(surveyReportService.getValidationStatus, started.jobId, () => !isMountedRef.current);
+                    const warnings = parseExportAllValidationResponse(job.result ?? "");
                     allWarnings.push(...warnings);
-                } catch (err) {
+                } catch (err: any) {
+                    if (err?.message === "cancelled") throw err;
                 }
             }
 
@@ -1127,12 +1153,16 @@ useEffect(() => {
                 return;
             }
 
-            const response = await surveyReportService.exportFullReportPdf(projectId, payload);
-            await processPdfResponse(response, getDynamicFileName("All"));
-        } catch (err) {
+            const { data: pdfStarted } = await surveyReportService.startExportFullPdf(projectId, payload);
+            const pdfJob = await surveyReportService.pollJob(surveyReportService.getExportFullPdfStatus, pdfStarted.jobId, () => !isMountedRef.current);
+            const bytes = Uint8Array.from(atob(pdfJob.base64 ?? ""), c => c.charCodeAt(0));
+            await processPdfResponse({ data: new Blob([bytes], { type: "application/pdf" }) }, getDynamicFileName("All"));
+        } catch (err: any) {
             setModal(null);
             setIsExportingAll(false);
-            popup.error("Exported  falied!", "Export");
+            if (err?.message !== "cancelled") {
+                popup.error("Exported  falied!", "Export");
+            }
         }
     };
 
@@ -1318,7 +1348,7 @@ useEffect(() => {
 
             {/* Reusable warning panel */}
             {(validateVisible || allValidateVisible) && (
-                <div ref={tooltipRef} role="tooltip" className="warning-panel" onMouseEnter={() => setIsWarningHovered(true)} onMouseLeave={() => setIsWarningHovered(false)}>
+                <div ref={tooltipRef} role="tooltip" className="warning-panel" style={{ top: warningPanelTop, maxHeight: `calc(100vh - ${warningPanelTop + 20}px)` }} onMouseEnter={() => setIsWarningHovered(true)} onMouseLeave={() => setIsWarningHovered(false)}>
                     <div className="warning-wrapper">
                         <h5 className="warning-title d-flex justify-content-between align-items-center">
                             {allValidateVisible ? "Validate All — Warnings" : "Validate — Warnings"}

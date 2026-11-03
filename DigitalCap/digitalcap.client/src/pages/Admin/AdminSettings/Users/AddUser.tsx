@@ -13,6 +13,7 @@ import * as absUserService from '../../../../service/AbsUserService';
 import type { AccountViewModel, UserAccountModel } from '../../../../service/AbsUserService';
 import * as userPermissionService from '../../../../service/UserPermissionService';
 import { ROLES } from '../../../File/appConstants';
+import { toFriendlyErrorMessage } from '../../../../utils/errorMessage';
 
 export interface CapUser {
     id: number;
@@ -621,6 +622,7 @@ const AddUser: React.FC<Props> = ({
             } else {
                 rawMsg = error?.response?.data?.title || error?.message || "Something went wrong";
             }
+            rawMsg = toFriendlyErrorMessage(rawMsg);
 
             const isDuplicateEmail =
                 rawMsg.toLowerCase().includes("email") &&
