@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import InformationPopup from './InformationPopup';
 import ConfirmationPopup from './ConfirmationPopup';
+import { GENERIC_ERROR_MESSAGE, isTechnicalErrorText, toFriendlyErrorMessage } from '../utils/errorMessage';
 
 export interface InfoPopupOptions {
     title?: string;
@@ -69,6 +70,9 @@ export const PopupProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             let msg: any = options.message;
             if (msg == null || msg === "" || (typeof msg === "object" && !React.isValidElement(msg))) {
                 msg = (msg && (msg.message || msg.title || msg.detail)) || "Something went wrong. Please try again.";
+            }
+            if (variant !== 'success') {
+                if (typeof msg === "string") msg = toFriendlyErrorMessage(msg, msg && !isTechnicalErrorText(msg) ? msg : GENERIC_ERROR_MESSAGE);
             }
             return new Promise((resolve) => {
                 setInfoState({

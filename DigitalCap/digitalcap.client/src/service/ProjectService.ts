@@ -1,6 +1,7 @@
 import axiosInstance from "./axiosInstance";
 import type { AxiosResponse } from "axios";
 import moment from "moment";
+import { toFriendlyErrorMessage } from "../utils/errorMessage";
 
 export interface DataSourceRequest {
     page?: number;
@@ -644,13 +645,15 @@ export function getOnlineLockStatus(projectId: number, signal?: AbortSignal): Pr
 /** The server's message from a failed transfer call, or a fallback. */
 export function getTransferErrorMessage(error: unknown, fallback: string): string {
     const data = (error as { response?: { data?: unknown } })?.response?.data;
+    let msg: string | undefined;
     if (data && typeof data === "object" && "message" in data && (data as TransferResult).message) {
         const result = data as TransferResult;
         const owner = result.lockedBy?.name || result.lockedBy?.email;
-        return owner ? `${result.message} (${owner})` : String(result.message);
+        msg = owner ? `${result.message} (${owner})` : String(result.message);
+    } else if (typeof data === "string" && data.trim() && !data.trim().startsWith("<")) {
+        msg = data;
     }
-    if (typeof data === "string" && data.trim() && !data.trim().startsWith("<")) return data;
-    return fallback;
+    return toFriendlyErrorMessage(msg, fallback);
 }
 
 export function updateOfflineReleasedStatus(projectId: number | string, signal?: AbortSignal): Promise<AxiosResponse<unknown>> {

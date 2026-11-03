@@ -14,6 +14,7 @@ import { isElectron, isAppOnline } from '../../utils/runtime';
 import { measureConnectionSpeed, isNetworkConnectionError } from '../../utils/connectionSpeed';
 import { isEmptyDate } from '../../utils/dateTime';
 import TransferProgressBar from '../../Common/TransferProgressBar';
+import { toFriendlyErrorMessage } from '../../utils/errorMessage';
 
 export interface SidebarProjectRow {
     name: string;
@@ -309,7 +310,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
         } catch (error: any) {
             setLoadSuccess(false);
-            setLoadError(error?.message || "Failed to load projects");
+            setLoadError(toFriendlyErrorMessage(error?.message, "Failed to load projects"));
         } finally {
 
             setLoading(false);
