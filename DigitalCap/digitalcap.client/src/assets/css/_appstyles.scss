@@ -2477,10 +2477,8 @@
 
 .warning-panel {
     position: fixed !important;
-    top: 90px;
     right: 20px;
     bottom: auto;
-    max-height: calc(100vh - 110px);
     z-index: 1050;
     width: 540px;
     max-width: 90vw;

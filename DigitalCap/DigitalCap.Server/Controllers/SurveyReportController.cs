@@ -21,6 +21,9 @@ using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Collections.Concurrent;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace DigitalCap.WebApi.Controllers
 {
@@ -34,13 +37,19 @@ namespace DigitalCap.WebApi.Controllers
         private readonly IConfiguration _configuration;
         private readonly IAsposePdfService _asposePdfService;
         private readonly IWebHostEnvironment _webHostEnvironment;
-        public SurveyReportController(ISurveyReportService surveyReportService, IConfiguration configData, IConfiguration configuration, IAsposePdfService asposePdfService, IWebHostEnvironment webHostEnvironment)
+        private readonly IServiceScopeFactory _scopeFactory;
+        private readonly ILogger<SurveyReportController> _logger;
+        private static readonly ConcurrentDictionary<string, ValidationJobStatus> _validationJobs = new();
+        private static readonly ConcurrentDictionary<string, PdfJobStatus> _pdfJobs = new();
+        public SurveyReportController(ISurveyReportService surveyReportService, IConfiguration configData, IConfiguration configuration, IAsposePdfService asposePdfService, IWebHostEnvironment webHostEnvironment, IServiceScopeFactory scopeFactory, ILogger<SurveyReportController> logger)
         {
             _surveyReportService = surveyReportService;
             _configData = configData;
             _configuration = configuration;
             _asposePdfService = asposePdfService;
             _webHostEnvironment = webHostEnvironment;
+            _scopeFactory = scopeFactory;
+            _logger = logger;
         }
         [HttpGet("[action]")]
         public async Task<IActionResult> SurveyReportIndex(int projectId, int? templateSectionId = null)
@@ -375,6 +384,73 @@ namespace DigitalCap.WebApi.Controllers
         {
             var result = await _surveyReportService.ExportAllValidation(projectId);
             return Ok(result.Data);
+        }
+
+        [HttpPost("[action]")]
+        public IActionResult StartExportAllValidation(int projectId)
+        {
+            var jobId = Guid.NewGuid().ToString();
+            _validationJobs[jobId] = new ValidationJobStatus();
+            _ = Task.Run(async () =>
+            {
+                using var scope = _scopeFactory.CreateScope();
+                try
+                {
+                    var service = scope.ServiceProvider.GetRequiredService<ISurveyReportService>();
+                    var result = await service.ExportAllValidation(projectId);
+                    _validationJobs[jobId] = new ValidationJobStatus { Status = "Completed", Result = result.Data };
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "StartExportAllValidation failed for project {ProjectId}", projectId);
+                    _validationJobs[jobId] = new ValidationJobStatus { Status = "Failed", Error = ex.Message };
+                }
+            });
+            return Ok(new { jobId, status = "Processing" });
+        }
+
+        [HttpPost("[action]")]
+        public IActionResult StartExportAllProjectValidation([FromQuery] int projectId, [FromQuery] int imo, [FromBody] List<ExportPart> settings)
+        {
+            var jobId = Guid.NewGuid().ToString();
+            var safeSettings = settings ?? new List<ExportPart>();
+            _validationJobs[jobId] = new ValidationJobStatus();
+            _ = Task.Run(async () =>
+            {
+                using var scope = _scopeFactory.CreateScope();
+                try
+                {
+                    var service = scope.ServiceProvider.GetRequiredService<IProjectSurveyService>();
+                    var result = await service.ExportAllProjectValidationAsync(projectId, imo, safeSettings);
+                    _validationJobs[jobId] = result.IsSuccess
+                        ? new ValidationJobStatus { Status = "Completed", Result = result.Data }
+                        : new ValidationJobStatus { Status = "Failed", Error = result.ErrorMessage };
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "StartExportAllProjectValidation failed for project {ProjectId}", projectId);
+                    _validationJobs[jobId] = new ValidationJobStatus { Status = "Failed", Error = ex.Message };
+                }
+            });
+            return Ok(new { jobId, status = "Processing" });
+        }
+
+        [HttpGet("[action]")]
+        public IActionResult GetValidationStatus(string jobId)
+        {
+            if (string.IsNullOrWhiteSpace(jobId) || !_validationJobs.TryGetValue(jobId, out var job))
+                return Ok(new { status = "NotFound" });
+            if (job.Status == "Completed")
+            {
+                _validationJobs.TryRemove(jobId, out _);
+                return Ok(new { status = "Completed", result = job.Result });
+            }
+            if (job.Status == "Failed")
+            {
+                _validationJobs.TryRemove(jobId, out _);
+                return Ok(new { status = "Failed", error = job.Error });
+            }
+            return Ok(new { status = "Processing" });
         }
 
         [HttpPost("[action]")]
@@ -721,6 +797,51 @@ namespace DigitalCap.WebApi.Controllers
                 "application/pdf",
                 $"{fileName}.pdf"
             );
+        }
+
+        [HttpPost("[action]")]
+        public IActionResult StartExportFullPdf(int projectId, [FromBody] List<ExportPart> selectedSettings = null, int? templateSectionId = null)
+        {
+            // Read the user BEFORE the background task — HttpContext is not available later.
+            var currentUserName = User.FindFirstValue(ClaimTypes.Upn) ?? User.FindFirstValue(ClaimTypes.Name);
+            var jobId = Guid.NewGuid().ToString();
+            _pdfJobs[jobId] = new PdfJobStatus();
+            _ = Task.Run(async () =>
+            {
+                using var scope = _scopeFactory.CreateScope();
+                try
+                {
+                    var pdfService = scope.ServiceProvider.GetRequiredService<IAsposePdfService>();
+                    var (pdfBytes, fileName) = await pdfService.GenerateFullReportPdf(projectId, currentUserName, templateSectionId, selectedSettings);
+                    _pdfJobs[jobId] = (pdfBytes == null || pdfBytes.Length == 0)
+                        ? new PdfJobStatus { Status = "Failed", Error = "Failed to generate full PDF" }
+                        : new PdfJobStatus { Status = "Completed", Bytes = pdfBytes, FileName = fileName };
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "StartExportFullPdf failed for project {ProjectId}", projectId);
+                    _pdfJobs[jobId] = new PdfJobStatus { Status = "Failed", Error = ex.Message };
+                }
+            });
+            return Ok(new { jobId, status = "Processing" });
+        }
+
+        [HttpGet("[action]")]
+        public IActionResult GetExportFullPdfStatus(string jobId)
+        {
+            if (string.IsNullOrWhiteSpace(jobId) || !_pdfJobs.TryGetValue(jobId, out var job))
+                return Ok(new { status = "NotFound" });
+            if (job.Status == "Completed")
+            {
+                _pdfJobs.TryRemove(jobId, out _);
+                return Ok(new { status = "Completed", base64 = Convert.ToBase64String(job.Bytes!), fileName = job.FileName });
+            }
+            if (job.Status == "Failed")
+            {
+                _pdfJobs.TryRemove(jobId, out _);
+                return Ok(new { status = "Failed", error = job.Error });
+            }
+            return Ok(new { status = "Processing" });
         }
         [HttpGet("[action]")]
         public IActionResult GetConfig()

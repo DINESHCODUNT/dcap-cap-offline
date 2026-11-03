@@ -33,12 +33,14 @@ namespace DigitalCap.WebApi.Filters
 
         /// <summary>
         /// Explicit read-only POSTs that do not match a prefix: report export plumbing (SurveyReport/Survey
-        /// SaveReportFile, MergeReportPDF/MergeReportPdf, SurveyReportPDF) and ProjectController.ReleaseOfflineDownload
-        /// (an administrator releasing the download lock, not a project edit). Other Save*/Merge* actions stay blocked.
+        /// SaveReportFile, MergeReportPDF/MergeReportPdf, SurveyReportPDF, export/validation job starters) and
+        /// ProjectController.ReleaseOfflineDownload (an administrator releasing the download lock, not a project edit).
+        /// Other Save*/Merge* actions stay blocked.
         /// </summary>
         private static readonly HashSet<string> ReadOnlyActions = new(StringComparer.OrdinalIgnoreCase)
         {
-            "SaveReportFile", "MergeReportPDF", "SurveyReportPDF", "ReleaseOfflineDownload"
+            "SaveReportFile", "MergeReportPDF", "SurveyReportPDF", "ReleaseOfflineDownload",
+            "StartExportAllValidation", "StartExportAllProjectValidation", "StartExportFullPdf"
         };
 
         private static readonly string[] ProjectIdNames = { "projectId", "projectID" };
