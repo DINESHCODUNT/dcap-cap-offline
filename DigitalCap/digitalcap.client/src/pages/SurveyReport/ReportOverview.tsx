@@ -22,6 +22,8 @@ import { isElectron } from '../../utils/runtime';
 import SyncConfirmModal from '../Project/SyncConfirmModal';
 import { ExportConfigurationModal } from './ExportConfigurationModal';
 import { ExportAllConfigurationModal } from './ExportAllConfigurationModal';
+import { EMPTY_GUID } from '../../utils/exportSettings';
+import { toFriendlyErrorMessage } from '../../utils/errorMessage';
 function UnsavedConfirmationModal({
     message,
     isLoading,
@@ -144,6 +146,7 @@ const ReportOverview: React.FC = () => {
     const [isExportingAll, setIsExportingAll] = useState(false);
     const [showExportModal, setShowExportModal] = useState(false);
     const [showExportAllModal, setShowExportAllModal] = useState(false);
+    const [exportAllMode, setExportAllMode] = useState<'export' | 'validate'>('export');
     const [showValidateModal, setShowValidateModal] = useState(false);
     const [showMobileSidebar, setShowMobileSidebar] = useState(false);
     const [exportTemplate, setExportTemplate] = useState<{ id: number, name: string } | null>(null);
@@ -480,78 +483,101 @@ useEffect(() => {
         }
     };
 
-    const handleValidateAll = async () => {
+    const runNewProjectValidateAll = async (settings: any[]) => {
         try {
             setIsValidatingAll(true);
             setValidateAllWarnings([]);
             setAllValidateVisible(true);
 
             const imo = data?.imonumber || data?.imoNumber;
-            const allWarnings: string[] = [];
+            const validParts = (settings || []).filter(
+                (p: any) => (p.partId ?? p.PartId) !== 0 && (p.includeInReport ?? p.IncludeInReport) !== false && (p.sections ?? []).length > 0
+            );
+
+            const payload: any = validParts.map((p: any) => ({
+                PartId: p.partId ?? p.PartId,
+                PartName: p.partName ?? p.PartName,
+                RequiredInReport: p.requiredInReport ?? p.RequiredInReport ?? false,
+                IncludeInReport: p.includeInReport ?? p.IncludeInReport ?? true,
+                sections: (p.sections ?? []).map((s: any) => ({
+                    SectionId: s.SectionId ?? s.sectionId,
+                    SectionName: s.SectionName ?? s.sectionName,
+                    IncludeInReport: s.IncludeInReport ?? s.includeInReport ?? true,
+                    RequiredInReport: s.RequiredInReport ?? s.requiredInReport ?? false,
+                    IsSubSection: false,
+                    TankTypeId: s.TankTypeId ?? s.tankTypeId ?? 0,
+                    ParentId: s.ParentId ?? s.parentId ?? EMPTY_GUID,
+                    TankType: s.TankType ?? s.tankType ?? ""
+                }))
+            }));
+
+            const { data: started } = await surveyReportService.startExportAllProjectValidation(projectId, imo, payload);
+            const job = await surveyReportService.pollJob(surveyReportService.getValidationStatus, started.jobId, () => !isMountedRef.current);
+            const warnings = parseExportAllValidationResponse(job.result ?? "");
+            setValidateAllWarnings(warnings);
+            if (warnings.length === 0) {
+                setAllValidateVisible(false);
+                popup.success("All parts have been successfully validated.", "Validate");
+            }
+        } catch (err: any) {
+            if (err?.message !== "cancelled") {
+                popup.error(toFriendlyErrorMessage(err, "Failed to validate. Please try again."), "Validate");
+            }
+        } finally {
+            if (isMountedRef.current) {
+                setIsValidatingAll(false);
+            }
+        }
+    };
+
+    const handleValidateAll = async () => {
+        try {
+            const imo = data?.imonumber || data?.imoNumber;
 
             if (!isNewProject) {
+                setIsValidatingAll(true);
+                setValidateAllWarnings([]);
+                setAllValidateVisible(true);
 
                 const { data: started } = await surveyReportService.startExportAllValidation(projectId);
                 const job = await surveyReportService.pollJob(surveyReportService.getValidationStatus, started.jobId, () => !isMountedRef.current);
                 const warnings = parseExportAllValidationResponse(job.result ?? "");
-                allWarnings.push(...warnings);
-
+                setValidateAllWarnings(warnings);
+                if (warnings.length === 0) {
+                    setAllValidateVisible(false);
+                    popup.success("All parts have been successfully validated.", "Validate");
+                }
             } else {
+                const show = await surveyReportService.checkShowExportAllSettings(projectId, imo);
+                if (show.data === true) {
+                    setExportAllMode('validate');
+                    setShowExportAllModal(true);
+                    return;
+                }
 
-                await surveyReportService.checkShowExportAllSettings(projectId, imo);
-
-                const partsRes = await surveyReportService.getAllParts(projectId, imo);
-                const rawSettings = partsRes.data as any[] ?? [];
-
-                const settings = rawSettings.map((part: any) => ({
-                    ...part,
-                    PartId: part.partId ?? part.PartId,
-                    PartName: part.partName ?? part.PartName,
-                    sections: (part.sections ?? part.Sections ?? []).map((s: any) => ({
-                        ...s,
+                const res = await surveyReportService.getAllParts(projectId, imo);
+                const parts = (res.data as any[]) || [];
+                const settings = parts.map(p => ({
+                    PartId: p.partId ?? p.PartId,
+                    PartName: p.partName ?? p.PartName,
+                    RequiredInReport: p.requiredInReport ?? p.RequiredInReport ?? false,
+                    IncludeInReport: true,
+                    sections: (p.sections ?? p.Sections ?? []).map((s: any) => ({
                         SectionId: s.sectionId ?? s.SectionId,
                         SectionName: s.sectionName ?? s.SectionName,
+                        IncludeInReport: true,
+                        RequiredInReport: s.requiredInReport ?? s.RequiredInReport ?? false,
+                        IsSubSection: false,
+                        TankTypeId: s.tankTypeId ?? s.TankTypeId ?? 0,
+                        ParentId: s.parentId ?? s.ParentId ?? EMPTY_GUID,
                         TankType: s.tankType ?? s.TankType ?? ""
                     }))
                 }));
-
-                for (const part of settings) {
-                    try {
-                        const partId = part.partId ?? part.PartId;
-                        const partName = part.partName ?? part.PartName;
-
-                        if (partName === "Vessel Main Data") continue;
-
-                        const response = await surveyReportService.exportAllProjectPartialValidation(
-                            projectId,
-                            imo,
-                            settings,
-                            partId
-                        );
-
-                        const warnings = parseExportAllValidationResponse(response.data as string);
-                        const formattedWarnings = warnings.map(w => {
-                            if (w.includes(" — ")) {
-                                const [lbl, stat] = w.split(" — ");
-                                return `${partName} - ${lbl} — ${stat}`;
-                            }
-                            return `${partName} - ${w}`;
-                        });
-                        allWarnings.push(...formattedWarnings);
-                    } catch (err) {
-                    }
-                }
+                await runNewProjectValidateAll(settings);
             }
-
-            setValidateAllWarnings(allWarnings);
-            if (allWarnings.length === 0) {
-                setAllValidateVisible(false);
-                popup.success("All parts have been successfully validated.", "Validate");
-            }
-
         } catch (err: any) {
             if (err?.message !== "cancelled") {
-                popup.error(err?.response?.data || err?.message || "Validation failed. Please try again.", "Validate");
+                popup.error(toFriendlyErrorMessage(err, "Failed to validate. Please try again."), "Validate");
             }
         } finally {
             if (isMountedRef.current) {
@@ -662,7 +688,7 @@ useEffect(() => {
                             executeExportPart(payload, template.templateId);
                         }
                     } else {
-                        setShowExportModal(true);
+                        executeExportPart([], template.templateId);
                     }
                 }
             }
@@ -1100,8 +1126,43 @@ useEffect(() => {
         );
     };
 
-    const handleExportAll = () => {
-        setShowExportAllModal(true);
+    const handleExportAll = async () => {
+        try {
+            const imo = data?.imonumber || data?.imoNumber;
+            if (!isNewProject) {
+                executeExportAll([]);
+                return;
+            }
+
+            const show = await surveyReportService.checkShowExportAllSettings(projectId, imo);
+            if (show.data === true) {
+                setExportAllMode('export');
+                setShowExportAllModal(true);
+                return;
+            }
+
+            const res = await surveyReportService.getAllParts(projectId, imo);
+            const parts = (res.data as any[]) || [];
+            const settings = parts.map(p => ({
+                PartId: p.partId ?? p.PartId,
+                PartName: p.partName ?? p.PartName,
+                RequiredInReport: p.requiredInReport ?? p.RequiredInReport ?? false,
+                IncludeInReport: true,
+                sections: (p.sections ?? p.Sections ?? []).map((s: any) => ({
+                    SectionId: s.sectionId ?? s.SectionId,
+                    SectionName: s.sectionName ?? s.SectionName,
+                    IncludeInReport: true,
+                    RequiredInReport: s.requiredInReport ?? s.RequiredInReport ?? false,
+                    IsSubSection: false,
+                    TankTypeId: s.tankTypeId ?? s.TankTypeId ?? 0,
+                    ParentId: s.parentId ?? s.ParentId ?? EMPTY_GUID,
+                    TankType: s.tankType ?? s.TankType ?? ""
+                }))
+            }));
+            await executeExportAll(settings);
+        } catch (err: any) {
+            popup.error(toFriendlyErrorMessage(err, "Failed to start export. Please try again."), "Export");
+        }
     };
 
     const executeExportAll = async (payload: any) => {
@@ -1161,7 +1222,7 @@ useEffect(() => {
             setModal(null);
             setIsExportingAll(false);
             if (err?.message !== "cancelled") {
-                popup.error("Exported  falied!", "Export");
+                popup.error(toFriendlyErrorMessage(err, "Export failed. Please try again."), "Export");
             }
         }
     };
@@ -1495,7 +1556,6 @@ useEffect(() => {
                     templateId={exportTemplate.id}
                     imo={data?.imonumber || (data as any)?.imoNumber || 0}
                     templateName={exportTemplate.name}
-                    templateSections={reportIndex?.reportPartGrid?.find((x: any) => x.templateId === exportTemplate.id)?.sectionsList}
                 />
             )}
 
@@ -1509,7 +1569,6 @@ useEffect(() => {
                     imo={data?.imonumber || (data as any)?.imoNumber || 0}
                     templateName={validateTemplate.name}
                     mode="validate"
-                    templateSections={reportIndex?.reportPartGrid?.find((x: any) => x.templateId === validateTemplate.id)?.sectionsList}
                 />
             )}
 
@@ -1517,10 +1576,17 @@ useEffect(() => {
                 <ExportAllConfigurationModal
                     show={showExportAllModal}
                     onHide={() => setShowExportAllModal(false)}
-                    onExport={executeExportAll}
+                    mode={exportAllMode}
+                    onExport={async (selectedSettings) => {
+                        setShowExportAllModal(false);
+                        if (exportAllMode === 'validate') {
+                            await runNewProjectValidateAll(selectedSettings);
+                        } else {
+                            await executeExportAll(selectedSettings);
+                        }
+                    }}
                     projectId={projectId}
                     imo={data?.imonumber || (data as any)?.imoNumber || 0}
-                    projectParts={reportIndex?.reportPartGrid}
                 />
             )}
 
