@@ -36,6 +36,8 @@ const ConfirmationPopup: React.FC<ConfirmationPopupProps> = ({
             centered
             backdrop="static"
             dialogClassName="app-popup"
+            className="information-popup-modal"
+            backdropClassName="information-popup-backdrop"
         >
             <Modal.Header closeButton>
                 <Modal.Title>

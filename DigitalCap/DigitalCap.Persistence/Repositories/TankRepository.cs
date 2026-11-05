@@ -65,6 +65,9 @@ ORDER BY TankImageCard.SectionId, CardNumber";
             {
                 var parameters = new DynamicParameters();
                 parameters.Add("@ImoNumber", imonumber);
+                parameters.Add("@ProjectId", projectId);
+                parameters.Add("@newImoNumber", newimo);
+                parameters.Add("@newProjectId", newprojectId);
 
                 return (await Connection.QueryAsync<VesselTank>(
                     sql: "dbo.CreateTanksofVesselByProject",
