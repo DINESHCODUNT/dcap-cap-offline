@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState, useCallback } from "react";
-import { Spinner } from "react-bootstrap";
+import AppLoader from '../../Common/AppLoader';
 import * as Icon from "react-bootstrap-icons";
 import _uniqueId from "lodash/uniqueId";
 import moment from "moment";
@@ -109,11 +109,8 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({
 
     if (loading && !model) {
         return (
-            <div className="mt-3 d-flex flex-column justify-content-center align-items-center" style={{ minHeight: "160px" }}>
-                <Spinner animation="border" role="status" variant="primary">
-                    <span className="visually-hidden">Loading...</span>
-                </Spinner>
-                <span className="mt-3 tx-14 text-muted">Loading report details…</span>
+            <div className="mt-3">
+                <AppLoader inline />
             </div>
         );
     }

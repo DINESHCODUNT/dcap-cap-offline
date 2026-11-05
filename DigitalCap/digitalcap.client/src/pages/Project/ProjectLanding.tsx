@@ -1,6 +1,6 @@
 import axios from 'axios';
 import React, { useState, useEffect, useRef } from 'react';
-import { Spinner } from "react-bootstrap";
+import AppLoader from '../../Common/AppLoader';
 import * as Icon from "react-bootstrap-icons";
 import * as projectService from '../../service/ProjectService';
 import type { ProjectLifecycleAction, SynchedOnlineContact } from '../../service/ProjectService';
@@ -439,11 +439,8 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
 
     if (loading) {
         return (
-            <div className="bg-white rounded shadow-sm p-5 d-flex flex-column justify-content-center align-items-center project-landing-empty">
-                <Spinner animation="border" role="status" variant="primary">
-                    <span className="visually-hidden">Loading...</span>
-                </Spinner>
-                <div className="mt-3 text-muted">Loading project details...</div>
+            <div className="bg-white rounded shadow-sm p-5 project-landing-empty">
+                <AppLoader inline />
             </div>
         );
     }

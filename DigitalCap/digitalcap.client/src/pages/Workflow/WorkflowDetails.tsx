@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Spinner } from "react-bootstrap";
+import AppLoader from '../../Common/AppLoader';
 import * as Icon from "react-bootstrap-icons";
 import WorkflowList from "./WorkflowList";
 import * as workflowService from "../../service/WorkflowService";
@@ -135,11 +135,8 @@ const WorkflowDetails: React.FC<WorkflowDetailsProps> = ({ projectId }) => {
 
     if (loading) {
         return (
-            <div className="card-area mb-3 d-flex flex-column justify-content-center align-items-center" style={{ minHeight: "200px" }}>
-                <Spinner animation="border" role="status" variant="primary">
-                    <span className="visually-hidden">Loading...</span>
-                </Spinner>
-                <div className="mt-3 text-muted">Loading workflow details...</div>
+            <div className="card-area mb-3">
+                <AppLoader inline />
             </div>
         );
     }
