@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import { useNavigate } from "react-router-dom";
 import { getApiScopes } from "../src/utils/authConfig";
+import AppLoader from "./Common/AppLoader";
 
 const Success: React.FC = () => {
     const { instance } = useMsal();
@@ -78,11 +79,7 @@ const Success: React.FC = () => {
         );
     }
 
-    return (
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
-            <p>Completing sign-in...</p>
-        </div>
-    );
+    return <AppLoader />;
 };
 
 export default Success;
