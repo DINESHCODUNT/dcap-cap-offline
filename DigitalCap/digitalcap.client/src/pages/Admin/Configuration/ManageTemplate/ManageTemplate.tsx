@@ -9,6 +9,7 @@ import * as gradingService from '../../../../service/GradingService';
 import { usePopup } from '../../../../Common/PopupProvider';
 import { resultMessage } from '../../../../Common/UtilityMessage';
 import DropdownWithSearch from '../../../../Common/DropdownWithSearch';
+import AppLoader from '../../../../Common/AppLoader';
 
 type FormData = {
     vesselTypeId: number | "";
@@ -96,16 +97,24 @@ const ManageTemplate: React.FC = () => {
         });
     }, []);
 
+    const [partsLoading, setPartsLoading] = useState<boolean>(false);
+    const [sectionsLoading, setSectionsLoading] = useState<boolean>(false);
+    const partsRequestIdRef = useRef<number>(0);
+    const sectionsRequestIdRef = useRef<number>(0);
+
     const onVesselTypeChange = async (vesselTypeId: number, silent: boolean = false) => {
         if (!vesselTypeId) return;
 
+        const currentRequestId = ++partsRequestIdRef.current;
         if (!silent) {
             setParts([]);
             setShowAddRow(false);
+            setPartsLoading(true);
         }
 
         try {
             const res = await reportConfigService.getReportPartsByVesselType(vesselTypeId);
+            if (partsRequestIdRef.current !== currentRequestId) return;
             const sorted = sortPartsBySequence(res.data ?? []);
 
             setParts(sorted);
@@ -117,6 +126,10 @@ const ManageTemplate: React.FC = () => {
             setPartOptions(partOptions);
 
         } catch (err) {
+        } finally {
+            if (!silent && partsRequestIdRef.current === currentRequestId) {
+                setPartsLoading(false);
+            }
         }
     };
     const orderedParts = useMemo(() => sortPartsBySequence(parts), [parts]);
@@ -285,6 +298,8 @@ const ManageTemplate: React.FC = () => {
 
     const onPartChange = async (partId: number) => {
         setFormData(prev => ({ ...prev, partId }));
+        const currentRequestId = ++sectionsRequestIdRef.current;
+        setSectionsLoading(true);
 
         try {
             const res =
@@ -292,6 +307,7 @@ const ManageTemplate: React.FC = () => {
                     Number(formData.vesselTypeId),
                     partId
                 );
+            if (sectionsRequestIdRef.current !== currentRequestId) return;
 
             const mappedSections = (res.data.normalSections ?? []).map((s: any) => ({
                 id: s.sectionId,
@@ -308,6 +324,10 @@ const ManageTemplate: React.FC = () => {
 
             setTankSections(res.data.tanksSections ?? []);
         } catch (err) {
+        } finally {
+            if (sectionsRequestIdRef.current === currentRequestId) {
+                setSectionsLoading(false);
+            }
         }
     };
 
@@ -449,7 +469,10 @@ const ManageTemplate: React.FC = () => {
                                 <div className="card-body">
 
                                     <div className="form-area">
-                                        <DragDropContext onDragEnd={handleDragEnd}>
+                                        {partsLoading ? (
+                                            <AppLoader inline />
+                                        ) : (
+                                            <DragDropContext onDragEnd={handleDragEnd}>
                                             <Droppable droppableId="parts">
                                                 {(provided) => (
                                                     <table className='table table-bordered custom-table'>
@@ -627,6 +650,7 @@ const ManageTemplate: React.FC = () => {
                                                 )}
                                             </Droppable>
                                         </DragDropContext>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -692,7 +716,10 @@ const ManageTemplate: React.FC = () => {
                                     )}
                                 </div>
                                 <div className="card-body">
-                                    <Tab
+                                    {sectionsLoading ? (
+                                        <AppLoader inline />
+                                    ) : (
+                                        <Tab
                                         activeTab={activeTab}
                                         onTabChange={handleTabClick}
                                         tabData={[
@@ -730,6 +757,7 @@ const ManageTemplate: React.FC = () => {
                                             }
                                         ]}
                                     />
+                                    )}
                                 </div>
                             </div>
                         </div>

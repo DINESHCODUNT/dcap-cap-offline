@@ -9,6 +9,8 @@ import { usePopup } from '../../Common/PopupProvider';
 import { resultMessage } from '../../Common/UtilityMessage';
 import DropdownWithSearch, { type DropdownWithSearchOption } from '../../Common/DropdownWithSearch';
 import { isEmptyDate } from '../../utils/dateTime';
+import AppLoader from '../../Common/AppLoader';
+import { toFriendlyErrorMessage } from '../../utils/errorMessage';
 
 type FormData = {
     project_name: string;
@@ -225,6 +227,8 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
     const sideDialog = useContext(SideDialogManagerContext);
     const [showDuplicateWarning, setShowDuplicateWarning] = useState<string | undefined>();
     const imoLookupCounterRef = useRef<number>(0);
+    const [projectLoading, setProjectLoading] = useState<boolean>(!!projectId);
+    const [projectLoadError, setProjectLoadError] = useState<string | null>(null);
     const [formData, setFormData] = React.useState<FormData>({ ...INITIAL_FORM_DATA });
     const updateForm = (field: keyof FormData, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -572,6 +576,8 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
     useEffect(() => {
         const loadProjectData = async () => {
             if (projectId) {
+                setProjectLoading(true);
+                setProjectLoadError(null);
                 try {
                     const response = await projectService.getProjectById(projectId);
                     if (response.data && response.data.projectDetails) {
@@ -672,8 +678,16 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                         if (projectData.fatigue !== undefined) setFatigue(projectData.fatigue ? 1 : 2);
                         if (projectData.isDefaultTank !== undefined) setTankSelected(projectData.isDefaultTank ? 1 : 2);
                         if (projectData.sisterVessel !== undefined) setSelected(projectData.sisterVessel ? 1 : 2);
+                    } else {
+                        setProjectLoadError("Failed to load project details. Please close and try again.");
                     }
-                } catch (error) {
+                } catch (error: any) {
+                    setProjectLoadError(toFriendlyErrorMessage(
+                        error?.response?.data?.message ?? error?.message,
+                        "Failed to load project details. Please close and try again."
+                    ));
+                } finally {
+                    setProjectLoading(false);
                 }
             }
         };
@@ -1243,7 +1257,27 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
             >
                 {() => (
                     <>
-                        {/* ── Project Information ── */}
+                        {projectId && projectLoading ? (
+                            <AppLoader inline />
+                        ) : projectId && projectLoadError ? (
+                            <>
+                                <div className="alert alert-danger" role="alert">
+                                    {projectLoadError}
+                                </div>
+                                <div className="col-md-12 form-group">
+                                    <div className="d-flex gap-2">
+                                        <Button
+                                            variant={BUTTONS.SECONDARY}
+                                            onClick={handleCancel}
+                                        >
+                                            Cancel
+                                        </Button>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                {/* ── Project Information ── */}
                         <h3 className="form-group-title">Project Information</h3>
                         <div className="row">
 
@@ -2085,6 +2119,8 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                                 </Button>
                             </div>
                         </div>
+                            </>
+                        )}
                     </>
                 )}
             </SideDialog>
