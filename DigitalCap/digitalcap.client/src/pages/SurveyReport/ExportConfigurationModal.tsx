@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Modal, Form, Spinner } from 'react-bootstrap';
 import { Button, BUTTONS } from 'customer_portal-ui-shared';
 import { getAllSections } from '../../service/SurveyReportService';
+import {
+    type ConfigSection,
+    toConfigSection,
+    getDisplayGroups,
+    collectSelectedSections,
+    SELECT_AT_LEAST_ONE
+} from '../../utils/exportSettings';
 
 interface ExportConfigurationModalProps {
     show: boolean;
@@ -12,7 +19,6 @@ interface ExportConfigurationModalProps {
     imo: number;
     templateName: string;
     mode?: 'export' | 'validate';
-    templateSections?: any[];
 }
 
 export const ExportConfigurationModal: React.FC<ExportConfigurationModalProps> = ({
@@ -23,95 +29,86 @@ export const ExportConfigurationModal: React.FC<ExportConfigurationModalProps> =
     templateId,
     imo,
     templateName,
-    mode = 'export',
-    templateSections
+    mode = 'export'
 }) => {
-    const [sections, setSections] = useState<any[]>([]);
+    const [sections, setSections] = useState<ConfigSection[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [validationError, setValidationError] = useState<string | null>(null);
 
     useEffect(() => {
         if (show) {
             setIsExporting(false);
+            setValidationError(null);
+            setLoadError(null);
             loadSections();
         } else {
             setSections([]);
+            setValidationError(null);
+            setLoadError(null);
         }
     }, [show, templateId]);
 
     const loadSections = async () => {
         setIsLoading(true);
+        setLoadError(null);
+        setValidationError(null);
         try {
-            if (templateSections && templateSections.length > 0) {
-                const mappedSections = templateSections.map((s: any) => ({
-                    ...s,
-                    SectionId: s.sectionId ?? s.SectionId,
-                    SectionName: s.sectionName ?? s.SectionName ?? s.name ?? s.Name,
-                    IncludeInReport: s.includeInReport ?? s.IncludeInReport ?? true,
-                    RequiredInReport: s.requiredInReport ?? s.RequiredInReport ?? false
-                }));
-                setSections(mappedSections);
-                setIsLoading(false);
-                return;
-            }
-
             const res = await getAllSections(projectId, templateId, imo);
-            if (res.data && (res.data as any[]).length > 0) {
-                const sectionsData = res.data as any[] ?? [];
-                const mappedSections = sectionsData.map((s: any) => ({
-                    ...s,
-                    IncludeInReport: s.includeInReport ?? s.IncludeInReport ?? true
-                }));
-                setSections(mappedSections);
+            if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+                setSections(res.data.map(toConfigSection));
             } else {
                 setSections([]);
             }
         } catch (error) {
+            setLoadError("Unable to load sections. Please try again.");
+            setSections([]);
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleCheckboxChange = (sectionId: number, checked: boolean) => {
-        setSections(prev => prev.map(s => {
-            const currentId = s.sectionId ?? s.SectionId;
-            if (currentId === sectionId) {
-                return { ...s, IncludeInReport: checked };
-            }
-            return s;
-        }));
+    const handleSectionCheckboxChange = (sectionId: string, checked: boolean) => {
+        setValidationError(null);
+        setSections(prev => prev.map(s => s.SectionId === sectionId ? { ...s, IncludeInReport: checked } : s));
+    };
+
+    const handleTankTypeCheckboxChange = (tankTypeId: number, checked: boolean) => {
+        setValidationError(null);
+        setSections(prev => prev.map(s => s.TankTypeId === tankTypeId ? { ...s, IncludeInReport: checked } : s));
     };
 
     const handleExportClick = async () => {
+        setValidationError(null);
+        const selected = collectSelectedSections(sections);
+        if (selected.length === 0) {
+            setValidationError(SELECT_AT_LEAST_ONE);
+            return;
+        }
+
         setIsExporting(true);
-        const selectedSettings = sections
-            .filter(s => s.IncludeInReport || s.requiredInReport || s.RequiredInReport)
-            .map(s => ({
-                SectionId: s.sectionId ?? s.SectionId,
-                SectionName: s.sectionName ?? s.SectionName,
+        try {
+            const payload = [{
+                PartId: templateId,
+                PartName: templateName,
+                RequiredInReport: false,
                 IncludeInReport: true,
-                RequiredInReport: s.requiredInReport ?? s.RequiredInReport ?? false,
-                IsSubSection: false,
-                TankTypeId: s.tankTypeId ?? s.TankTypeId ?? 0,
-                ParentId: s.parentId ?? s.ParentId ?? "00000000-0000-0000-0000-000000000000",
-                TankType: s.tankType ?? s.TankType ?? ""
-            }));
+                sections: selected
+            }];
 
-        const payload = [{
-            PartId: templateId,
-            PartName: templateName,
-            RequiredInReport: false,
-            IncludeInReport: true,
-            sections: selectedSettings
-        }];
-
-        await onExport(payload);
-        setIsExporting(false);
+            await onExport(payload);
+        } finally {
+            setIsExporting(false);
+        }
     };
+
+    const { normal, tankTypes } = getDisplayGroups(sections);
+    const hasItems = normal.length > 0 || tankTypes.length > 0;
 
     return (
         <Modal show={show} onHide={onHide} size="lg" centered backdrop="static">
-            <Modal.Header closeButton>
+            <Modal.Header closeButton={!isExporting}>
                 <Modal.Title>{mode === 'validate' ? 'Validate' : 'Export'} {templateName} Sections</Modal.Title>
             </Modal.Header>
             <Modal.Body style={{ maxHeight: '60vh', overflowY: 'auto' }}>
@@ -120,33 +117,46 @@ export const ExportConfigurationModal: React.FC<ExportConfigurationModalProps> =
                         <Spinner animation="border" variant="primary" />
                         <span className="ms-2">Loading sections...</span>
                     </div>
+                ) : loadError ? (
+                    <p className="text-danger p-2">{loadError}</p>
                 ) : (
                     <div className="section-list p-2">
-                        {sections.length === 0 ? (
+                        {!hasItems ? (
                             <p>No sections found.</p>
                         ) : (
-                            sections.map(section => {
-                                const isRequired = section.requiredInReport || section.RequiredInReport;
-                                const sectionId = section.sectionId ?? section.SectionId;
-                                const sectionName = section.sectionName ?? section.SectionName;
-
-                                return (
+                            <>
+                                {normal.map(section => (
                                     <Form.Check
-                                        key={sectionId}
+                                        key={section.SectionId}
                                         type="checkbox"
-                                        id={`section-${sectionId}`}
-                                        label={sectionName}
-                                        checked={isRequired ? true : section.IncludeInReport}
-                                        disabled={isRequired}
-                                        onChange={(e) => handleCheckboxChange(sectionId, e.target.checked)}
+                                        id={`section-${section.SectionId}`}
+                                        label={section.SectionName}
+                                        checked={section.RequiredInReport || section.IncludeInReport}
+                                        disabled={section.RequiredInReport}
+                                        onChange={(e) => handleSectionCheckboxChange(section.SectionId, e.target.checked)}
                                         className="mb-3"
                                     />
-                                );
-                            })
+                                ))}
+                                {tankTypes.map(t => (
+                                    <Form.Check
+                                        key={`tanktype-${t.tankTypeId}`}
+                                        type="checkbox"
+                                        id={`tanktype-${t.tankTypeId}`}
+                                        label={t.tankType}
+                                        checked={t.required || t.included}
+                                        disabled={t.required}
+                                        onChange={(e) => handleTankTypeCheckboxChange(t.tankTypeId, e.target.checked)}
+                                        className="mb-3"
+                                    />
+                                ))}
+                            </>
                         )}
                     </div>
                 )}
             </Modal.Body>
+            {validationError && (
+                <div className="text-danger px-3 pb-2">{validationError}</div>
+            )}
             <Modal.Footer className="gap-2">
                 <Button variant={BUTTONS.TERTIARY} onClick={onHide} disabled={isExporting}>Close</Button>
                 <Button variant={BUTTONS.PRIMARY} onClick={handleExportClick} disabled={isLoading || isExporting}>

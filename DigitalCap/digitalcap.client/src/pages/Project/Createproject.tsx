@@ -224,6 +224,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
     const [isSaving, setIsSaving] = useState<boolean>(false);
     const sideDialog = useContext(SideDialogManagerContext);
     const [showDuplicateWarning, setShowDuplicateWarning] = useState<string | undefined>();
+    const imoLookupCounterRef = useRef<number>(0);
     const [formData, setFormData] = React.useState<FormData>({ ...INITIAL_FORM_DATA });
     const updateForm = (field: keyof FormData, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -814,7 +815,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
 
         if (tankselected === 2) {
             if (!formData.copying_vessel_id || formData.copying_vessel_id === "0") {
-                errors.copying_vessel_id = "Tank Vessel Name is required.";
+                errors.copying_vessel_id = "Project Copied is required.";
             }
         }
 
@@ -1040,6 +1041,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                 setFormData({ ...INITIAL_FORM_DATA });
                 setSelected(2);
                 setTankSelected(1);
+                setShowDuplicateWarning(undefined);
                 setFormErrors({});
                 popup.success({
                     title: isEdit ? "Edit Project" : "Create Project",
@@ -1071,47 +1073,93 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
         }
     };
 
+    const resetImoState = () => {
+        imoLookupCounterRef.current += 1;
+        setShowDuplicateWarning(undefined);
+        setTankSelected(1);
+        setFormData(prev => ({ ...prev, copying_vessel_id: "" }));
+        setFormErrors(prev => {
+            if (!prev.copying_vessel_id) return prev;
+            const next = { ...prev };
+            delete next.copying_vessel_id;
+            return next;
+        });
+    };
+
     const handleImoLookup = async (imo: string) => {
-        if (!imo) return;
+        const trimmed = imo?.trim();
+        if (!trimmed || trimmed === "0" || trimmed.length !== 7 || !/^\d{7}$/.test(trimmed)) {
+            resetImoState();
+            return;
+        }
+
+        const requestId = ++imoLookupCounterRef.current;
         try {
-            const res = await projectService.lookupByImo(imo);
-            const data = res.data;
+            const res = await projectService.lookupByImo(trimmed);
+            if (imoLookupCounterRef.current !== requestId) return;
 
-            if (!data) return;
+            const data = res?.data;
+            if (!data) {
+                resetImoState();
+                return;
+            }
 
-            if (data.result === true) {
+            if (data.result === true && data.project) {
                 setShowDuplicateWarning("true");
                 setTankSelected(2);
-            }
 
-            if (data.project) {
-                setExistingProjectOptions([{
-                    text: data.project.text || data.project.label || "",
-                    value: data.project.value || ""
-                }]);
-                setFormData(prev => ({
-                    ...prev,
-                    copying_vessel_id: data.project?.value || ""
-                }));
-            }
+                const projValue = String(data.project.value ?? "");
+                const projText = String(data.project.text ?? data.project.label ?? projValue);
 
-            if (data.vesseldetails) {
-                const vessel = data.vesseldetails;
-                setFormData(prev => ({
-                    ...prev,
-                    copying_vessel_id: data.project?.value || prev.copying_vessel_id,
-                    vessel_name: vessel.vesselName || prev.vessel_name,
-                    builder: vessel.builder || "",
-                    hull_number: vessel.hullNumber || "",
-                    length_overall: vessel.lengthOverall ? String(vessel.lengthOverall) : "",
-                    month_build: vessel.monthBuilt ? String(vessel.monthBuilt) : "",
-                    year_build: vessel.yearBuilt ? String(vessel.yearBuilt) : "",
-                    class_number: vessel.absClassID || "",
-                    imo_number: vessel.imo || prev.imo_number,
-                    vessel_type: vessel.type ? String(vessel.type) : "",
-                }));
+                setExistingProjectOptions(prev => {
+                    if (prev.some(o => String(o.value) === projValue)) return prev;
+                    return [{ text: projText, value: projValue }, ...prev];
+                });
+
+                setFormData(prev => {
+                    const next: FormData = {
+                        ...prev,
+                        copying_vessel_id: projValue,
+                    };
+                    if (data.vesseldetails) {
+                        const vessel = data.vesseldetails;
+                        // digital-cap rule: keep existing vessel name if user already typed one
+                        if (!prev.vessel_name?.trim() && vessel.vesselName) {
+                            next.vessel_name = vessel.vesselName;
+                        }
+                        if (vessel.builder) next.builder = vessel.builder;
+                        if (vessel.hullNumber) next.hull_number = vessel.hullNumber;
+                        if (vessel.lengthOverall != null && String(vessel.lengthOverall) !== "" && String(vessel.lengthOverall) !== "0") {
+                            next.length_overall = String(vessel.lengthOverall);
+                        }
+                        if (vessel.monthBuilt != null && String(vessel.monthBuilt) !== "") {
+                            next.month_build = String(vessel.monthBuilt);
+                        }
+                        if (vessel.yearBuilt != null && String(vessel.yearBuilt) !== "") {
+                            next.year_build = String(vessel.yearBuilt);
+                        }
+                        if (vessel.absClassID) next.class_number = vessel.absClassID;
+                        if (vessel.imo) next.imo_number = vessel.imo;
+                        if (vessel.type != null && String(vessel.type) !== "") {
+                            next.vessel_type = String(vessel.type);
+                        }
+                    }
+                    return next;
+                });
+
+                setFormErrors(prev => {
+                    if (!prev.copying_vessel_id) return prev;
+                    const n = { ...prev };
+                    delete n.copying_vessel_id;
+                    return n;
+                });
+            } else {
+                resetImoState();
             }
         } catch (err) {
+            if (imoLookupCounterRef.current === requestId) {
+                resetImoState();
+            }
         }
     };
 
@@ -1146,11 +1194,17 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                     ? String(vessel.type)
                     : (vessel.Type != null ? String(vessel.Type) : ""),
             }));
+
+            const returnedImo = vessel.imo || vessel.IMO;
+            if (returnedImo) {
+                handleImoLookup(String(returnedImo));
+            } else {
+                resetImoState();
+            }
         } catch (err) {
         }
     };
-    const isImoLocked = !!showDuplicateWarning;
-    const isVesselSectionDisabled = isImoLocked || !!projectId;
+    const isCopyLocked = !!showDuplicateWarning;
 
     return (
         <>
@@ -1313,11 +1367,15 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                                     onChange={(value: string) => {
                                         if (/^\d*$/.test(value)) {
                                             updateForm("imo_number", value);
-                                            if (value.length === 7) handleImoLookup(value);
+                                            if (value.length === 7) {
+                                                handleImoLookup(value);
+                                            } else {
+                                                resetImoState();
+                                            }
                                         }
                                     }}
                                     maxLength={7}
-                                    disabled={isImoLocked}
+                                    disabled={!!projectId}
                                 />
                                 {formErrors.imo_number && <span className="text-danger">{formErrors.imo_number}</span>}
                             </div>
@@ -1329,7 +1387,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                                     placeholder="Enter Vessel Name"
                                     value={formData.vessel_name}
                                     onChange={(value: string) => updateForm("vessel_name", value)}
-                                    disabled={isVesselSectionDisabled}
+                                    disabled={!!projectId}
                                 />
                                 {formErrors.vessel_name && <span className="text-danger">{formErrors.vessel_name}</span>}
                             </div>
@@ -1347,7 +1405,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                                         setFormData(prev => ({ ...prev, classification: vals.map(v => v.value) }));
                                         setFormErrors(prev => { const c = { ...prev }; delete c.classification; return c; });
                                     }}
-                                    disabled={isVesselSectionDisabled}
+                                    disabled={!!projectId}
                                 />
                                 {formErrors.classification && <span className="text-danger">{formErrors.classification}</span>}
                             </div>
@@ -1358,7 +1416,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                                     placeholder="Enter Builder Name"
                                     value={formData.builder}
                                     onChange={(value: string) => updateForm("builder", value)}
-                                    disabled={isVesselSectionDisabled}
+                                    disabled={!!projectId}
                                 />
                             </div>
 
@@ -1372,7 +1430,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                                             updateForm("hull_number", value);
                                         }
                                     }}
-                                    disabled={isVesselSectionDisabled}
+                                    disabled={!!projectId}
                                 />
                             </div>
 
@@ -1382,7 +1440,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                                     placeholder="Enter Length Overall"
                                     value={formData.length_overall}
                                     onChange={(value: string) => updateForm("length_overall", value.replace(/[^0-9.]/g, ''))}
-                                    disabled={isVesselSectionDisabled}
+                                    disabled={!!projectId}
                                 />
                             </div>
 
@@ -1395,7 +1453,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                                     options={monthBuiltOptions}
                                     selected={formData.month_build ? [String(formData.month_build)] : []}
                                     placeholder="Select Month Built"
-                                    disabled={isVesselSectionDisabled}
+                                    disabled={!!projectId}
                                 />
                                 {formErrors.month_build && <span className="text-danger">{formErrors.month_build}</span>}
                             </div>
@@ -1410,7 +1468,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                                             updateForm("year_build", value);
                                         }
                                     }}
-                                    disabled={isVesselSectionDisabled}
+                                    disabled={!!projectId}
                                 />
                                 {formErrors.year_build && <span className="text-danger">{formErrors.year_build}</span>}
                             </div>
@@ -1433,7 +1491,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                                     selected={formData.vessel_type?.trim() ? [String(formData.vessel_type)] : []}
                                     placeholder="Select a Vessel Type"
                                     search={true}
-                                    disabled={isVesselSectionDisabled}
+                                    disabled={!!projectId}
                                 />
                                 {formErrors.vessel_type && <span className="text-danger">{formErrors.vessel_type}</span>}
                             </div>
@@ -1448,7 +1506,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                                             setSelected(1);
                                             updateForm("contract_sister_exist", true);
                                         }}
-                                        disabled={isVesselSectionDisabled}
+                                        disabled={!!projectId}
                                     />
                                     <RadioInput
                                         label="No"
@@ -1468,7 +1526,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                                                 return c;
                                             });
                                         }}
-                                        disabled={isVesselSectionDisabled}
+                                        disabled={!!projectId}
                                     />
                                 </div>
                             </div>
@@ -1513,20 +1571,20 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                                             setTankSelected(1);
                                             setFormData(prev => ({ ...prev, copying_vessel_id: "" }));
                                         }}
-                                        disabled={isVesselSectionDisabled}
+                                        disabled={!!projectId || isCopyLocked}
                                     />
                                     <RadioInput
                                         label="Copy Tank from Existing CAP"
                                         checked={tankselected === 2}
                                         onChange={() => setTankSelected(2)}
-                                        disabled={isVesselSectionDisabled}
+                                        disabled={!!projectId || isCopyLocked}
                                     />
                                 </div>
                             </div>
 
                             {tankselected === 2 && (
                                 <div className="col-md-6 form-group">
-                                    <Label name="Project Copied" bold />
+                                    <Label name="Project Copied" bold required />
                                     <Label name="IMO Number/ Vessel Name/ Project Name/ Project ID" />
                                     <AbsSelect
                                         mult={false}
@@ -1535,7 +1593,7 @@ const CreateProject: React.FC<{ id: string; projectId?: number; onSuccess?: () =
                                         options={existingProjectOptions}
                                         placeholder="Select an Existing Project"
                                         search={true}
-                                        disabled={isVesselSectionDisabled}
+                                        disabled={!!projectId || isCopyLocked}
                                     />
                                     {formErrors.copying_vessel_id && <span className="text-danger">{formErrors.copying_vessel_id}</span>}
                                 </div>

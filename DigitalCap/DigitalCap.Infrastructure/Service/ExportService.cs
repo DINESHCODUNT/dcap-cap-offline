@@ -2,6 +2,7 @@
 using DigitalCap.Core.Interfaces.Service;
 using DigitalCap.Core.Models;
 using DigitalCap.Core.Models.ExportConfig;
+using DigitalCap.Core.Models.Permissions;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -13,12 +14,18 @@ namespace DigitalCap.Infrastructure.Service
         private readonly IExportRepository _exportRepository;
         private readonly IProjectRepository _projectRepository;
         private readonly ISecurityService _securityService;
+        private readonly IUserPermissionRepository _userPermissionRepository;
 
-        public ExportService(IExportRepository exportRepository, IProjectRepository projectRepository, ISecurityService securityService)
+        public ExportService(
+            IExportRepository exportRepository,
+            IProjectRepository projectRepository,
+            ISecurityService securityService,
+            IUserPermissionRepository userPermissionRepository)
         {
             _exportRepository = exportRepository;
             _projectRepository = projectRepository;
             _securityService = securityService;
+            _userPermissionRepository = userPermissionRepository;
         }
 
 
@@ -100,31 +107,51 @@ namespace DigitalCap.Infrastructure.Service
         {
             try
             {
+                var permission = await _userPermissionRepository.GetRolePermissionByUserName(username, EnumExtensions.GetDescription(ManagePages.ManageExport));
+                if (permission == null || !permission.Edit)
+                {
+                    return ServiceResult<bool>.Failure("You do not have permission to edit export settings.");
+                }
+
                 foreach (var part in settings.exportParts)
                 {
-                    
-                    await _exportRepository.UpdatePartRequiredInReportAsync(
+                    var partUpdated = await _exportRepository.UpdatePartRequiredInReportAsync(
                         part.RequiredInReport,
                         part.PartId,
                         settings.SelectedImoNumber,
                         settings.SelectedVesselTypeId, username);
 
+                    if (!partUpdated)
+                    {
+                        return ServiceResult<bool>.Failure("Failed to save export settings");
+                    }
+
                     foreach (var section in part.sections)
                     {
                         if (section.TankTypeId != 0)
                         {
-                            await _exportRepository.UpdateTankSectionRequiredInReportAsync(
+                            var tankUpdated = await _exportRepository.UpdateTankSectionRequiredInReportAsync(
                                 section.RequiredInReport,
                                 section.SectionId,
                                 settings.SelectedImoNumber, username);
+
+                            if (!tankUpdated)
+                            {
+                                return ServiceResult<bool>.Failure("Failed to save export settings");
+                            }
                         }
                         else
                         {
-                            await _exportRepository.UpdateSectionRequiredInReportAsync(
+                            var sectionUpdated = await _exportRepository.UpdateSectionRequiredInReportAsync(
                                 section.RequiredInReport,
                                 section.SectionId,
                                 settings.SelectedImoNumber,
                                 settings.SelectedVesselTypeId, username);
+
+                            if (!sectionUpdated)
+                            {
+                                return ServiceResult<bool>.Failure("Failed to save export settings");
+                            }
                         }
                     }
                 }

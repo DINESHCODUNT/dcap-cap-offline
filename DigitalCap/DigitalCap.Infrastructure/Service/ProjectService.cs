@@ -102,7 +102,7 @@ namespace DigitalCap.Infrastructure.Service
                         .FirstOrDefault();
                 }
                 var projectListByImo = await _projectRepository.GetProjectListByIMO(model.IMO);
-                model.CopyingVesselID = Convert.ToInt32(projectListByImo.Max(x => x.Value));
+                model.CopyingVesselID = projectListByImo.Select(x => Convert.ToInt32(x.Value)).DefaultIfEmpty(0).Max();
             }
 
             var shipTypes = await _tankRepository.GetShipType();
@@ -115,39 +115,41 @@ namespace DigitalCap.Infrastructure.Service
 
             var projectId = await _projectRepository.CreateProject(model, currentUser);
 
-            if (ImoExists)
+            int copiedFromProjectId = 0;
+
+            if (ImoExists && Convert.ToInt32(model.CopyingVesselID) > 0)
             {
                 model.TankVesselIMO = Convert.ToInt32(model.IMO.ToString());
                 await _tankRepository.PopulateTemplate(
                     model.IMO.ToString(), null, model.IMO.ToString(),
                     projectId, Convert.ToInt32(model.CopyingVesselID));
                 copyproject = await _projectRepository.GetProject(Convert.ToInt16(projectId));
+                copiedFromProjectId = Convert.ToInt32(model.CopyingVesselID);
             }
-            else
+            else if (!ImoExists && model.IsDefaultTank != true)
             {
-                if (model.IsDefaultTank == true)
+                copyproject = await _projectRepository.GetProject(
+                    Convert.ToInt16(model.CopyingVesselID));
+
+                var tankAvailable = await _tankRepository.GetTanks_VesselByProject(
+                    copyproject.IMO.ToString(),
+                    Convert.ToInt16(model.CopyingVesselID));
+
+                if (tankAvailable.Count() > 0)
                 {
-                    model.TankVesselType = model.ShipType.ToString();
+                    model.TankVesselIMO = Convert.ToInt32(copyproject.IMO);
                     await _tankRepository.PopulateTemplate(
-                        model.IMO.ToString(), vesseltype, null, projectId);
+                        model.IMO.ToString(), null, copyproject.IMO.ToString(),
+                        projectId, Convert.ToInt32(model.CopyingVesselID));
+                    copiedFromProjectId = Convert.ToInt32(model.CopyingVesselID);
                 }
-                else
-                {
-                    copyproject = await _projectRepository.GetProject(
-                        Convert.ToInt16(model.CopyingVesselID));
+            }
 
-                    var tankAvailable = await _tankRepository.GetTanks_VesselByProject(
-                        copyproject.IMO.ToString(),
-                        Convert.ToInt16(model.CopyingVesselID));
-
-                    if (tankAvailable.Count() > 0)
-                    {
-                        model.TankVesselIMO = Convert.ToInt32(copyproject.IMO);
-                        await _tankRepository.PopulateTemplate(
-                            model.IMO.ToString(), null, copyproject.IMO.ToString(),
-                            projectId, Convert.ToInt16(model.CopyingVesselID));
-                    }
-                }
+            if (copiedFromProjectId == 0)
+            {
+                model.TankVesselType = model.ShipType.ToString();
+                await _tankRepository.PopulateTemplate(
+                    model.IMO.ToString(), vesseltype, null, projectId);
             }
 
             await UpdateProjectPercentComplete(projectId, currentUser);
@@ -187,8 +189,8 @@ namespace DigitalCap.Infrastructure.Service
                 (int)model.ShipType,
                 currentUser,
                 projectId,
-                ImoExists,
-                ImoExists ? Convert.ToInt32(model.CopyingVesselID) : 0
+                copiedFromProjectId > 0,
+                copiedFromProjectId
             );
 
             await _gradingService.PopulateGrading(

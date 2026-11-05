@@ -5,6 +5,8 @@ import * as exportService from '../../../../service/ExportService';
 import * as gradingService from '../../../../service/GradingService';
 import { usePopup } from '../../../../Common/PopupProvider';
 import { resultMessage } from '../../../../Common/UtilityMessage';
+import { usePermissions } from '../../../../context/PermissionContext';
+import { toFriendlyErrorMessage } from '../../../../utils/errorMessage';
 
 export interface VesselType {
     id: string;
@@ -43,6 +45,8 @@ export interface TankTypeSection {
 
 const ManageExport: React.FC = () => {
     const popup = usePopup();
+    const { pagePermissions } = usePermissions();
+    const canEdit = !!((pagePermissions as any)?.manageExport?.edit ?? (pagePermissions as any)?.ManageExport?.edit);
     const [vesselTypes, setVesselTypes] = useState<VesselType[]>([]);
     const [selectedVesselType, setSelectedVesselType] = useState<string>("");
     const [exportParts, setExportParts] = useState<ExportPart[]>([]);
@@ -171,26 +175,34 @@ const ManageExport: React.FC = () => {
                     return part;
                 }
 
-                return {
-                    ...part,
-                    requiredInReport: newRequiredInReport,
-                    includeInReport: newRequiredInReport,
-                    sections: part.sections.map(sec => ({
-                        ...sec,
-                        requiredInReport: newRequiredInReport,
-                        includeInReport: newRequiredInReport
-                    })),
-                    tankTypes: part.tankTypes.map(tt => ({
-                        ...tt,
-                        requiredInReport: newRequiredInReport,
-                        includeInReport: newRequiredInReport,
-                        tankSections: tt.tankSections.map(ts => ({
-                            ...ts,
-                            requiredInReport: newRequiredInReport,
-                            includeInReport: newRequiredInReport
+                if (newRequiredInReport) {
+                    return {
+                        ...part,
+                        requiredInReport: true,
+                        includeInReport: true
+                    };
+                } else {
+                    return {
+                        ...part,
+                        requiredInReport: false,
+                        includeInReport: false,
+                        sections: part.sections.map(sec => ({
+                            ...sec,
+                            requiredInReport: false,
+                            includeInReport: false
+                        })),
+                        tankTypes: part.tankTypes.map(tt => ({
+                            ...tt,
+                            requiredInReport: false,
+                            includeInReport: false,
+                            tankSections: tt.tankSections.map(ts => ({
+                                ...ts,
+                                requiredInReport: false,
+                                includeInReport: false
+                            }))
                         }))
-                    }))
-                };
+                    };
+                }
             });
         });
     };
@@ -211,13 +223,8 @@ const ManageExport: React.FC = () => {
                     return sec;
                 });
 
-                const hasAnySectionChecked = updatedSections.some(sec => sec.requiredInReport) ||
-                    part.tankTypes.some(tt => tt.requiredInReport);
-
                 return {
                     ...part,
-                    requiredInReport: hasAnySectionChecked,
-                    includeInReport: hasAnySectionChecked,
                     sections: updatedSections
                 };
             });
@@ -246,13 +253,8 @@ const ManageExport: React.FC = () => {
                     return tt;
                 });
 
-                const hasAnySectionChecked = part.sections.some(sec => sec.requiredInReport) ||
-                    updatedTankTypes.some(tt => tt.requiredInReport);
-
                 return {
                     ...part,
-                    requiredInReport: hasAnySectionChecked,
-                    includeInReport: hasAnySectionChecked,
                     tankTypes: updatedTankTypes
                 };
             });
@@ -340,9 +342,9 @@ const ManageExport: React.FC = () => {
 
             const res = await exportService.saveRequiredInExport(payload);
 
-            const isSuccess = res.data === true || res.data?.isSuccess !== false;
+            const isSuccess = res.data === true || (res.data?.isSuccess !== false && res.data?.data !== false);
 
-            if (isSuccess) {
+            if (isSuccess && res.data !== false) {
                 setSelectedVesselType("");
                 setExportParts([]);
                 setValidationError("");
@@ -355,7 +357,7 @@ const ManageExport: React.FC = () => {
                 popup.error({ message: "Failed to save export settings. Please try again." });
             }
         } catch (err: any) {
-            const errorMsg = err.response?.data?.message || err?.message || "An error occurred while saving settings.";
+            const errorMsg = toFriendlyErrorMessage(err, "Failed to save export settings. Please try again.");
             setValidationError(errorMsg);
             popup.error({ message: errorMsg });
         } finally {
@@ -419,6 +421,7 @@ const ManageExport: React.FC = () => {
                                         <CheckboxInput
                                             label={part.partName}
                                             checked={part.requiredInReport}
+                                            disabled={!canEdit}
                                             onChange={() => togglePart(part.partId)}
                                         />
                                     </div>
@@ -444,6 +447,7 @@ const ManageExport: React.FC = () => {
                                                             <CheckboxInput
                                                                 label={section.sectionName}
                                                                 checked={section.requiredInReport}
+                                                                disabled={!canEdit}
                                                                 onChange={() => toggleSection(part.partId, section.sectionId)}
                                                             />
                                                         </div>
@@ -455,6 +459,7 @@ const ManageExport: React.FC = () => {
                                                             <CheckboxInput
                                                                 label={tankType.tankTypeName}
                                                                 checked={tankType.requiredInReport}
+                                                                disabled={!canEdit}
                                                                 onChange={() => toggleTankType(part.partId, tankType.tankTypeId)}
                                                             />
                                                         </div>
@@ -484,7 +489,7 @@ const ManageExport: React.FC = () => {
                                 <Button
                                     variant={BUTTONS.PRIMARY}
                                     onClick={handleSave}
-                                    disabled={isSaving || !selectedVesselType || exportParts.length === 0}
+                                    disabled={!canEdit || isSaving || !selectedVesselType || exportParts.length === 0}
                                 >
                                     {isSaving ? "Saving..." : "Save"}
                                 </Button>

@@ -63,7 +63,7 @@ namespace DigitalCap.WebApi.Controllers
             var result = await _exportService.SaveRequiredInExportAsync(settings, username);
 
             if (!result.IsSuccess)
-                return BadRequest(result.Message);
+                return BadRequest(result.ErrorMessage);
 
             return Ok(true);
         }
