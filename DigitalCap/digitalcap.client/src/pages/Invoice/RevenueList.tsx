@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState, useMemo, useCallback } from "react";
-import { Spinner } from "react-bootstrap";
+import AppLoader from '../../Common/AppLoader';
 import { AccordionGroup, Badge, Button, SideDialogManagerContext, BUTTONS, TextField } from "customer_portal-ui-shared";
 import * as Icon from "react-bootstrap-icons";
 import RevenueEdit from "./RevenueEdit";
@@ -205,12 +205,7 @@ const RevenueList: React.FC<RevenueListProps> = ({ projectId }) => {
             </div>
             <div className="revenue-list">
                 {loading && sections.length === 0 ? (
-                    <div className="d-flex flex-column justify-content-center align-items-center py-5" style={{ minHeight: "160px" }}>
-                        <Spinner animation="border" role="status" variant="primary">
-                            <span className="visually-hidden">Loading...</span>
-                        </Spinner>
-                        <div className="mt-3 text-muted">Loading revenue tasks…</div>
-                    </div>
+                    <AppLoader inline />
                 ) : sections.length === 0 ? (
                     <div className="text-center p-4 text-muted">No revenue tasks available</div>
                 ) : (

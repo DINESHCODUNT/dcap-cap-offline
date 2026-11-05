@@ -3,6 +3,7 @@ import {
     useEffect,
     useImperativeHandle,
     useMemo,
+    useRef,
     useState,
     forwardRef,
 } from "react";
@@ -14,6 +15,7 @@ import type { Comment } from "../../service/CommentService";
 import { normalizeCommentFromApi } from "../../service/CommentService";
 import { usePopup } from "../../Common/PopupProvider";
 import { resultMessage } from "../../Common/UtilityMessage";
+import AppLoader from "../../Common/AppLoader";
 const COMMENT_MAX_LENGTH = 4000;
 
 export interface WorkflowCommentItem {
@@ -76,6 +78,12 @@ const Comments = forwardRef<CommentsHandle, CommentsProps>(({
     const popup = usePopup();
     const [commentError, setCommentError] = useState("");
     const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
+    const [commentsLoading, setCommentsLoading] = useState<boolean>(true);
+    const loadedOnceRef = useRef<boolean>(false);
+
+    useEffect(() => {
+        loadedOnceRef.current = false;
+    }, [projectId, projectTaskId]);
 
     useEffect(() => {
         setEditingCommentId(null);
@@ -87,7 +95,11 @@ const Comments = forwardRef<CommentsHandle, CommentsProps>(({
     const loadComments = useCallback(async () => {
         if (!canUseComments) {
             setComments([]);
+            setCommentsLoading(false);
             return;
+        }
+        if (!loadedOnceRef.current) {
+            setCommentsLoading(true);
         }
         try {
             const response = await commentService.getComments(projectId, taskIdForApi, "");
@@ -95,6 +107,9 @@ const Comments = forwardRef<CommentsHandle, CommentsProps>(({
             setComments(raw.map(normalizeCommentFromApi));
         } catch {
             setComments([]);
+        } finally {
+            loadedOnceRef.current = true;
+            setCommentsLoading(false);
         }
     }, [canUseComments, projectId, taskIdForApi, notes]);
 
@@ -238,7 +253,10 @@ const Comments = forwardRef<CommentsHandle, CommentsProps>(({
                 <div className="section-actions"></div>
             </div>
             <div className="comments">
-                {showList &&
+                {commentsLoading ? (
+                    <AppLoader inline />
+                ) : (
+                    showList &&
                     list.map((c) => (
                         <div className="comment-item" key={c.id}>
                             <div className={`comment-avatar user-bg-${(c.id % 4) + 1}`}>{c.initials}</div>
@@ -291,7 +309,8 @@ const Comments = forwardRef<CommentsHandle, CommentsProps>(({
                             )}
                             {/*) : null}*/}
                         </div>
-                    ))}
+                    ))
+                )}
 
                 <Divider className="divider-1" />
                 {!readOnly && (

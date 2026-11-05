@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Form, Spinner, Accordion } from 'react-bootstrap';
+import { Modal, Form, Accordion } from 'react-bootstrap';
 import { Button, BUTTONS } from 'customer_portal-ui-shared';
+import AppLoader from '../../Common/AppLoader';
 import { getAllParts } from '../../service/SurveyReportService';
 import {
     type ConfigSection,
@@ -152,10 +153,7 @@ export const ExportAllConfigurationModal: React.FC<ExportAllConfigurationModalPr
             </Modal.Header>
             <Modal.Body style={{ maxHeight: '60vh', overflowY: 'auto' }}>
                 {isLoading ? (
-                    <div className="d-flex justify-content-center align-items-center" style={{ height: '100px' }}>
-                        <Spinner animation="border" variant="primary" />
-                        <span className="ms-2">Loading report configuration...</span>
-                    </div>
+                    <AppLoader inline />
                 ) : loadError ? (
                     <p className="text-danger p-2">{loadError}</p>
                 ) : (

@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Spinner } from "react-bootstrap";
+import AppLoader from "../../Common/AppLoader";
 
 const SetToken: React.FC = () => {
     const navigate = useNavigate();
@@ -27,13 +27,7 @@ const SetToken: React.FC = () => {
         navigate(target, { replace: true });
     }, [navigate]);
 
-    return (
-        <div className="d-flex justify-content-center align-items-center min-vh-100">
-            <Spinner animation="border" role="status" variant="primary">
-                <span className="visually-hidden">Loading...</span>
-            </Spinner>
-        </div>
-    );
+    return <AppLoader />;
 };
 
 export default SetToken;

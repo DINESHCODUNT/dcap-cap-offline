@@ -4,8 +4,11 @@ import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { Doughnut } from 'react-chartjs-2';
 import type { ProjectSidebarStatsAggregate } from '../../service/ProjectService';
 import * as Icon from "react-bootstrap-icons";
+import AppLoader from '../../Common/AppLoader';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
+
+const CHART_ERROR_MESSAGE = "Failed to load chart data. Please try again.";
 
 const contrastTextFor = (hex: string) => {
   const c = hex.replace('#', '');
@@ -20,11 +23,15 @@ interface DashboardWidgetsProps {
   stats?: ProjectSidebarStatsAggregate | null;
   statusChartStats?: ProjectSidebarStatsAggregate | null;
   regionChartStats?: ProjectSidebarStatsAggregate | null;
+  statsFailed?: boolean;
   onStatusClick?: (status: string | null) => void;
   onRegionClick?: (region: string | null) => void;
 }
 
-const DashboardWidgets: React.FC<DashboardWidgetsProps> = ({ stats, statusChartStats, regionChartStats, onStatusClick, onRegionClick }) => {
+const DashboardWidgets: React.FC<DashboardWidgetsProps> = ({ stats, statusChartStats, regionChartStats, statsFailed = false, onStatusClick, onRegionClick }) => {
+
+  const hasStatusData = !!(statusChartStats || stats);
+  const hasRegionData = !!(regionChartStats || stats);
 
   const TOTAL_PROJECTS = (statusChartStats || stats)?.total ?? 0;
   const TOTAL_CERTIFICATION = (regionChartStats || stats)?.regions ? Object.values((regionChartStats || stats)!.regions).reduce((a, b) => a + b, 0) : 0;
@@ -246,7 +253,13 @@ const DashboardWidgets: React.FC<DashboardWidgetsProps> = ({ stats, statusChartS
               </div>
             </div>
             <div className="dashboard-chart-area position-relative">
-              <Doughnut id="statusChart" key={`status-${TOTAL_PROJECTS}`} data={chartData} options={statusOptions as any} plugins={[ChartDataLabels as any, centerTextPlugin as any]} />
+              {!hasStatusData && !statsFailed ? (
+                <AppLoader inline />
+              ) : !hasStatusData && statsFailed ? (
+                <div className="text-center p-4 text-danger">{CHART_ERROR_MESSAGE}</div>
+              ) : (
+                <Doughnut id="statusChart" key={`status-${TOTAL_PROJECTS}`} data={chartData} options={statusOptions as any} plugins={[ChartDataLabels as any, centerTextPlugin as any]} />
+              )}
             </div>
           </div>
         </div>
@@ -260,7 +273,13 @@ const DashboardWidgets: React.FC<DashboardWidgetsProps> = ({ stats, statusChartS
               </div>
             </div>
             <div className="dashboard-chart-area position-relative">
-              <Doughnut id="regionChart" key={`region-${TOTAL_CERTIFICATION}`} data={regionChartData} options={regionOptions as any} plugins={[ChartDataLabels as any, regioncenterTextPlugin as any]} />
+              {!hasRegionData && !statsFailed ? (
+                <AppLoader inline />
+              ) : !hasRegionData && statsFailed ? (
+                <div className="text-center p-4 text-danger">{CHART_ERROR_MESSAGE}</div>
+              ) : (
+                <Doughnut id="regionChart" key={`region-${TOTAL_CERTIFICATION}`} data={regionChartData} options={regionOptions as any} plugins={[ChartDataLabels as any, regioncenterTextPlugin as any]} />
+              )}
             </div>
           </div>
         </div>

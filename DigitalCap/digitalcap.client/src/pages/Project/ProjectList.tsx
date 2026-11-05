@@ -51,6 +51,7 @@ export interface ProjectListProps {
     onSelectProject: (project: SidebarProjectRow | null) => void;
     refreshTrigger?: number;
     onSidebarStats?: (stats: projectService.ProjectSidebarStatsAggregate) => void;
+    onStatsError?: () => void;
     onStatusChartStats?: (stats: projectService.ProjectSidebarStatsAggregate | null) => void;
     onRegionChartStats?: (stats: projectService.ProjectSidebarStatsAggregate | null) => void;
     onProjectsLoaded?: (projects: SidebarProjectRow[]) => void;
@@ -83,6 +84,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     onSelectProject,
     refreshTrigger = 0,
     onSidebarStats,
+    onStatsError,
     onStatusChartStats,
     onRegionChartStats,
     onProjectsLoaded,
@@ -525,7 +527,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 onSidebarStats?.(stats);
 
             } catch (err) {
-
+                onStatsError?.();
             }
         };
 

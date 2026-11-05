@@ -14,7 +14,7 @@ import "yet-another-react-lightbox/plugins/thumbnails.css";
 import "yet-another-react-lightbox/plugins/captions.css";
 import BulkImageUpload from './BulkImageUpload';
 import ReportContentListView from './ReportContentListView';
-import Spinner from 'react-bootstrap/Spinner';
+import AppLoader from '../../Common/AppLoader';
 import * as surveyReportService from '../../service/SurveyReportService';
 import { usePopup } from '../../Common/PopupProvider';
 import { getPartDisplayLabel, findPartInGrid, getPartNameFromGrid } from './partUtils';
@@ -1323,11 +1323,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
         "To arrive at an unbiased evaluation of the vessel's condition, the survey was carried out using this check sheet together with a grading system ranging from very good to unsatisfactory with the survey being done by surveyors acting independently of each other. Upon completion of CAP Survey by the attending CAP Surveyors, a grade was agreed upon and assigned to each item with results reported herein.";
 
     if (loading) {
-        return (
-            <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
-                <Spinner animation="border" />
-            </div>
-        );
+        return <AppLoader inline />;
     }
 
     return (

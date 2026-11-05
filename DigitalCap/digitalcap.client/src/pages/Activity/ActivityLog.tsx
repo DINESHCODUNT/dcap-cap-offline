@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Spinner } from "react-bootstrap";
+import AppLoader from '../../Common/AppLoader';
 import * as projectService from '../../service/ProjectService';
 import { Button, BUTTONS } from 'customer_portal-ui-shared';
 import * as Icon from "react-bootstrap-icons";
@@ -40,46 +40,45 @@ interface ActivityLogProps {
     source?: "overview" | "recentActivity" | "projectLanding";
     onArrowClick?: (activity: any) => void;
     refreshTrigger?: number;
+    isLoading?: boolean;
+    errorMessage?: string | null;
 }
 export default function ActivityLog({
     projectId,
     activities = [],
     source = "overview",
     onArrowClick,
-    refreshTrigger = 0
+    refreshTrigger = 0,
+    isLoading = false,
+    errorMessage = null,
 }: ActivityLogProps) {
-    const [activityGroups, setActivityGroups] = useState<ActivityGroup[]>([]);
-    const [loading, setLoading] = useState<boolean>(true);
-    const [error, setError] = useState<string | null>(null);
+    const [overviewGroups, setOverviewGroups] = useState<ActivityGroup[]>([]);
+    const [overviewLoading, setOverviewLoading] = useState<boolean>(true);
+    const [overviewError, setOverviewError] = useState<string | null>(null);
+
+    const isControlled = source === "recentActivity" || source === "projectLanding";
+    const loading = isControlled ? isLoading : overviewLoading;
+    const error = isControlled ? errorMessage : overviewError;
+
+    const controlledGroups = useMemo<ActivityGroup[]>(() => {
+        if (!isControlled) return [];
+        return activities.length > 0 ? [{ dateLabel: "", dateText: "", activities }] : [];
+    }, [activities, isControlled]);
+
+    const activityGroups = isControlled ? controlledGroups : overviewGroups;
+
+    const headingText = source === "recentActivity" ? "Recent Activity" : "Activity Log";
 
     useEffect(() => {
-        if (source === "recentActivity" || source === "projectLanding") return;
         if (source === "overview") {
             loadActivities();
         }
     }, [projectId, source, refreshTrigger]);
 
-    useEffect(() => {
-        if (source !== "recentActivity" && source !== "projectLanding") return;
-
-        if (activities.length === 0) {
-            setLoading(false);
-            return;
-        }
-        setActivityGroups([
-            {
-                dateLabel: "",
-                dateText: "",
-                activities
-            }
-        ]);
-        setLoading(false);
-    }, [activities, source]);
-
     const loadActivities = async () => {
         try {
-            setLoading(true);
-            setError(null);
+            setOverviewLoading(true);
+            setOverviewError(null);
 
             let groups: ActivityGroup[] = [];
 
@@ -110,11 +109,11 @@ export default function ActivityLog({
                 }
             }
 
-            setActivityGroups(groups);
+            setOverviewGroups(groups);
         } catch (err: any) {
-            setError('Failed to load activities. Please try again.');
+            setOverviewError('Failed to load activities. Please try again.');
         } finally {
-            setLoading(false);
+            setOverviewLoading(false);
         }
     };
 
@@ -239,7 +238,7 @@ export default function ActivityLog({
         return (
             <div className="h-100 d-flex flex-column flex-grow-1">
                 <div className="section-title">
-                    <h5 className='_600'>Activity Log</h5>
+                    <h5 className='_600'>{headingText}</h5>
                     <div className="section-actions">
                         {source === "overview" && (
                             <Link to="/app/Activity/ActivityLog" className="text-primary text-decoration-underline text-sm fw-medium">
@@ -248,11 +247,8 @@ export default function ActivityLog({
                         )}
                     </div>
                 </div>
-                <div className="feed flex-grow-1 d-flex flex-column justify-content-center align-items-center" style={{ minHeight: "320px" }}>
-                    <Spinner animation="border" role="status" variant="primary">
-                        <span className="visually-hidden">Loading...</span>
-                    </Spinner>
-                    <div className="mt-3 text-muted">Loading activities...</div>
+                <div className="feed flex-grow-1">
+                    <AppLoader inline />
                 </div>
             </div>
         );
@@ -262,7 +258,7 @@ export default function ActivityLog({
         return (
             <>
                 <div className="section-title">
-                    <h5 className='_600'>Activity Log</h5>
+                    <h5 className='_600'>{headingText}</h5>
                     <div className="section-actions">
                         {source === "overview" && (
                             <Link to="/app/Activity/ActivityLog" className="text-primary text-decoration-underline text-sm fw-medium">
@@ -284,7 +280,7 @@ export default function ActivityLog({
         return (
             <>
                 <div className="section-title">
-                    <h5 className='_600'>Activity Log</h5>
+                    <h5 className='_600'>{headingText}</h5>
                     <div className="section-actions">
                         {source === "overview" && (
                             <Link to="/app/Activity/ActivityLog" className="text-primary text-decoration-underline text-sm fw-medium">
@@ -303,7 +299,7 @@ export default function ActivityLog({
     return (
         <>
             <div className="section-title">
-                <h5 className='_600'>Activity Log</h5>
+                <h5 className='_600'>{headingText}</h5>
                 <div className="section-actions">
                     {source === "overview" && (
                         <Link to="/app/Activity/ActivityLog" className="text-primary text-decoration-underline text-sm fw-medium">
@@ -337,21 +333,15 @@ export default function ActivityLog({
                                     <div className="act-body">
                                         <div className="act-top">
                                             <div className="act-text">
-                                                <div className="act-text">
-                                                    {(source === "recentActivity" || source === "projectLanding") ? (
-                                                        <>
-                                                            {activity.VesselProject && (
-                                                                <div>
-                                                                    <span className="_600">
-                                                                        {activity.VesselProject} - {activity.text}
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                        </>
-                                                    ) : (
-                                                        <></>
-                                                    )}
-                                                </div>
+                                                {(source === "recentActivity" || source === "projectLanding") ? (
+                                                    <div>
+                                                        <span className="_600">
+                                                            {activity.VesselProject ? `${activity.VesselProject} - ${activity.text}` : activity.text}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <></>
+                                                )}
                                             </div>
                                             <div className="d-flex justify-content-end gap-3">
 

@@ -1,6 +1,6 @@
 import { type JSX } from "react";
 import { Navigate } from "react-router-dom";
-import { Spinner } from "react-bootstrap";
+import AppLoader from "../Common/AppLoader";
 import { usePermissions } from "../context/PermissionContext";
 
 interface Props {
@@ -21,14 +21,7 @@ const RoleProtectedRoute = ({
     const { loadingPermissions, hasRole, hasGlobalPermission, permissions, roles, pagePermissions } = usePermissions();
 
     if (loadingPermissions) {
-        return (
-            <div className="d-flex flex-column justify-content-center align-items-center min-vh-100">
-                <Spinner animation="border" role="status" variant="primary">
-                    <span className="visually-hidden">Loading permissions...</span>
-                </Spinner>
-                <div className="mt-3 text-muted">Loading permissions...</div>
-            </div>
-        );
+        return <AppLoader />;
     }
 
     let isAllowed = true;
