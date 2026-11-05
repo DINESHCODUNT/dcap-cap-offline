@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { AbsSelect, AbsSearch, CheckboxInput, Label } from "customer_portal-ui-shared";
-import { Spinner } from 'react-bootstrap';
+import AppLoader from '../../../../Common/AppLoader';
 import * as userPermissionService from '../../../../service/UserPermissionService';
 import { usePopup } from '../../../../Common/PopupProvider';
 
@@ -194,11 +194,7 @@ const PermissionList: React.FC = () => {
                 </div>
             </div>
             {loading && (
-                <div className="d-flex justify-content-center my-4">
-                    <Spinner animation="border" role="status">
-                        <span className="visually-hidden">Loading...</span>
-                    </Spinner>
-                </div>
+                <AppLoader inline />
             )}
             {roleId && (
                 <div className="custom-react-table">

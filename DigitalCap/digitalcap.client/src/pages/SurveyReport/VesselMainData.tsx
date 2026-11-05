@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import ABSLogo from '../../assets/images/ABSLogo.svg';
 import { Label, Input, DatePickerInput, Divider, AbsSelect } from "customer_portal-ui-shared";
 import RichTextEditor from "../../Common/RichTextEditor";
-import Spinner from 'react-bootstrap/Spinner';
+import AppLoader from '../../Common/AppLoader';
 import { updateReport } from "../../service/SurveyReportService";
 import { formatClassNotationsForDisplay, formatClassNotationsForSave } from "../../utils/classNotationFormatter";
 import { parseVisitDate, formatVisitDateForSave, isEmptyDate } from "../../utils/dateTime";
@@ -273,13 +273,7 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, readOnl
     };
 
     if (loading) {
-        return (
-            <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
-                <Spinner animation="border" role="status" variant="primary">
-                    <span className="visually-hidden">Loading...</span>
-                </Spinner>
-            </div>
-        );
+        return <AppLoader inline />;
     }
     return (
         <div className="report-content">

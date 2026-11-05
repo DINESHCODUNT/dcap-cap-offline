@@ -7,6 +7,7 @@ import { usePopup } from '../../../../Common/PopupProvider';
 import { resultMessage } from '../../../../Common/UtilityMessage';
 import { usePermissions } from '../../../../context/PermissionContext';
 import { toFriendlyErrorMessage } from '../../../../utils/errorMessage';
+import AppLoader from '../../../../Common/AppLoader';
 
 export interface VesselType {
     id: string;
@@ -406,9 +407,7 @@ const ManageExport: React.FC = () => {
 
                     {/* Loading */}
                     {loading && (
-                        <div className="text-center mt-4">
-                            <p>Loading export parts...</p>
-                        </div>
+                        <AppLoader inline />
                     )}
 
                     {/* Parts and Sections */}

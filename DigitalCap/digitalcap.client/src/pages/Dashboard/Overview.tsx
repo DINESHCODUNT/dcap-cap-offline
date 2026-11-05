@@ -55,6 +55,7 @@ const Overview: React.FC = () => {
     const [sidebarStats, setSidebarStats] = React.useState<projectService.ProjectSidebarStatsAggregate | null>(null);
     const [statusChartStats, setStatusChartStats] = React.useState<projectService.ProjectSidebarStatsAggregate | null>(null);
     const [regionChartStats, setRegionChartStats] = React.useState<projectService.ProjectSidebarStatsAggregate | null>(null);
+    const [statsFailed, setStatsFailed] = React.useState<boolean>(false);
     const [exporting, setExporting] = useState(false);
     const [buttonPermissions, setButtonPermissions] = useState({
         addProject: true,
@@ -314,6 +315,7 @@ const Overview: React.FC = () => {
                                     stats={sidebarStats}
                                     statusChartStats={statusChartStats}
                                     regionChartStats={regionChartStats}
+                                    statsFailed={statsFailed}
                                     onStatusClick={setDashboardStatusFilter}
                                     onRegionClick={setDashboardRegionFilter}
                                 />
@@ -330,7 +332,11 @@ const Overview: React.FC = () => {
                                     selectedProject={selectedProject}
                                     onSelectProject={setSelectedProject}
                                     refreshTrigger={refreshTrigger}
-                                    onSidebarStats={setSidebarStats}
+                                    onSidebarStats={(stats) => {
+                                        setSidebarStats(stats);
+                                        setStatsFailed(false);
+                                    }}
+                                    onStatsError={() => setStatsFailed(true)}
                                     onStatusChartStats={setStatusChartStats}
                                     onRegionChartStats={setRegionChartStats}
                                     externalSearchTerm={sidebarSearchTerm}

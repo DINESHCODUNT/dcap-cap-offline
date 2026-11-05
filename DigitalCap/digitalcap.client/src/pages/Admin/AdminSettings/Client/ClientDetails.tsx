@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useMemo, useCallback } from 'react';
 import { AbsReactTable, AbsSearch, Button, BUTTONS, Divider, Label, SideDialog, SideDialogManagerContext } from "customer_portal-ui-shared";
 import * as Icon from 'react-bootstrap-icons';
-import { Spinner } from 'react-bootstrap';
+import AppLoader from '../../../../Common/AppLoader';
 import { MemoryRouter } from 'react-router-dom';
 import * as clientProfileService from '../../../../service/ClientProfileService';
 import AddUser from '../Users/AddUser';
@@ -295,11 +295,7 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ id, clientId }) => {
                 {() => (
                     <>
                         {detailsLoading ? (
-                            <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '200px' }}>
-                                <Spinner animation="border" role="status" variant="primary">
-                                    <span className="visually-hidden">Loading...</span>
-                                </Spinner>
-                            </div>
+                            <AppLoader inline />
                         ) : (
                             <>
                                 {/* Client Info */}
