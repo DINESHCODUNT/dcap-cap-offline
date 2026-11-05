@@ -1,5 +1,5 @@
 import axios from 'axios';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Spinner } from "react-bootstrap";
 import * as Icon from "react-bootstrap-icons";
 import * as projectService from '../../service/ProjectService';
@@ -17,6 +17,7 @@ import RevenueList from '../Invoice/RevenueList';
 import DocumentList from '../File/DocumentList';
 import { Link } from 'react-router-dom';
 import { isElectron } from '../../utils/runtime';
+import { toFriendlyErrorMessage } from '../../utils/errorMessage';
 
 interface Project {
     name: string;
@@ -168,8 +169,12 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
     const [synchedOnlineContact, setSynchedOnlineContact] = useState<SynchedOnlineContact | null>(null);
     const [showDiscardOfflineWarning, setShowDiscardOfflineWarning] = useState(false);
     const [activities, setActivities] = useState<any[]>([]);
+    const [activitiesLoading, setActivitiesLoading] = useState<boolean>(true);
+    const [activitiesError, setActivitiesError] = useState<string | null>(null);
+    const activitiesLoadedRef = useRef<boolean>(false);
 
     useEffect(() => {
+        activitiesLoadedRef.current = false;
         loadRecentActivities();
     }, [project.id]);
 
@@ -184,6 +189,10 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
     }, []);
 
     const loadRecentActivities = async () => {
+        if (!activitiesLoadedRef.current) {
+            setActivitiesLoading(true);
+        }
+        setActivitiesError(null);
         try {
             const response = await projectService.GetRecentActivities2ByProjectId(false, project.id);
 
@@ -201,7 +210,15 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
 
             setActivities(mappedActivities);
         }
-        catch (err) {
+        catch (err: any) {
+            setActivities([]);
+            setActivitiesError(toFriendlyErrorMessage(
+                err?.response?.data?.message ?? err?.response?.data ?? err?.message,
+                "Failed to load activities. Please try again."
+            ));
+        } finally {
+            activitiesLoadedRef.current = true;
+            setActivitiesLoading(false);
         }
     };
 
@@ -605,7 +622,7 @@ const ProjectLanding: React.FC<ProjectLandingProps> = ({ project, onBack, onEdit
                             {
                                 content: (
                                     <>
-                                        <ActivityLog projectId={project.id} source={"projectLanding"} activities={activities} />
+                                        <ActivityLog projectId={project.id} source={"projectLanding"} activities={activities} isLoading={activitiesLoading} errorMessage={activitiesError} />
                                         {!isElectron() && (
                                             <div className="text-center mt-3">
                                                 <Link className="text-primary text-decoration-none fw-medium" to="/app/Activity/ActivityLog" state={{ projectId: project.id, projectName: project.name }}>

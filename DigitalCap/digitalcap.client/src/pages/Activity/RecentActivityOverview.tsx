@@ -1,31 +1,19 @@
-import React, { useContext, useState, useEffect, useMemo } from 'react';
-import { SideDialogManagerContext, BreadcrumbBar, Button, BUTTONS } from "customer_portal-ui-shared";
-import CreateProject from '../Project/Createproject';
-import _uniqueId from "lodash/uniqueId";
+import React, { useState, useEffect, useRef } from 'react';
+import { BreadcrumbBar, Button, BUTTONS } from "customer_portal-ui-shared";
 import { getRelativeTime } from '../../utils/dateTime';
 import ActivityLog from '../Activity/ActivityLog';
-import ProjectLanding from '../Project/ProjectLanding';
 import * as projectService from '../../service/ProjectService';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { toFriendlyErrorMessage } from '../../utils/errorMessage';
 
 const RecentActivityOverview: React.FC = () => {
     const navigate = useNavigate();
-    const sideDialog = useContext(SideDialogManagerContext) as any;
-
-    const [selectedProject, setSelectedProject] = useState<{
-        name: string;
-        imo: string;
-        date: string;
-        pct: number;
-        status: string;
-        id?: number;
-    } | null>(null);
 
     const [activities, setActivities] = useState<any[]>([]);
-    const memoizedActivities = useMemo(() => activities, [activities]);
-    const permissions: string[] = [];
-    const hasGlobalPermission = (perm: string) =>
-        permissions.includes(perm);
+    const [loading, setLoading] = useState<boolean>(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const requestIdRef = useRef<number>(0);
+
     const location = useLocation();
     const [filteredProjectId, setFilteredProjectId] = useState<number>(0);
     const [filteredProjectName, setFilteredProjectName] = useState<string>("");
@@ -39,6 +27,9 @@ const RecentActivityOverview: React.FC = () => {
     }, [location.state]);
 
     const loadRecentActivities = async (projectId: number = 0) => {
+        const currentRequestId = ++requestIdRef.current;
+        setLoading(true);
+        setLoadError(null);
         try {
             let response;
             if (projectId > 0) {
@@ -46,6 +37,8 @@ const RecentActivityOverview: React.FC = () => {
             } else {
                 response = await projectService.GetRecentActivities2(false, 0);
             }
+
+            if (requestIdRef.current !== currentRequestId) return;
 
             const mappedActivities = (response.data || []).map((item: any) => ({
                 id: item.id,
@@ -60,17 +53,18 @@ const RecentActivityOverview: React.FC = () => {
             }));
 
             setActivities(mappedActivities);
-        } catch (err) {
+        } catch (err: any) {
+            if (requestIdRef.current !== currentRequestId) return;
+            setActivities([]);
+            setLoadError(toFriendlyErrorMessage(
+                err?.response?.data?.message ?? err?.response?.data ?? err?.message,
+                "Failed to load activities. Please try again."
+            ));
+        } finally {
+            if (requestIdRef.current === currentRequestId) {
+                setLoading(false);
+            }
         }
-    };
-
-    const handleEditProject = (projectId: number) => {
-        const editId = _uniqueId("sideDialog_");
-
-        sideDialog.addDialog({
-            id: editId,
-            component: <CreateProject id={editId} projectId={projectId} onSuccess={() => loadRecentActivities(filteredProjectId)} />
-        });
     };
 
     const handleArrowClick = (activity: any) => {
@@ -112,25 +106,15 @@ const RecentActivityOverview: React.FC = () => {
                     <div className="col-md-12">
                         <div className="grid-container">
                             <div className="grid-content-body">
-                                {selectedProject ? (
-                                    <ProjectLanding
-                                        project={selectedProject}
-                                        onBack={() => setSelectedProject(null)}
-                                        onEdit={handleEditProject}
-                                        onProjectsChanged={() => {
-                                            loadRecentActivities();
-                                        }}
-                                        globalPermission={hasGlobalPermission}
+                                <div className="card-area">
+                                    <ActivityLog
+                                        source="recentActivity"
+                                        activities={activities}
+                                        isLoading={loading}
+                                        errorMessage={loadError}
+                                        onArrowClick={handleArrowClick}
                                     />
-                                ) : (
-                                    <div className="card-area">
-                                        <ActivityLog
-                                            source="recentActivity"
-                                            activities={memoizedActivities}
-                                            onArrowClick={handleArrowClick}
-                                        />
-                                    </div>
-                                )}
+                                </div>
                             </div>
                         </div>
                     </div>
