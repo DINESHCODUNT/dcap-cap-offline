@@ -1,11 +1,13 @@
 import React, { useEffect, useRef } from "react";
 import ABSLogo from '../../assets/images/ABSLogo.svg';
-import { Label, Input, DatePickerInput, Divider, AbsSelect } from "customer_portal-ui-shared";
+import { Label, Input, Divider, AbsSelect } from "customer_portal-ui-shared";
+import NotApplicableDateInput from "../../Common/NotApplicableDateInput";
 import RichTextEditor from "../../Common/RichTextEditor";
 import AppLoader from '../../Common/AppLoader';
 import { updateReport } from "../../service/SurveyReportService";
 import { formatClassNotationsForDisplay, formatClassNotationsForSave } from "../../utils/classNotationFormatter";
 import { parseVisitDate, formatVisitDateForSave, isEmptyDate } from "../../utils/dateTime";
+import { NOT_APPLICABLE_DATE, isNotApplicableDate } from "../../utils/notApplicableDate";
 import { usePopup } from "../../Common/PopupProvider";
 
 type FormData = {
@@ -43,8 +45,8 @@ type FormData = {
     propulsion_manufacturer: string;
     gear_manufacturer: string;
     imoNumber: string;
-    firstVisitDate: Date | "";
-    lastVisitDate: Date | "";
+    firstVisitDate: Date | "" | null;
+    lastVisitDate: Date | "" | null;
 };
 
 interface Props {
@@ -208,8 +210,12 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, readOnl
             propulsion_manufacturer: vessel.propulsionManufacturer || "",
             gear_manufacturer: vessel.gearManufacturer || "",
             imoNumber: vessel.imoNumber || "",
-            firstVisitDate: parseVisitDate(vessel.firstVisitDate) || "",
-            lastVisitDate: parseVisitDate(vessel.lastVisitDate) || "",
+            firstVisitDate: isNotApplicableDate(vessel.firstVisitDate)
+                ? NOT_APPLICABLE_DATE
+                : (parseVisitDate(vessel.firstVisitDate) || ""),
+            lastVisitDate: isNotApplicableDate(vessel.lastVisitDate)
+                ? NOT_APPLICABLE_DATE
+                : (parseVisitDate(vessel.lastVisitDate) || ""),
         });
         if (!isEmptyDate(vessel.portDate)) {
             setportDate(new Date(vessel.portDate));
@@ -224,6 +230,11 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, readOnl
         const text = typeof editor.getText === "function" ? editor.getText().trim() : "";
         if (!text) return "";
         return typeof editor.getHTML === "function" ? editor.getHTML() : "";
+    };
+
+    const visitDateValue = (d: any): Date | null => {
+        if (!d || !(d instanceof Date) || isNaN(d.getTime()) || isNotApplicableDate(d)) return null;
+        return d;
     };
 
     const handleFieldUpdate = async (
@@ -243,6 +254,8 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, readOnl
             saveValue = formatClassNotationsForSave(value);
         } else if (value instanceof Date) {
             saveValue = formatVisitDateForSave(value);
+        } else if ((field === "firstVisitDate" || field === "lastVisitDate") && !value) {
+            saveValue = null;
         }
 
         onVesselFieldChange?.(field, saveValue);
@@ -318,11 +331,18 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, readOnl
                                         }}
                                         disabled={isLocked}
                                     />
-                                    <DatePickerInput
+                                    <NotApplicableDateInput
                                         onChange={(value: any) => {
+                                            const firstVal = visitDateValue(formData.firstVisitDate);
+                                            const lastVal = visitDateValue(value);
+                                            if (firstVal && lastVal && firstVal > lastVal) {
+                                                handleFieldUpdate("lastVisitDate", null);
+                                                return;
+                                            }
                                             handleFieldUpdate("lastVisitDate", value);
                                         }}
-                                        value={formData.lastVisitDate}
+                                        value={formData.lastVisitDate instanceof Date ? formData.lastVisitDate : null}
+                                        minDate={visitDateValue(formData.firstVisitDate) ?? undefined}
                                         disabled={isLocked}
                                     />
                                 </div>
@@ -375,11 +395,17 @@ const VesselMainData: React.FC<Props> = ({ reportData, isOfflineProject, readOnl
 
                                 <span className="certify">as the vessel lay afloat on drydock and underway on  </span>  <span className="inline-group certify">
                                     <span className="inline-control inline-control--date">
-                                        <DatePickerInput
+                                        <NotApplicableDateInput
                                             onChange={(value: any) => {
+                                                const firstVal = visitDateValue(value);
+                                                const lastVal = visitDateValue(formData.lastVisitDate);
+                                                if (firstVal && lastVal && firstVal > lastVal) {
+                                                    handleFieldUpdate("lastVisitDate", null);
+                                                }
                                                 handleFieldUpdate("firstVisitDate", value);
                                             }}
-                                            value={formData.firstVisitDate}
+                                            value={formData.firstVisitDate instanceof Date ? formData.firstVisitDate : null}
+                                            maxDate={visitDateValue(formData.lastVisitDate) ?? undefined}
                                             disabled={isLocked}
                                         />
                                     </span>

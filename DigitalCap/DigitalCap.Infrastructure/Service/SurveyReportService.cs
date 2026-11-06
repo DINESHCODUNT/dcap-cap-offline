@@ -1,4 +1,5 @@
 using DigitalCap.Core.Enumerations;
+using DigitalCap.Core.Helpers;
 using DigitalCap.Core.Helpers.Extensions;
 using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Interfaces.Service;
@@ -3680,6 +3681,28 @@ namespace DigitalCap.Infrastructure.Service
         {
             try
             {
+                // Survey status (33-39) and statutory certificate (40-54, 74) dates can be entered as "N/A"
+                if ((reportPart >= 33 && reportPart <= 54) || reportPart == 74)
+                {
+                    if (string.IsNullOrWhiteSpace(value))
+                    {
+                        value = null;
+                    }
+                    else
+                    {
+                        value = NotApplicableDate.ToStorable(value);
+                    }
+
+                    if (string.IsNullOrWhiteSpace(surveyDate))
+                    {
+                        surveyDate = null;
+                    }
+                    else
+                    {
+                        surveyDate = NotApplicableDate.ToStorable(surveyDate);
+                    }
+                }
+
                 Report report = new Report();
                 if (reportPart >= 1 && reportPart <= 3)
                 {
