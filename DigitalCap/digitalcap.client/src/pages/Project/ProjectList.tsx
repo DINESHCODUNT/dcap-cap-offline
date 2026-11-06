@@ -12,7 +12,7 @@ import EmptyProjectView from './EmptyProjectView';
 import SyncConfirmModal from './SyncConfirmModal';
 import { isElectron, isAppOnline } from '../../utils/runtime';
 import { measureConnectionSpeed, isNetworkConnectionError } from '../../utils/connectionSpeed';
-import { isEmptyDate } from '../../utils/dateTime';
+import { isEmptyDate, formatDisplayDateTime } from '../../utils/dateTime';
 import TransferProgressBar from '../../Common/TransferProgressBar';
 import { toFriendlyErrorMessage } from '../../utils/errorMessage';
 
@@ -262,8 +262,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
                 let formattedCommentDate = '';
                 if (project.commentLastModifiedDate) {
-                    const parsedCMD = moment(project.commentLastModifiedDate);
-                    formattedCommentDate = parsedCMD.isValid() ? parsedCMD.format('DD-MMM h:mmA') : '';
+                    formattedCommentDate = formatDisplayDateTime(project.commentLastModifiedDate);
                 }
 
                 return {

@@ -1,3 +1,22 @@
+import moment from "moment";
+
+export const DISPLAY_DATE_FORMAT = "DD-MMM-YYYY";
+export const DISPLAY_DATETIME_FORMAT = "DD-MMM-YYYY hh:mm A";
+
+export function formatDisplayDate(value: string | Date | null | undefined): string {
+    if (!value) return "";
+    const m = moment(value);
+    if (!m.isValid()) return "";
+    return m.locale("en").format(DISPLAY_DATE_FORMAT);
+}
+
+export function formatDisplayDateTime(value: string | Date | null | undefined): string {
+    if (!value) return "";
+    const m = moment(value);
+    if (!m.isValid()) return "";
+    return m.locale("en").format(DISPLAY_DATETIME_FORMAT);
+}
+
 export function parseApiDateTime(value: string | Date | null | undefined): Date {
     if (!value) return new Date(NaN);
     if (value instanceof Date) return value;

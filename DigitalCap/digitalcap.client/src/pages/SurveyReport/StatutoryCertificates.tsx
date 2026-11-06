@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
+import moment from "moment";
 import ABSLogo from '../../assets/images/ABSLogo.svg';
 import { Label, Input, AbsSelect } from "customer_portal-ui-shared";
 import NotApplicableDateInput from "../../Common/NotApplicableDateInput";
 import { updateReport } from "../../service/SurveyReportService";
-import { parseVisitDate, formatVisitDateForSave, isEmptyDate } from "../../utils/dateTime";
+import { parseVisitDate, formatVisitDateForSave, isEmptyDate, DISPLAY_DATE_FORMAT } from "../../utils/dateTime";
 import { NOT_APPLICABLE_DATE, isNotApplicableDate } from "../../utils/notApplicableDate";
 import { usePopup } from "../../Common/PopupProvider";
 
@@ -274,11 +275,7 @@ const StatutoryCertificates: React.FC<{
     };
 
     const formatDate = (date: Date): string => {
-        return date.toLocaleDateString('en-GB', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-        }).replace(/ /g, '-');
+        return moment(date).locale("en").format(DISPLAY_DATE_FORMAT);
     };
     const handleDateChange = async (
         id: string,
