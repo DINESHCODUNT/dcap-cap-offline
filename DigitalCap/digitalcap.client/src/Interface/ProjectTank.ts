@@ -14,11 +14,20 @@ export interface SelectOption {
 }
 
 export interface ManageTankResponse {
+    editable?: boolean;
+    Editable?: boolean;
     tanks: TankDto[];
     imoNumberOptions: SelectOption[];
     tankTypeOptions: SelectOption[];
     tankNameOptions: SelectOption[];
     tankStatusOptions: SelectOption[];
+}
+
+export interface MasterTankResponse {
+    data?: TankDto[];
+    Data?: TankDto[];
+    editable?: boolean;
+    Editable?: boolean;
 }
 export interface TankDto {
     tankId?: number;
