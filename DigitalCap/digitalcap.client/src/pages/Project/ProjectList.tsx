@@ -10,11 +10,12 @@ import { resultMessage } from '../../Common/UtilityMessage';
 import moment from 'moment';
 import EmptyProjectView from './EmptyProjectView';
 import SyncConfirmModal from './SyncConfirmModal';
-import { isElectron, isAppOnline } from '../../utils/runtime';
+import { isElectron, isAppOnline, getOfflineUser } from '../../utils/runtime';
 import { measureConnectionSpeed, isNetworkConnectionError } from '../../utils/connectionSpeed';
 import { isEmptyDate, formatDisplayDateTime } from '../../utils/dateTime';
 import TransferProgressBar from '../../Common/TransferProgressBar';
 import { toFriendlyErrorMessage } from '../../utils/errorMessage';
+import AppLoader from '../../Common/AppLoader';
 
 export interface SidebarProjectRow {
     name: string;
@@ -108,6 +109,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const [loading, setLoading] = useState(false);
     const [loadSuccess, setLoadSuccess] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [isCheckingOnlineRedirect, setIsCheckingOnlineRedirect] = useState(false);
+    const redirectAttemptedRef = useRef(false);
     const [downloadingProjectName, setDownloadingProjectName] = useState<string | null>(null);
     const [isDownloadInBackground, setIsDownloadInBackground] = useState<boolean>(false);
     const [downloadAbortController, setDownloadAbortController] = useState<AbortController | null>(null);
@@ -968,21 +971,65 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
     useEffect(() => {
         let isMounted = true;
-        if (!loading && loadSuccess && !loadError && isDesktop && allProjects.length === 0) {
-            isAppOnline().then(async (online) => {
-                if (!isMounted || !online) return;
-                try {
-                    const res: any = await projectService.getOnlineUrl();
-                    if (isMounted && res?.data?.url) {
-                        window.location.href = res.data.url;
-                    }
-                } catch {
-                    // If fetching online URL fails, do not redirect
-                }
-            });
+        let didFinish = false;
+
+        if (allProjects.length > 0) {
+            redirectAttemptedRef.current = false;
+            setIsCheckingOnlineRedirect(false);
+            return;
         }
+
+        if (!loading && loadSuccess && !loadError && isDesktop && allProjects.length === 0) {
+            if (redirectAttemptedRef.current) return;
+            setIsCheckingOnlineRedirect(true);
+
+            (async () => {
+                try {
+                    const online = await isAppOnline();
+                    if (!isMounted) return;
+                    if (!online) {
+                        didFinish = true;
+                        redirectAttemptedRef.current = true;
+                        setIsCheckingOnlineRedirect(false);
+                        return;
+                    }
+
+                    const [res, offlineUser] = await Promise.all([
+                        projectService.getOnlineUrl().catch(() => null),
+                        getOfflineUser().catch(() => null)
+                    ]);
+
+                    if (!isMounted) return;
+
+                    const rawUrl = res?.data?.url;
+                    if (!rawUrl) {
+                        didFinish = true;
+                        redirectAttemptedRef.current = true;
+                        setIsCheckingOnlineRedirect(false);
+                        return;
+                    }
+
+                    didFinish = true;
+                    redirectAttemptedRef.current = true;
+                    const base = rawUrl.endsWith('/') ? rawUrl : `${rawUrl}/`;
+                    const email = offlineUser?.emailId?.trim();
+                    const query = email ? `?loginHint=${encodeURIComponent(email)}` : '';
+                    window.location.href = `${base}internal${query}`;
+                } catch {
+                    if (isMounted) {
+                        didFinish = true;
+                        redirectAttemptedRef.current = true;
+                        setIsCheckingOnlineRedirect(false);
+                    }
+                }
+            })();
+        }
+
         return () => {
             isMounted = false;
+            if (!didFinish) {
+                setIsCheckingOnlineRedirect(false);
+            }
         };
     }, [loading, loadSuccess, loadError, isDesktop, allProjects.length]);
 
@@ -1100,7 +1147,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     <div className="alert alert-danger mt-3" role="alert">
                         {loadError}
                     </div>
-                ) : !loading && allProjects.length === 0 ? (
+                ) : (isCheckingOnlineRedirect || (loading && allProjects.length === 0)) ? (
+                    <AppLoader inline />
+                ) : allProjects.length === 0 ? (
                     <EmptyProjectView />
                 ) : (
                     <>
