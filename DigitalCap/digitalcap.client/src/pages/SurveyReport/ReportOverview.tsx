@@ -205,6 +205,16 @@ const ReportOverview: React.FC = () => {
         return () => { window.removeEventListener("scroll", update); window.removeEventListener("resize", update); };
     }, [validateVisible, allValidateVisible]);
 
+    const hideWarningPanel = () => {
+        if (warningTimeoutRef.current) {
+            clearTimeout(warningTimeoutRef.current);
+            warningTimeoutRef.current = null;
+        }
+        setValidateVisible(false);
+        setAllValidateVisible(false);
+        setIsWarningHovered(false);
+    };
+
     const [modal, setModal] = useState<{
         message?: string;
         isLoading?: boolean;
@@ -1342,7 +1352,7 @@ useEffect(() => {
                 >
 
                     <div className="d-flex flex-wrap gap-2 justify-content-md-end mt-2 mt-md-0">
-                        <Dropdown>
+                        <Dropdown onToggle={(isOpen) => { if (isOpen) hideWarningPanel(); }}>
                             <Dropdown.Toggle as={CustomDropdownToggle} id="dropdown-validate" disabled={isButtonloading || isOfflineProject || loading}>
                                 Validate(s)
                             </Dropdown.Toggle>
@@ -1357,7 +1367,7 @@ useEffect(() => {
                         </Dropdown>
 
                         {showExportMenu && (
-                            <Dropdown>
+                            <Dropdown onToggle={(isOpen) => { if (isOpen) hideWarningPanel(); }}>
                                 <Dropdown.Toggle as={CustomDropdownToggle} id="dropdown-export" disabled={isButtonloading || isOfflineProject || loading}>
                                     Export(s)
                                 </Dropdown.Toggle>
@@ -1414,10 +1424,7 @@ useEffect(() => {
                         <h5 className="warning-title d-flex justify-content-between align-items-center">
                             {allValidateVisible ? "Validate All — Warnings" : "Validate — Warnings"}
                             <button
-                                onClick={() => {
-                                    setValidateVisible(false);
-                                    setAllValidateVisible(false);
-                                }}
+                                onClick={hideWarningPanel}
                                 aria-label="Close"
                                 className="warning-close-btn"
                             >
