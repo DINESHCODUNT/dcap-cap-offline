@@ -141,7 +141,6 @@ const ReportContent: React.FC<ReportContentProps> = ({
         if (!reportData) return [];
 
         const appendTankSections = (sections: any[]) => {
-            if (isElectron()) return sections;
             const tankSections = toArray(
                 reportData?.tankReportView?.sections ??
                 reportData?.template?.tankReportView?.sections
