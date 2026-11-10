@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { Button, AbsReactTable, BUTTONS, Divider, Input, AbsSelect, AbsSearch, RadioInput, Label } from "customer_portal-ui-shared";
 import * as Icon from 'react-bootstrap-icons';
 import ManageTankTemplateList from './ManageTankTemplateList';
-import { Modal, Offcanvas } from 'react-bootstrap';
+import TankStatusChangeModal, { type SelectedTankItem, toSelectedTanks } from './TankStatusChangeModal';
+import { Offcanvas } from 'react-bootstrap';
 import * as tankService from '../../../../service/TankService';
 import * as gradingService from '../../../../service/GradingService';
 import { usePopup } from '../../../../Common/PopupProvider';
@@ -22,6 +23,7 @@ interface ManageTankRow {
     tankName: string;
     subheader: string;
     imo?: string;
+    isDownload?: boolean;
 }
 
 type TankFormState = {
@@ -49,15 +51,14 @@ const ManageTankList: React.FC = () => {
     const [showMobileSidebar, setShowMobileSidebar] = useState(false);
     const [val, updateVal] = React.useState<string>("");
     const [searchApplied, updateSearchApplied] = React.useState<string | null>(null);
+    const [selectedTanks, setSelectedTanks] = useState<SelectedTankItem[]>([]);
+    const [tableKey, setTableKey] = useState<number>(0);
     const [open, setOpen] = React.useState<boolean>();
-    const [statusModel, setStatusModel] = React.useState<boolean>();
+    const [statusModel, setStatusModel] = React.useState<boolean>(false);
     const [tankList, setTankList] = useState<ManageTankRow[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
     const [TankFilter, setTankFilter] = useState<ManageTankRow[]>([]);
     const [dataCount, setDataCount] = useState(0);
-    const [selectedIds, setSelectedIds] = useState<string[]>([]);
-    const [bulkStatus, setBulkStatus] = useState<boolean>(true);
-    const [selectedTankNames, setSelectedTankNames] = useState<string[]>([]);
     const [hierarchicalFilters, setHierarchicalFilters] = useState<{
         vesselType?: string;
         tankName?: string;
@@ -304,29 +305,10 @@ const ManageTankList: React.FC = () => {
         }
     };
 
-    const handleBulkStatusUpdate = async () => {
-        try {
-            const response = await tankService.updateTankStatus({
-                data: selectedIds,
-                status: bulkStatus,
-                IMO: ""
-            });
-            if (response && response.data) {
-                setStatusModel(false);
-
-                setSelectedIds([]);
-                setSelectedTankNames([]);
-                setBulkStatus(true);
-
-                await loadTankList();
-                popup.success({
-                    title: "Update Tank Status",
-                    message: "Tank status updated successfully"
-                });
-            }
-        } catch (e: any) {
-            popup.error({ message: e?.message || "Failed to update tank status." });
-        }
+    const handleStatusChangeDone = async () => {
+        setSelectedTanks([]);
+        setTableKey(k => k + 1);
+        await loadTankList();
     };
 
     const resetForm = () => {
@@ -374,6 +356,7 @@ const ManageTankList: React.FC = () => {
             const mappedData: ManageTankRow[] = rawData.map(item => {
                 const rawStatus = item.status || "N/A";
                 const isActive = rawStatus === true || rawStatus === 1 || String(rawStatus).toLowerCase() === 'active' || String(rawStatus).toLowerCase() === 'true';
+                const isDownload = Boolean(item.isDownload ?? item.IsDownload);
 
                 return {
                     tankId: item.tankId ?? item.TankId ?? "",
@@ -385,6 +368,7 @@ const ManageTankList: React.FC = () => {
                     tankName: item.tankName ?? item.TankName ?? "",
                     subheader: item.subheader ?? item.Subheader ?? item.subHeader ?? "",
                     imo: String(item.imo ?? item.IMO ?? item.imoNumber ?? item.IMONumber ?? ""),
+                    isDownload,
                 };
             });
 
@@ -823,23 +807,7 @@ const ManageTankList: React.FC = () => {
     }, [hierarchicalFilters]);
 
     const handleRowSelected = useCallback((rows: ManageTankRow[]) => {
-        if (!rows || !Array.isArray(rows)) return;
-        const ids = rows.map((row: any) => row.tankId || row.id || "").filter((id: string) => id !== "");
-        const names = rows.map((row: any) => row.tankName || row.tank_name || "").filter((name: string) => name !== "");
-
-        setSelectedIds((prevIds: string[]) => {
-            const prevIdsStr = prevIds.slice().sort().join(",");
-            const newIdsStr = ids.slice().sort().join(",");
-            if (prevIdsStr === newIdsStr) return prevIds;
-            return ids;
-        });
-
-        setSelectedTankNames((prevNames: string[]) => {
-            const prevNamesStr = prevNames.slice().sort().join(",");
-            const newNamesStr = names.slice().sort().join(",");
-            if (prevNamesStr === newNamesStr) return prevNames;
-            return names;
-        });
+        setSelectedTanks(toSelectedTanks(rows));
     }, []);
 
     return (
@@ -905,16 +873,19 @@ const ManageTankList: React.FC = () => {
                                                 setOpen(true);
                                             }}>Add New Tank</Button>
                                         </div>
-                                        <div>
-                                            <Button variant={BUTTONS.PRIMARY} disabled={selectedIds.length === 0}
-                                                onClick={() => setStatusModel(true)}>Change Status</Button>
-                                        </div>
+                                        {selectedTanks.length > 0 && (
+                                            <div>
+                                                <Button variant={BUTTONS.PRIMARY}
+                                                    onClick={() => setStatusModel(true)}>Change Status</Button>
+                                            </div>
+                                        )}
                                     </>
                                 )}
                             </div>
                         </div>
                         <div className="custom-react-table">
                             <AbsReactTable
+                                key={`manage-tanks-table-${tableKey}-${canEdit ? 'edit' : 'view'}`}
                                 loading={loading}
                                 columns={columns}
                                 data={tankList}
@@ -1072,46 +1043,13 @@ const ManageTankList: React.FC = () => {
                     </div>
                 </Offcanvas.Body>
             </Offcanvas>
-            <Modal show={statusModel} dialogClassName="app-popup" centered onHide={() => setStatusModel(false)} animation={false} backdrop="static">
-                <Modal.Header closeButton>
-                    <Modal.Title>Confirm</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <div className="row">
-                        <div className="col-md-12">
-                            <div className="d-flex justify-content-center align-items-center flex-column">
-                                <p className='_500 tx-14 text-center'>
-                                    {selectedTankNames.length === 1
-                                        ? `Are you sure you want to change '${selectedTankNames[0]}' status?`
-                                        : `Are you sure you want to change status of ${selectedTankNames.length} tanks?`}
-                                </p>
-
-                                <div className='d-flex justify-content-center flex-row gap-3'>
-                                    <RadioInput
-                                        label="Active"
-                                        checked={bulkStatus === true}
-                                        onChange={() => setBulkStatus(true)}
-                                    />
-
-                                    <RadioInput
-                                        label="Inactive"
-                                        checked={bulkStatus === false}
-                                        onChange={() => setBulkStatus(false)}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </Modal.Body>
-                <Modal.Footer className='gap-2'>
-                    <Button variant={BUTTONS.SECONDARY} onClick={() => setStatusModel(false)}>
-                        No, Cancel
-                    </Button>
-                    <Button variant={BUTTONS.PRIMARY} onClick={handleBulkStatusUpdate}>
-                        Yes, Proceed
-                    </Button>
-                </Modal.Footer>
-            </Modal>
+            <TankStatusChangeModal
+                show={statusModel}
+                onHide={() => setStatusModel(false)}
+                selectedTanks={selectedTanks}
+                imo=""
+                onDone={handleStatusChangeDone}
+            />
         </>
     );
 };
