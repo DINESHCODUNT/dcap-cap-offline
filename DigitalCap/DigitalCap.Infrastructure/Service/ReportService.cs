@@ -1,4 +1,5 @@
 using DigitalCap.Core.Constants;
+using DigitalCap.Core.Helpers;
 using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Interfaces.Service;
 using DigitalCap.Core.Models;
@@ -10,6 +11,7 @@ using Microsoft.AspNetCore.Identity;
 using NPOI.HSSF.UserModel;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -343,8 +345,8 @@ namespace DigitalCap.Infrastructure.Service
                 ("Year Built", p => p.YearBuilt),
                 ("Consideration (I/R)", p => p.CapType.GetDescription()),
                 ("Type of Ship", p => p.ShipType.ToString()),
-                ("Agreement Date", p => p.AgreementDate?.ToShortDateString()),
-                ("Agreement Signed Date", p => p.AgreementSignedDate?.ToShortDateString()),
+                ("Agreement Date", p => p.AgreementDate?.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture)),
+                ("Agreement Signed Date", p => p.AgreementSignedDate?.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture)),
                 ("Agreement under ABS (AS) or ABS Group (ABSG)", p => p.AgreementOwner),
                 ("Proposal Number", p => p.AgreementNumber),
                 ("Remark", p => p.ProjectComments)
@@ -374,29 +376,29 @@ namespace DigitalCap.Infrastructure.Service
                 ("Type of Ship", p => p.ShipType.ToString()),
                 ("Builder", p => p.Builder),
                 ("Hull No.", p => p.HullNumber),
-                ("Agreement Date", p => p.AgreementDate?.ToShortDateString()),
-                ("Agreement Signed Date", p => p.AgreementSignedDate?.ToShortDateString()),
+                ("Agreement Date", p => p.AgreementDate?.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture)),
+                ("Agreement Signed Date", p => p.AgreementSignedDate?.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture)),
                 ("Proposal Number", p => p.AgreementNumber),
-                ("Request Record Review Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.RecordReviewRequested, x => x.StatusDate?.Date.ToShortDateString())),
-                ("Record Review Received Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.RecordReviewReceived, x => x.StatusDate?.Date.ToShortDateString())),
+                ("Request Record Review Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.RecordReviewRequested, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
+                ("Record Review Received Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.RecordReviewReceived, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
                 ("Record Review Status", p => taskCache.GetTaskValue(p.ID, (int)TaskId.RecordReviewReceived, x => x.Status)),
-                ("SED Form Sent", p => taskCache.GetTaskValue(p.ID, (int)TaskId.RequestSenttoSED, x => x.StatusDate?.Date.ToShortDateString())),
-                ("PFA Rec'd From SED", p => taskCache.GetTaskValue(p.ID, (int)TaskId.PFAReceivedfromSED, x => x.StatusDate?.Date.ToShortDateString())),
-                ("PFA Sent to CAP L. Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.PFASenttoCAPLead, x => x.StatusDate?.Date.ToShortDateString())),
-                ("Gauge Rec'd from CAP L. Date (OR UTM Report)", p => taskCache.GetTaskValue(p.ID, (int)TaskId.GaugingsReceivedfromCAPLead, x => x.StatusDate?.Date.ToShortDateString())),
-                ("Structural Eval Rec'd Date (OR HSA)", p => taskCache.GetTaskValue(p.ID, (int)TaskId.StructuralEvaluationAndEvalGradeReceived, x => x.StatusDate?.Date.ToShortDateString())),
+                ("SED Form Sent", p => taskCache.GetTaskValue(p.ID, (int)TaskId.RequestSenttoSED, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
+                ("PFA Rec'd From SED", p => taskCache.GetTaskValue(p.ID, (int)TaskId.PFAReceivedfromSED, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
+                ("PFA Sent to CAP L. Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.PFASenttoCAPLead, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
+                ("Gauge Rec'd from CAP L. Date (OR UTM Report)", p => taskCache.GetTaskValue(p.ID, (int)TaskId.GaugingsReceivedfromCAPLead, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
+                ("Structural Eval Rec'd Date (OR HSA)", p => taskCache.GetTaskValue(p.ID, (int)TaskId.StructuralEvaluationAndEvalGradeReceived, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
                 ("Eval Grade ", p => p.StructuralGrade?.GetDescription()),
                 ("Fatigue Grade", p => p.FatigueGrade?.GetDescription()),
                 ("Renewal Grade", p => p.RenewalGrade?.GetDescription()),
                 ("Material Grade", p => p.MaterialGrade?.GetDescription()),
                 ("Gauging", p => p.GaugingGrade?.GetDescription()),
                 ("Hull Girder Strength", p => p.HullGirderStrength?.GetDescription()),
-                ("Planned Drydock Time", p => p.DrydockStart?.ToShortDateString()),
+                ("Planned Drydock Time", p => p.DrydockStart?.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture)),
                 ("CAP Lead", p => p.LeadSurveyor),
-                ("Lead Surveyor Assigned Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.FindAvailableSurveyor, x => x.StatusDate?.Date.ToShortDateString())),
+                ("Lead Surveyor Assigned Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.FindAvailableSurveyor, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
                 ("CAP Team", p => p.SecondSurveyor),
-                ("First Visit Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SurveyStarted, x => x.StatusDate?.Date.ToShortDateString())),
-                ("Last Visit Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SurveyCompleted, x => x.StatusDate?.Date.ToShortDateString())),
+                ("First Visit Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SurveyStarted, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
+                ("Last Visit Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SurveyCompleted, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
                 ("Survey Time Period", p =>
                 {
                     var surveyStartedDaysWorked = taskCache.GetTaskValue(p.ID, (int)TaskId.SurveyStarted, x => x.DaysWorked);
@@ -407,12 +409,12 @@ namespace DigitalCap.Infrastructure.Service
 
                     return Math.Max(surveyStartedDaysWorked ?? int.MinValue, surveyCompletedDaysWorked ?? int.MinValue);
                 }),
-                ("10 Days Past Last Visit", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SurveyCompleted, x => x.StatusDate?.Date.ToShortDateString())),
+                ("10 Days Past Last Visit", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SurveyCompleted, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
                 ("Survey Days", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SurveyReceived, x => x.SurveyDays?.ToString())),
                 ("Survey Status ", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SurveyStarted, x => x.Status)),
                 ("Drydock Location", p => p.DrydockLocationName),
-                ("Report Date", p => p.ClassReportDate?.ToShortDateString()),
-                ("Report Rec'd Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.ReportReceivedbyCAPHQ, x => x.StatusDate?.Date.ToShortDateString())),
+                ("Report Date", p => p.ClassReportDate?.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture)),
+                ("Report Rec'd Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.ReportReceivedbyCAPHQ, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
                 ("Report Turnaround", p =>
                 {
                     var reportCommencedDaysWorked = taskCache.GetTaskValue(p.ID, (int)TaskId.ReportCommencedbySurveyor, x => x.DaysWorked);
@@ -423,27 +425,27 @@ namespace DigitalCap.Infrastructure.Service
 
                     return Math.Max(reportCommencedDaysWorked ?? int.MinValue, reportReceivedDaysWorked ?? int.MinValue);
                 }),
-                ("Sent to Chief Surveyor/ CAPCOM", p => taskCache.GetTaskValue(p.ID, (int)TaskId.DraftReportSenttoCAPCOM, x => x.StatusDate?.Date.ToShortDateString())),
-                ("Cert. Date", p => p.CAPCertificateIssuanceDate?.ToShortDateString()),
+                ("Sent to Chief Surveyor/ CAPCOM", p => taskCache.GetTaskValue(p.ID, (int)TaskId.DraftReportSenttoCAPCOM, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
+                ("Cert. Date", p => p.CAPCertificateIssuanceDate?.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture)),
                 ("Certificate Grade", p => p.FinalGrade?.GetDescription()),
-                ("Grade Received Date from CAPCOM", p => taskCache.GetTaskValue(p.ID, (int)TaskId.CAPHQFinalizingReport, x => x.StatusDate?.Date.ToShortDateString())),
-                ("Final Consolidated Report Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.ConsolidatedReportReadyforDelivery, x => x.StatusDate?.Date.ToShortDateString())),
-                ("Cost Increase Request (X)", p => taskCache.GetTaskValue(p.ID, (int)TaskId.FirstCostIncreaseNoticeSent, x => x.StatusDate?.Date.ToShortDateString())),
-                ("Invoice 1 Date Issued", p => taskCache.GetTaskValue(p.ID, (int)TaskId.FirstInvoiceRequested, x => x.StatusDate?.Date.ToShortDateString())),
+                ("Grade Received Date from CAPCOM", p => taskCache.GetTaskValue(p.ID, (int)TaskId.CAPHQFinalizingReport, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
+                ("Final Consolidated Report Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.ConsolidatedReportReadyforDelivery, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
+                ("Cost Increase Request (X)", p => taskCache.GetTaskValue(p.ID, (int)TaskId.FirstCostIncreaseNoticeSent, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
+                ("Invoice 1 Date Issued", p => taskCache.GetTaskValue(p.ID, (int)TaskId.FirstInvoiceRequested, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
                 ("Invoice 1 Amount", p => taskCache.GetTaskValue(p.ID, (int)TaskId.FirstInvoiceRequested, x => x.Value)),
-                ("Invoice 2 Date Issued", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SecondInvoiceRequested, x => x.StatusDate?.Date.ToShortDateString())),
+                ("Invoice 2 Date Issued", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SecondInvoiceRequested, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
                 ("Invoice 2 Amount", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SecondInvoiceRequested, x => x.Value)),
-                ("Final Invoice (3rd) Issued", p => taskCache.GetTaskValue(p.ID, (int)TaskId.ThirdInvoiceRequested, x => x.StatusDate?.Date.ToShortDateString())),
+                ("Final Invoice (3rd) Issued", p => taskCache.GetTaskValue(p.ID, (int)TaskId.ThirdInvoiceRequested, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
                 ("Final Invoice (3rd) Amount", p => taskCache.GetTaskValue(p.ID, (int)TaskId.ThirdInvoiceRequested, x => x.Value)),
-                ("Record Review IC Invoice Received Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.RRReceived, x => x.StatusDate?.Date.ToShortDateString())),
+                ("Record Review IC Invoice Received Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.RRReceived, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
                 ("Record Review IC Invoice Amount", p => taskCache.GetTaskValue(p.ID, (int)TaskId.RRReceived, x => x.Value)),
-                ("SED IC Invoice 1 Received Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SED1Received, x => x.StatusDate?.Date.ToShortDateString())),
+                ("SED IC Invoice 1 Received Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SED1Received, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
                 ("SED IC Invoice 1 Amount", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SED1Received, x => x.Value)),
-                ("SED IC Invoice 2 Received Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SED2Received, x => x.StatusDate?.Date.ToShortDateString())),
+                ("SED IC Invoice 2 Received Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SED2Received, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
                 ("SED IC Invoice 2 Amount", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SED2Received, x => x.Value)),
-                ("Survey IC Invoice Received Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SurveyReceived, x => x.StatusDate?.Date.ToShortDateString())),
+                ("Survey IC Invoice Received Date", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SurveyReceived, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
                 ("Survey IC Invoice Amount", p => taskCache.GetTaskValue(p.ID, (int)TaskId.SurveyReceived, x => x.Value)),
-                ("PCF Date (Project Closeout Form)", p => taskCache.GetTaskValue(p.ID, (int)TaskId.PCFCompleted, x => x.StatusDate?.Date.ToShortDateString())),
+                ("PCF Date (Project Closeout Form)", p => taskCache.GetTaskValue(p.ID, (int)TaskId.PCFCompleted, x => x.StatusDate?.Date.ToString(DateFormats.DisplayDate, CultureInfo.InvariantCulture))),
                 ("Project Elapsed", p =>
                 {
                     if (!p.ID.HasValue)

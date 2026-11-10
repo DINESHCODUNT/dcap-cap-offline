@@ -6,6 +6,7 @@ import {
     inferFileDataTypeLoose,
     parseFileDataType,
 } from "../constants/fileDataTypes";
+import { formatDisplayDateTime } from "../utils/dateTime";
 
 /** Merge root row with nested shapes some APIs use (`file`, `projectFile`, …). */
 function mergeBlocksForFileTypeLookup(row: unknown): Record<string, unknown> {
@@ -210,7 +211,7 @@ export function normalizeProjectFile(row: unknown): {
     if (modBy || modOn) {
         const on =
             modOn != null && modOn !== ""
-                ? new Date(modOn as string).toLocaleString()
+                ? formatDisplayDateTime(modOn as string) || "N/A"
                 : "N/A";
         modifiedLine = modBy ? `${modBy} / ${on}` : String(on);
     }

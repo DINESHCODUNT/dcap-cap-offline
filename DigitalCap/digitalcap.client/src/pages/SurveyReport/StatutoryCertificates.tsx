@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
+import moment from "moment";
 import ABSLogo from '../../assets/images/ABSLogo.svg';
-import { Label, Input, DatePickerInput, AbsSelect } from "customer_portal-ui-shared";
+import { Label, Input, AbsSelect } from "customer_portal-ui-shared";
+import NotApplicableDateInput from "../../Common/NotApplicableDateInput";
 import { updateReport } from "../../service/SurveyReportService";
-import { parseVisitDate, formatVisitDateForSave, isEmptyDate } from "../../utils/dateTime";
+import { parseVisitDate, formatVisitDateForSave, isEmptyDate, DISPLAY_DATE_FORMAT } from "../../utils/dateTime";
+import { NOT_APPLICABLE_DATE, isNotApplicableDate } from "../../utils/notApplicableDate";
 import { usePopup } from "../../Common/PopupProvider";
 
 interface CertField {
@@ -151,9 +154,11 @@ const StatutoryCertificates: React.FC<{
             CERT_SECTIONS.flatMap((s) => s.fields.map((f) => [f.id, f.date]))
         )
     );
-    const parseDate = (dateStr: string) => {
+    const parseDate = (dateStr: string | any): Date | null => {
+        if (isNotApplicableDate(dateStr)) return NOT_APPLICABLE_DATE;
         if (isEmptyDate(dateStr)) return null;
-        return new Date(dateStr);
+        const d = new Date(dateStr);
+        return isNaN(d.getTime()) ? null : d;
     };
 
     useEffect(() => {
@@ -177,8 +182,16 @@ const StatutoryCertificates: React.FC<{
             setPortDate(new Date(vessel.portDate));
         }
 
-        setLastVisitDate(parseVisitDate(vessel.lastVisitDate));
-        setFirstVisitDate(parseVisitDate(vessel.firstVisitDate));
+        setLastVisitDate(
+            isNotApplicableDate(vessel.lastVisitDate)
+                ? NOT_APPLICABLE_DATE
+                : parseVisitDate(vessel.lastVisitDate)
+        );
+        setFirstVisitDate(
+            isNotApplicableDate(vessel.firstVisitDate)
+                ? NOT_APPLICABLE_DATE
+                : parseVisitDate(vessel.firstVisitDate)
+        );
 
         setDates({
             loadline: exp.llliDate,
@@ -204,7 +217,7 @@ const StatutoryCertificates: React.FC<{
 
     }, [reportData]);
     const getDateStatus = (dateStr: string) => {
-        if (isEmptyDate(dateStr)) {
+        if (isEmptyDate(dateStr) || isNotApplicableDate(dateStr)) {
             return { color: 'transparent', status: '' };
         }
         const today = new Date();
@@ -222,19 +235,27 @@ const StatutoryCertificates: React.FC<{
         }
     };
 
+    const visitDateValue = (d: any): Date | null => {
+        if (!d || !(d instanceof Date) || isNaN(d.getTime()) || isNotApplicableDate(d)) return null;
+        return d;
+    };
+
     const handleVisitDateChange = async (
         field: "lastVisitDate" | "firstVisitDate",
-        date: Date
+        date: Date | null
     ) => {
         if (field === "lastVisitDate") {
-            setLastVisitDate(date);
+            setLastVisitDate(date ?? "");
         } else {
-            setFirstVisitDate(date);
+            setFirstVisitDate(date ?? "");
         }
 
         try {
-            const formatted = formatVisitDateForSave(date);
+            const formatted = date ? formatVisitDateForSave(date) : null;
             onVesselFieldChange?.(field, formatted);
+
+            const surveyDateSource =
+                lastVisitDate instanceof Date ? lastVisitDate : portdate;
 
             await updateReport({
                 projectId: reportData?.projectId,
@@ -243,8 +264,8 @@ const StatutoryCertificates: React.FC<{
                 value: formatted,
                 imonumber: Number(formData.imoNumber),
                 surveyDate:
-                    (lastVisitDate instanceof Date ? lastVisitDate : portdate) instanceof Date
-                        ? ((lastVisitDate instanceof Date ? lastVisitDate : portdate) as Date).toISOString()
+                    surveyDateSource instanceof Date && !isNotApplicableDate(surveyDateSource)
+                        ? surveyDateSource.toISOString()
                         : "",
             });
 
@@ -254,22 +275,20 @@ const StatutoryCertificates: React.FC<{
     };
 
     const formatDate = (date: Date): string => {
-        return date.toLocaleDateString('en-GB', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-        }).replace(/ /g, '-');
+        return moment(date).locale("en").format(DISPLAY_DATE_FORMAT);
     };
     const handleDateChange = async (
         id: string,
-        val: Date
+        val: Date | null
     ): Promise<void> => {
 
-        const formattedDate = formatDate(val);
+        const formattedDate = val
+            ? (isNotApplicableDate(val) ? "1900-01-01" : formatDate(val))
+            : null;
 
         setDates((prev) => ({
             ...prev,
-            [id]: formattedDate
+            [id]: formattedDate ?? ""
         }));
 
         try {
@@ -281,7 +300,7 @@ const StatutoryCertificates: React.FC<{
                 value: formattedDate,
                 imonumber: Number(formData.imoNumber),
                 surveyDate:
-                    portdate instanceof Date
+                    portdate instanceof Date && !isNotApplicableDate(portdate)
                         ? portdate.toISOString()
                         : "",
             });
@@ -309,7 +328,6 @@ const StatutoryCertificates: React.FC<{
                                     </div>
                                     <div>
                                         <Input
-                                            label=""
                                             placeholder="Enter Report No"
                                             value={formData.report_no}
                                             onChange={(value: string) => {
@@ -359,13 +377,19 @@ const StatutoryCertificates: React.FC<{
                                             }}
                                             disabled={isLocked}
                                         />
-                                        <DatePickerInput
+                                        <NotApplicableDateInput
                                             onChange={(date: any) => {
-                                                if (date instanceof Date) {
-                                                    handleVisitDateChange("lastVisitDate", date);
+                                                const firstVal = visitDateValue(firstVisitDate);
+                                                const lastVal = visitDateValue(date);
+                                                if (firstVal && lastVal && firstVal > lastVal) {
+                                                    setLastVisitDate("");
+                                                    handleVisitDateChange("lastVisitDate", null);
+                                                    return;
                                                 }
+                                                handleVisitDateChange("lastVisitDate", date);
                                             }}
-                                            value={lastVisitDate}
+                                            value={lastVisitDate instanceof Date ? lastVisitDate : null}
+                                            minDate={visitDateValue(firstVisitDate) ?? undefined}
                                             disabled={isLocked}
                                         />
                                     </div>
@@ -452,13 +476,18 @@ const StatutoryCertificates: React.FC<{
 
                                     <span className="certify">as the vessel lay afloat on drydock and underway on  </span>  <span className="inline-group certify">
                                         <span className="inline-control inline-control--date">
-                                            <DatePickerInput
+                                            <NotApplicableDateInput
                                                 onChange={(date: any) => {
-                                                    if (date instanceof Date) {
-                                                        handleVisitDateChange("firstVisitDate", date);
+                                                    const firstVal = visitDateValue(date);
+                                                    const lastVal = visitDateValue(lastVisitDate);
+                                                    if (firstVal && lastVal && firstVal > lastVal) {
+                                                        setLastVisitDate("");
+                                                        handleVisitDateChange("lastVisitDate", null);
                                                     }
+                                                    handleVisitDateChange("firstVisitDate", date);
                                                 }}
-                                                value={firstVisitDate}
+                                                value={firstVisitDate instanceof Date ? firstVisitDate : null}
+                                                maxDate={visitDateValue(lastVisitDate) ?? undefined}
                                                 disabled={isLocked}
                                             />
                                         </span>
@@ -517,9 +546,9 @@ const StatutoryCertificates: React.FC<{
                                                                             <span className="flex-shrink-0 fw-bold" style={{ color }}>{status ? `(${status})` : ""}</span>
                                                                         </div>
                                                                         <div>
-                                                                            <DatePickerInput
+                                                                            <NotApplicableDateInput
                                                                                 value={parseDate(currentDate)}
-                                                                                onChange={(val: Date) => handleDateChange(field.id, val)}
+                                                                                onChange={(val: Date | null) => handleDateChange(field.id, val)}
                                                                                 disabled={isLocked}
                                                                             />
                                                                         </div>

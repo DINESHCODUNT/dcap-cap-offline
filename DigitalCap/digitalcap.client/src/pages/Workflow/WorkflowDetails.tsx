@@ -5,6 +5,7 @@ import WorkflowList from "./WorkflowList";
 import * as workflowService from "../../service/WorkflowService";
 import type { WorkflowViewModel } from "../../Interface/Workflow";
 import { ProgressState } from "../../Interface/Workflow";
+import { formatDisplayDate } from "../../utils/dateTime";
 import { isElectron } from "../../utils/runtime";
 
 interface WorkflowDetailsProps {
@@ -50,12 +51,7 @@ const WorkflowDetails: React.FC<WorkflowDetailsProps> = ({ projectId }) => {
     };
 
     const formatStepDateMVC = (dateStr?: string | Date | null): string => {
-        if (!dateStr) return "";
-        const d = new Date(dateStr);
-        const day = d.toLocaleDateString("en-US", { day: "numeric" });
-        const month = d.toLocaleDateString("en-US", { month: "short" });
-        const year = d.toLocaleDateString("en-US", { year: "numeric" });
-        return `${day}-${month}-${year}`;
+        return formatDisplayDate(dateStr);
     };
 
 

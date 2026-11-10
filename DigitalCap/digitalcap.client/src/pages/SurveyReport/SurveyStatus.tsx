@@ -1,8 +1,10 @@
 import React, { useEffect, useRef } from "react";
 import ABSLogo from '../../assets/images/ABSLogo.svg';
-import { Label, Input, DatePickerInput, AbsSelect } from "customer_portal-ui-shared";
+import { Label, Input, AbsSelect } from "customer_portal-ui-shared";
+import NotApplicableDateInput from "../../Common/NotApplicableDateInput";
 import { updateReport } from "../../service/SurveyReportService";
 import { parseVisitDate, formatVisitDateForSave, isEmptyDate } from "../../utils/dateTime";
+import { NOT_APPLICABLE_DATE, isNotApplicableDate } from "../../utils/notApplicableDate";
 import { usePopup } from "../../Common/PopupProvider";
 
 type FormData = {
@@ -40,6 +42,9 @@ const SURVEY_REPORT_PARTS = {
     vessel_name: 4,
 };
 const parseDate = (value: any): Date | null => {
+    if (isNotApplicableDate(value)) {
+        return NOT_APPLICABLE_DATE;
+    }
     if (isEmptyDate(value)) {
         return null;
     }
@@ -126,8 +131,16 @@ const SurveyStatus: React.FC<{
         }));
 
         setportDate(parseDate(reportData.reportDate));
-        setLastVisitDate(parseVisitDate(vessel.lastVisitDate));
-        setFirstVisitDate(parseVisitDate(vessel.firstVisitDate));
+        setLastVisitDate(
+            isNotApplicableDate(vessel.lastVisitDate)
+                ? NOT_APPLICABLE_DATE
+                : parseVisitDate(vessel.lastVisitDate)
+        );
+        setFirstVisitDate(
+            isNotApplicableDate(vessel.firstVisitDate)
+                ? NOT_APPLICABLE_DATE
+                : parseVisitDate(vessel.firstVisitDate)
+        );
         setSurveyDueDate(parseDate(survey.classSurveyDate));
         setDrydockDueDate(parseDate(survey.dryDockDate));
         setDue(parseDate(specialHullDueDate));
@@ -141,6 +154,11 @@ const SurveyStatus: React.FC<{
         const day = String(date.getDate()).padStart(2, "0");
 
         return `${year}-${month}-${day}`;
+    };
+
+    const visitDateValue = (d: any): Date | null => {
+        if (!d || !(d instanceof Date) || isNaN(d.getTime()) || isNotApplicableDate(d)) return null;
+        return d;
     };
     const handleSurveyUpdate = async (
         field: keyof typeof SURVEY_REPORT_PARTS,
@@ -205,7 +223,7 @@ const SurveyStatus: React.FC<{
                 imonumber: Number(updatedFormData.imoNumber),
 
                 surveyDate:
-                    surveyDateSource instanceof Date
+                    surveyDateSource instanceof Date && !isNotApplicableDate(surveyDateSource)
                         ? formatDateForApi(surveyDateSource)
                         : "",
             });
@@ -238,7 +256,6 @@ const SurveyStatus: React.FC<{
                                 </div>
                                 <div>
                                     <Input
-                                        label=""
                                         placeholder="Enter Report No"
                                         value={formData.report_no}
                                         onChange={(value: string) => {
@@ -263,12 +280,20 @@ const SurveyStatus: React.FC<{
                                         }}
                                         disabled={isLocked}
                                     />
-                                    <DatePickerInput
+                                    <NotApplicableDateInput
                                         onChange={(date: any) => {
+                                            const firstVal = visitDateValue(firstVisitDate);
+                                            const lastVal = visitDateValue(date);
+                                            if (firstVal && lastVal && firstVal > lastVal) {
+                                                setLastVisitDate("");
+                                                handleSurveyUpdate("lastVisitDate", null);
+                                                return;
+                                            }
                                             setLastVisitDate(date);
                                             handleSurveyUpdate("lastVisitDate", date);
                                         }}
-                                        value={lastVisitDate}
+                                        value={lastVisitDate instanceof Date ? lastVisitDate : null}
+                                        minDate={visitDateValue(firstVisitDate) ?? undefined}
                                         disabled={isLocked}
                                     />
                                 </div>
@@ -330,12 +355,19 @@ const SurveyStatus: React.FC<{
                                 </span>
                                 <span className="certify">as the vessel lay afloat on drydock and underway on  </span>  <span className="inline-group certify">
                                     <span className="inline-control inline-control--date">
-                                        <DatePickerInput
+                                        <NotApplicableDateInput
                                             onChange={(date: any) => {
+                                                const firstVal = visitDateValue(date);
+                                                const lastVal = visitDateValue(lastVisitDate);
+                                                if (firstVal && lastVal && firstVal > lastVal) {
+                                                    setLastVisitDate("");
+                                                    handleSurveyUpdate("lastVisitDate", null);
+                                                }
                                                 setFirstVisitDate(date);
                                                 handleSurveyUpdate("firstVisitDate", date);
                                             }}
-                                            value={firstVisitDate}
+                                            value={firstVisitDate instanceof Date ? firstVisitDate : null}
+                                            maxDate={visitDateValue(lastVisitDate) ?? undefined}
                                             disabled={isLocked}
                                         />
                                     </span>
@@ -356,7 +388,7 @@ const SurveyStatus: React.FC<{
                                 <div className="row">
                                     <div className="col-md-3 form-group">
                                         <Label name="Annual Class Surveys Due" bold />
-                                        <DatePickerInput
+                                        <NotApplicableDateInput
                                             value={surveydueDate}
                                             onChange={(date: any) => {
                                                 setSurveyDueDate(date);
@@ -370,7 +402,7 @@ const SurveyStatus: React.FC<{
                                     </div>
                                     <div className="col-md-3 form-group">
                                         <Label name="Drydocking Due" bold />
-                                        <DatePickerInput
+                                        <NotApplicableDateInput
                                             value={drydockdueDate}
                                             onChange={(date: any) => {
                                                 setDrydockDueDate(date);
@@ -385,8 +417,7 @@ const SurveyStatus: React.FC<{
                                     <div className="col-md-3 form-group">
                                         <Label name="Special Survey Hull#" bold />
                                         <Input
-                                            label=""
-                                            placeholder="Enter Builder"
+                                            placeholder="Enter Hull#"
                                             value={formData.sshull}
                                             onChange={(value: string) => {
 
@@ -412,7 +443,7 @@ const SurveyStatus: React.FC<{
                                     </div>
                                     <div className="col-md-3 form-group">
                                         <Label name="Due" bold />
-                                        <DatePickerInput
+                                        <NotApplicableDateInput
                                             value={due}
                                             onChange={(date: any) => {
                                                 setDue(date);
@@ -430,7 +461,7 @@ const SurveyStatus: React.FC<{
                                             bold
                                         />
 
-                                        <DatePickerInput
+                                        <NotApplicableDateInput
                                             value={surveydue}
                                             onChange={(date: any) => {
                                                 setSurveyDue(date);
@@ -444,7 +475,7 @@ const SurveyStatus: React.FC<{
                                     </div>
                                     <div className="col-md-3 form-group">
                                         <Label name="Boiler Survey(s) Due" bold />
-                                        <DatePickerInput
+                                        <NotApplicableDateInput
                                             value={boilersurveydue}
                                             onChange={(date: any) => {
                                                 setBoilerSurveyDue(date);
@@ -458,7 +489,7 @@ const SurveyStatus: React.FC<{
                                     </div>
                                     <div className="col-md-3 form-group">
                                         <Label name="Tailshaft Survey Due" bold />
-                                        <DatePickerInput
+                                        <NotApplicableDateInput
                                             value={tailshaftsurveydue}
                                             onChange={(date: any) => {
 

@@ -3566,6 +3566,28 @@
     }
 }
 
+.not-applicable-date-input-container {
+    .na-date-input {
+        font-size: 0.75rem;
+        padding: 5px 32px 5px 10px;
+        border: none;
+        width: 100%;
+        background-color: #F1F1F2;
+        outline: 0;
+        box-shadow: none;
+
+        &:focus {
+            border: 1px solid #231F20;
+            box-shadow: none;
+        }
+
+        &:disabled {
+            background-color: #e9ecef;
+            cursor: not-allowed;
+        }
+    }
+}
+
 /* Desktop (Electron): Edge-like thin scrollbars */
 :where(html.is-desktop) ::-webkit-scrollbar {
     width: 10px;

@@ -544,14 +544,14 @@ namespace DigitalCap.Persistence.Repositories
                         "dd-MM-yyyy",
                         CultureInfo.InvariantCulture,
                         DateTimeStyles.None,
-                        out firstVisitDate);
+                        out firstVisitDate) && firstVisitDate.Date != new DateTime(1900, 1, 1);
 
                     bool isLastValid = DateTime.TryParseExact(
                         data?.lastVisitDate,
                         "dd-MM-yyyy",
                         CultureInfo.InvariantCulture,
                         DateTimeStyles.None,
-                        out lastVisitDate);
+                        out lastVisitDate) && lastVisitDate.Date != new DateTime(1900, 1, 1);
 
                     if (isLastValid && isFirstValid &&
                         lastVisitDate.Date < firstVisitDate.Date)
@@ -1302,13 +1302,10 @@ namespace DigitalCap.Persistence.Repositories
         }
         private static DateTime? Pick(DateTime? newValue, DateTime? oldValue)
         {
-            if (newValue != null && newValue != DateTime.MinValue)
-                return newValue;
+            if (newValue != null)
+                return newValue == DateTime.MinValue ? null : newValue;
 
-            if (oldValue != null && oldValue != DateTime.MinValue)
-                return oldValue;
-
-            return null;
+            return oldValue == DateTime.MinValue ? null : oldValue;
         }
         private static DateTime? Normalize(DateTime? date)
         {

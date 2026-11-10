@@ -1,5 +1,6 @@
 using Aspose.Pdf;
 using Aspose.Pdf.Text;
+using DigitalCap.Core.Helpers;
 using DigitalCap.Core.Interfaces.Service;
 using DigitalCap.Core.Interfaces.Repository;
 using DigitalCap.Core.Models.Survey;
@@ -125,7 +126,10 @@ namespace DigitalCap.Infrastructure.Service
                 })
                 .Replace("{{FLAG}}", v.FlagName ?? "")
                 .Replace("{{IMO_NUMBER}}", v.ImoNumber.ToString() ?? "")
-                .Replace("{{PORT_DATE}}", report?.ReportDate ?? "")
+                .Replace("{{REPORT_NO}}", report?.ReportNo ?? "")
+                .Replace("{{REPORT_PORT}}", report?.ReportPort ?? "")
+                .Replace("{{PORT_VISIT_DATE}}", FormatVisitDate(v?.LastVisitDate))
+                .Replace("{{FIRST_VISIT_DATE}}", FormatVisitDate(v?.FirstVisitDate))
                 .Replace("{{VESSEL_TYPE}}", v.VesselType ?? "")
                 .Replace("{{YEAR_BUILT}}", v.YearBuilt.ToString())
                 .Replace("{{BUILT_BY}}", v.BuiltBy ?? "")
@@ -155,21 +159,51 @@ namespace DigitalCap.Infrastructure.Service
                 .Replace("{{GEAR_MANUFACTURER}}", v.GearManufacturer ?? "");
         }
 
+        private string FormatReportDate(DateTime? d)
+        {
+            if (!d.HasValue || !NotApplicableDate.HasValue(d.Value))
+                return "";
+            if (d.Value.Date == NotApplicableDate.Value.Date)
+                return NotApplicableDate.Text;
+            return d.Value.ToString("dd-MMM-yyyy");
+        }
+
+        private string FormatVisitDate(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return "";
+            var trimmed = raw.Trim();
+            if (trimmed == "01-01-1900" || trimmed == "1900-01-01" || NotApplicableDate.IsText(trimmed))
+                return NotApplicableDate.Text;
+
+            if (DateTime.TryParseExact(trimmed, "dd-MM-yyyy", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var vd))
+            {
+                return vd.Date == NotApplicableDate.Value.Date ? NotApplicableDate.Text : vd.ToString("dd-MMM-yyyy");
+            }
+
+            if (DateTime.TryParse(trimmed, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var parsed))
+            {
+                if (parsed.Date == NotApplicableDate.Value.Date) return NotApplicableDate.Text;
+                if (!NotApplicableDate.HasValue(parsed)) return "";
+                return parsed.ToString("dd-MMM-yyyy");
+            }
+
+            return trimmed;
+        }
+
         private string BuildSurveyStatusHtml(Report report)
         {
             var html = ReadEmbeddedResource("SurveyStatus.html");
             var s = report?.SurveyStatus ?? new SurveyStatus();
-            string F(DateTime? d) => d?.ToString("dd-MMM-yyyy") ?? "";
 
             return html
                 .Replace("{{VESSEL_NAME}}", report?.Vessel?.VesselName ?? "")
-                .Replace("{{CLASS_SURVEY_DATE}}", F(s.ClassSurveyDate))
-                .Replace("{{DRYDOCK_DATE}}", F(s.DryDockDate))
+                .Replace("{{CLASS_SURVEY_DATE}}", FormatReportDate(s.ClassSurveyDate))
+                .Replace("{{DRYDOCK_DATE}}", FormatReportDate(s.DryDockDate))
                 .Replace("{{SPECIAL_HULL_NO}}", s.SpecialHullNo?.ToString() ?? "")
-                .Replace("{{DUE_DATE}}", "")
-                .Replace("{{MACHINERY_DATE}}", F(s.SpecialContinuousMachineryDate))
-                .Replace("{{BOILER_DATE}}", F(s.BoilerDate))
-                .Replace("{{TAILSHAFT_DATE}}", F(s.TailshaftDate));
+                .Replace("{{DUE_DATE}}", FormatReportDate(s.GetHullSurveyDate()))
+                .Replace("{{MACHINERY_DATE}}", FormatReportDate(s.SpecialContinuousMachineryDate))
+                .Replace("{{BOILER_DATE}}", FormatReportDate(s.BoilerDate))
+                .Replace("{{TAILSHAFT_DATE}}", FormatReportDate(s.TailshaftDate));
         }
 
         private string BuildStatutoryHtml(Report report)
@@ -181,8 +215,16 @@ namespace DigitalCap.Infrastructure.Service
             var sb = new StringBuilder();
             string Row(string label, DateTime? date)
             {
+                if (!date.HasValue || !NotApplicableDate.HasValue(date.Value))
+                {
+                    return $"<tr><th>{label}</th><td></td></tr>";
+                }
+                if (date.Value.Date == NotApplicableDate.Value.Date)
+                {
+                    return $"<tr><th>{label}</th><td>{NotApplicableDate.Text}</td></tr>";
+                }
                 var status = GetDateStatus(date);
-                return $"<tr><th>{label}</th><td class=\"{status.css}\">{date?.ToString("dd-MMM-yyyy") ?? "-"} ({status.text})</td></tr>";
+                return $"<tr><th>{label}</th><td class=\"{status.css}\">{date.Value.ToString("dd-MMM-yyyy")} ({status.text})</td></tr>";
             }
 
             sb.Append("<table>");
@@ -843,7 +885,7 @@ factors (tank not gas free, etc.)"
                     hi.LeadSurveyorNumber ?? "-")
 
                 .Replace("{{LAST_VISIT_DATE}}",
-                    hi.LastVisitDate.ToString("dd-MMM-yyyy"))
+                    FormatReportDate(hi.LastVisitDate))
 
                 .Replace("{{SURVEYOR_NAME}}",
                     hi.SurveyorName ?? "-")
