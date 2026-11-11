@@ -17,6 +17,7 @@ import ReportContentListView from './ReportContentListView';
 import AppLoader from '../../Common/AppLoader';
 import * as surveyReportService from '../../service/SurveyReportService';
 import { usePopup } from '../../Common/PopupProvider';
+import { useBulkUpload } from '../../Common/BulkUploadProvider';
 import { getPartDisplayLabel, findPartInGrid, getPartNameFromGrid } from './partUtils';
 import { isElectron } from '../../utils/runtime';
 import { usePermissions } from '../../context/PermissionContext';
@@ -67,6 +68,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
     refreshCurrentReport
 }) => {
     const isLocked = Boolean(isOfflineProject || readOnly);
+    const { isRunning: isBulkUploading } = useBulkUpload();
     const navigate = useNavigate();
     const { pagePermissions, hasPagePermission } = usePermissions();
     const canManageTank = !isElectron() || !!(pagePermissions?.manageTank?.read || pagePermissions?.manageTank?.edit || hasPagePermission('manageTank') || hasPagePermission('ManageTank'));
@@ -1112,6 +1114,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
 
     const handleClick = () => {
         if (isLocked) return;
+        if (isBulkUploading) return;
         let filteredReportSectionOptions = reportSectionOptions;
         if (!isNewProject) {
             filteredReportSectionOptions = reportSectionOptions.filter((opt: any) => opt.value?.startsWith(`${reportData.template.id}:`));
@@ -1600,7 +1603,7 @@ const ReportContent: React.FC<ReportContentProps> = ({
                                             selected={viewMode === 'GRID' ? 'Grid' : 'List'}
                                         />
                                     </div>
-                                    <Button onClick={handleClick} disabled={isLocked}>Bulk Update</Button>
+                                    <Button onClick={handleClick} disabled={isLocked || isBulkUploading}>Bulk Update</Button>
                                 </div>
                             </div>
                         </div>

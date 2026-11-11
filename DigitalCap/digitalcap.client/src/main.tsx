@@ -7,6 +7,7 @@ import { PermissionProvider } from "./context/PermissionContext";
 import initializeMsal from "./msalInstance";
 import App from "./App";
 import { PopupProvider } from "./Common/PopupProvider";
+import { BulkUploadProvider } from "./Common/BulkUploadProvider";
 import { SideDialogManagerProvider, SideDialogContainer } from "customer_portal-ui-shared";
 import "regenerator-runtime/runtime";
 import { Provider } from "react-redux";
@@ -29,10 +30,12 @@ if (isElectron()) document.documentElement.classList.add('is-desktop');
                                 <AuthProvider>
                                     <PermissionProvider>
                                         <PopupProvider>
-                                            <App />
-                                            <div id="side-dialog-root">
-                                                <SideDialogContainer />
-                                            </div>
+                                            <BulkUploadProvider>
+                                                <App />
+                                                <div id="side-dialog-root">
+                                                    <SideDialogContainer />
+                                                </div>
+                                            </BulkUploadProvider>
                                         </PopupProvider>
                                     </PermissionProvider>
                                 </AuthProvider>
