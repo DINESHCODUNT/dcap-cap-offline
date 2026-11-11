@@ -4,6 +4,7 @@ import * as Icon from "react-bootstrap-icons";
 import ImageAttachment from "./ImageAttachment";
 import * as surveyReportService from "../../service/SurveyReportService";
 import { usePopup } from '../../Common/PopupProvider';
+import { useBulkUpload } from '../../Common/BulkUploadProvider';
 
 const BulkImageUpload: React.FC<{
     id: string,
@@ -21,6 +22,7 @@ const BulkImageUpload: React.FC<{
 
     const sideDialog = useContext(SideDialogManagerContext) as any;
     const popup = usePopup();
+    const bulkUpload = useBulkUpload();
     const [attachmentList, setAttachmentList] = useState<any[]>([]);
     const [errors, setErrors] = useState<any>({});
     const [isUploading, setIsUploading] = useState(false);
@@ -73,133 +75,143 @@ const BulkImageUpload: React.FC<{
         return Object.keys(newErrors).length === 0;
     };
 
+    const uploadRow = async (row: any) => {
+        const formData = new FormData();
+
+        formData.append("file", row.file);
+
+        const cleanSectionId = row.reportSection?.includes(":")
+            ? row.reportSection.split(":")[1]
+            : row.reportSection;
+
+        formData.append("projectId", projectId.toString());
+        formData.append("templateId", templateId.toString());
+        formData.append("sectionId", cleanSectionId);
+        formData.append("cardId", row.fileName);
+        formData.append("imageId", "0");
+        formData.append("replaceImage", "false");
+
+        if (isNewProject) {
+            const selectedFileOpt = fileNameOptions.find((o: any) => String(o.value) === String(row.fileName));
+            const actualCardName = selectedFileOpt?.text || "Unknown";
+
+            await surveyReportService.uploadGenericSurveyImage({
+                file: row.file,
+                projectId,
+                templateId,
+                sectionId: cleanSectionId,
+                cardId: row.fileName,
+                imageId: 0,
+                replaceImage: false,
+                cardName: actualCardName
+            });
+        } else {
+            await surveyReportService.uploadImage(formData);
+        }
+
+        if (row.description) {
+            const selectedFileOpt = fileNameOptions.find((o: any) => String(o.value) === String(row.fileName));
+            const actualCardName = selectedFileOpt?.text || "Unknown";
+
+            if (isNewProject) {
+                await surveyReportService.updateGenericImageDescriptionDropdownCard({
+                    templateId,
+                    projectId,
+                    sectionId: cleanSectionId,
+                    cardId: row.fileName,
+                    value: row.description,
+                    cardName: actualCardName
+                });
+            } else {
+                await surveyReportService.updateImageDescriptionDropdownCard({
+                    templateId,
+                    projectId,
+                    sectionId: cleanSectionId,
+                    cardId: row.fileName,
+                    value: row.description
+                });
+            }
+
+            const selectedDesc = descriptionOptions.find((d: any) => String(d.value) === String(row.description));
+            if (selectedDesc?.text?.toLowerCase()?.includes("other") && row.additionalDescription) {
+                if (isNewProject) {
+                    await surveyReportService.updateGenericAdditionalDescription({
+                        templateId,
+                        projectId,
+                        sectionId: cleanSectionId,
+                        cardId: row.fileName,
+                        value: row.additionalDescription,
+                        cardName: actualCardName
+                    });
+                } else {
+                    await surveyReportService.updateAdditionalDescription({
+                        templateId,
+                        projectId,
+                        sectionId: cleanSectionId,
+                        cardId: row.fileName,
+                        value: row.additionalDescription
+                    });
+                }
+            }
+
+            const conditionValue = row.condition ? row.condition : 0;
+            console.log("BULK_UPLOAD_SAVE_CONDITION", {
+                rowCondition: row.condition,
+                conditionValue,
+                isNewProject,
+                templateId,
+                projectId,
+                sectionId: cleanSectionId,
+                cardId: row.fileName,
+                cardName: actualCardName
+            });
+            if (isNewProject) {
+                await surveyReportService.updateGenericCurrentCondition({
+                    templateId,
+                    projectId,
+                    sectionId: cleanSectionId,
+                    cardId: row.fileName,
+                    value: conditionValue,
+                    cardName: actualCardName
+                });
+            } else {
+                await surveyReportService.updateCurrentCondition({
+                    templateId,
+                    projectId,
+                    sectionId: cleanSectionId,
+                    cardId: row.fileName,
+                    value: conditionValue
+                });
+            }
+        }
+    };
+
+    const getRowLabel = (row: any): string => {
+        const selectedFileOpt = fileNameOptions?.find((o: any) => String(o.value) === String(row.fileName));
+        return selectedFileOpt?.text || row.file?.name || "Image";
+    };
+
     const handleBulkUpload = async () => {
         if (readOnly) return;
+        if (isUploading) return;
         if (!validateRows()) return;
 
         setIsUploading(true);
 
-        try {
+        const started = bulkUpload.startBulkUpload({
+            rows: [...attachmentList],
+            uploadRow,
+            getRowLabel,
+            onComplete: onUploadSuccess
+        });
 
-            for (const row of attachmentList) {
-
-                const formData = new FormData();
-
-                formData.append("file", row.file);
-
-                const cleanSectionId = row.reportSection?.includes(":")
-                    ? row.reportSection.split(":")[1]
-                    : row.reportSection;
-
-                formData.append("projectId", projectId.toString());
-                formData.append("templateId", templateId.toString());
-                formData.append("sectionId", cleanSectionId);
-                formData.append("cardId", row.fileName);
-                formData.append("imageId", "0");
-                formData.append("replaceImage", "false");
-
-                if (isNewProject) {
-                    const selectedFileOpt = fileNameOptions.find((o: any) => String(o.value) === String(row.fileName));
-                    const actualCardName = selectedFileOpt?.text || "Unknown";
-
-                    await surveyReportService.uploadGenericSurveyImage({
-                        file: row.file,
-                        projectId,
-                        templateId,
-                        sectionId: cleanSectionId,
-                        cardId: row.fileName,
-                        imageId: 0,
-                        replaceImage: false,
-                        cardName: actualCardName
-                    });
-                } else {
-                    await surveyReportService.uploadImage(formData);
-                }
-
-                if (row.description) {
-                    const selectedFileOpt = fileNameOptions.find((o: any) => String(o.value) === String(row.fileName));
-                    const actualCardName = selectedFileOpt?.text || "Unknown";
-
-                    if (isNewProject) {
-                        await surveyReportService.updateGenericImageDescriptionDropdownCard({
-                            templateId,
-                            projectId,
-                            sectionId: cleanSectionId,
-                            cardId: row.fileName,
-                            value: row.description,
-                            cardName: actualCardName
-                        });
-                    } else {
-                        await surveyReportService.updateImageDescriptionDropdownCard({
-                            templateId,
-                            projectId,
-                            sectionId: cleanSectionId,
-                            cardId: row.fileName,
-                            value: row.description
-                        });
-                    }
-
-                    const selectedDesc = descriptionOptions.find((d: any) => String(d.value) === String(row.description));
-                    if (selectedDesc?.text?.toLowerCase()?.includes("other") && row.additionalDescription) {
-                        if (isNewProject) {
-                            await surveyReportService.updateGenericAdditionalDescription({
-                                templateId,
-                                projectId,
-                                sectionId: cleanSectionId,
-                                cardId: row.fileName,
-                                value: row.additionalDescription,
-                                cardName: actualCardName
-                            });
-                        } else {
-                            await surveyReportService.updateAdditionalDescription({
-                                templateId,
-                                projectId,
-                                sectionId: cleanSectionId,
-                                cardId: row.fileName,
-                                value: row.additionalDescription
-                            });
-                        }
-                    }
-
-                    const conditionValue = row.condition ? row.condition : 0;
-                    console.log("BULK_UPLOAD_SAVE_CONDITION", {
-                        rowCondition: row.condition,
-                        conditionValue,
-                        isNewProject,
-                        templateId,
-                        projectId,
-                        sectionId: cleanSectionId,
-                        cardId: row.fileName,
-                        cardName: actualCardName
-                    });
-                    if (isNewProject) {
-                        await surveyReportService.updateGenericCurrentCondition({
-                            templateId,
-                            projectId,
-                            sectionId: cleanSectionId,
-                            cardId: row.fileName,
-                            value: conditionValue,
-                            cardName: actualCardName
-                        });
-                    } else {
-                        await surveyReportService.updateCurrentCondition({
-                            templateId,
-                            projectId,
-                            sectionId: cleanSectionId,
-                            cardId: row.fileName,
-                            value: conditionValue
-                        });
-                    }
-                }
-            }
-            await onUploadSuccess();
-            sideDialog.removeDialog(id);
-            popup.success("File has been uploaded successfully.", "Upload File");
-        } catch (err: any) {
-            popup.error({ message: err?.message || "Failed to upload images." });
-        } finally {
+        if (!started) {
             setIsUploading(false);
+            popup.error({ message: "A bulk upload is already in progress. Please wait for it to finish." });
+            return;
         }
+
+        sideDialog.removeDialog(id);
     };
 
     return (
